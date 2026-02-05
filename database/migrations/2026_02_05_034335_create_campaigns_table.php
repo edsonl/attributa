@@ -1,0 +1,65 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('campaigns', function (Blueprint $table) {
+
+            // ID interno da campanha
+            $table->bigIncrements('id');
+
+            // Código único da campanha (até 20 caracteres), usado para tracking e integrações
+            $table->string('code', 20)->unique();
+
+            // Nome da campanha / produto (exibição interna)
+            $table->string('name');
+
+            // Status atual da campanha (draft, active, paused, finished, archived)
+            $table->string('status')->default('draft');
+
+            // Canal principal da campanha (ex: Google Ads, Meta Ads, WhatsApp)
+            $table->unsignedInteger('channel_id');
+
+            // ID da campanha na plataforma externa (Google Ads, Meta, etc.)
+            $table->string('external_campaign_id')->nullable();
+
+            // Data e hora de início da campanha (timezone-aware)
+            $table->dateTime('starts_at')->nullable();
+
+            // Data e hora de término da campanha (timezone-aware)
+            $table->dateTime('ends_at')->nullable();
+
+            // Orçamento total da campanha (valor monetário, ex: BRL)
+            $table->decimal('budget_total', 15, 2)->nullable();
+
+            // Valor de comissão associado à campanha (lead, venda ou afiliado)
+            $table->decimal('commission_value', 15, 2)->nullable();
+
+            // Timezone principal da campanha (ex: America/Sao_Paulo)
+            $table->string('timezone')->default(config('app.timezone'));
+
+            // Metadados flexíveis para integrações e configurações específicas
+            $table->json('metadata')->nullable();
+
+            // Timestamps padrão do Laravel
+            $table->timestamps();
+
+            // Soft delete para preservar histórico da campanha
+            $table->softDeletes();
+
+            // Índices auxiliares para filtros frequentes
+            $table->index('status');
+            $table->index('canal_id');
+            $table->index('external_campaign_id');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('campaigns');
+    }
+};

@@ -8,6 +8,7 @@ use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\TaskController;
 use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
+use App\Http\Controllers\Panel\CampaignController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -26,6 +27,8 @@ Route::view('/', 'site.home')->name('home');
 
 // redireciona /home para a home canônica
 Route::redirect('/home', '/');
+
+Route::redirect('/campanhas', '/painel/campaigns');
 
 Route::get('/sobre', function () {
     return Inertia::render('About', []);
@@ -78,6 +81,8 @@ Route::middleware(['auth', 'verified'])
         ->name('panel.')
         ->group(function () {
 
+            //Crud Campanhas :
+            Route::resource('campaigns', CampaignController::class);
 
             //CRUD Usuários
             // bulk delete

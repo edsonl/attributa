@@ -1,0 +1,45 @@
+<script setup>
+import { Head, Link } from '@inertiajs/vue3'
+
+import FormCampaign from './FormCampaign.vue'
+
+const props = defineProps({
+    channels: {
+        type: Array,
+        required: true,
+    },
+    countries: {
+        type: Array,
+        required: true,
+    },
+})
+</script>
+<template>
+    <Head title="Nova Campanha" />
+
+    <div class="tw-space-y-3">
+        <!-- Header -->
+        <div class="tw-flex tw-items-center tw-justify-between">
+            <h1 class="tw-text-lg tw-font-semibold">
+                Nova Campanha
+            </h1>
+
+            <Link :href="route('panel.campaigns.index')">
+                <q-btn
+                    flat
+                    icon="arrow_back"
+                    label="Voltar"
+                />
+            </Link>
+        </div>
+        <!-- Form -->
+        <q-card flat bordered>
+            <q-card-section>
+                <FormCampaign
+                    :channels="channels"
+                    :countries="countries"
+                />
+            </q-card-section>
+        </q-card>
+    </div>
+</template>
