@@ -1,0 +1,59 @@
+# ===============================
+# Laravel
+# ===============================
+/vendor
+/node_modules
+/public/storage
+/storage/*.key
+/storage/app/public
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*.php
+
+# Arquivos de ambiente
+.env
+.env.backup
+.env.production
+
+# Logs
+storage/logs/*
+*.log
+
+# ===============================
+# Inertia / Vite / Frontend
+# ===============================
+/public/build
+/public/hot
+.vite
+
+# Dependências JS
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===============================
+# IDEs / Editores
+# ===============================
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ===============================
+# Sistema Operacional
+# ===============================
+.DS_Store
+Thumbs.db
+
+# ===============================
+# Outros
+# ===============================
+*.zip
+*.tar
+*.gz
+*.rar

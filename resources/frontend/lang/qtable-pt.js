@@ -1,0 +1,17 @@
+export const qTableLangPt = {
+    noData: 'Nenhum registro encontrado',
+    noResults: 'Nenhum resultado corresponde à busca',
+    loading: 'Carregando...',
+    selectedRecords: (rows) => (rows === 1 ? '1 item selecionado' : `${rows} itens selecionados`),
+    recordsPerPage: 'Registros por página:',
+    allRows: 'Todos',
+    pagination: (start, end, total) => `${start}-${end} de ${total}`,
+    columns: 'Colunas',
+    sort: 'Ordenar',
+    filter: 'Filtrar',
+    firstPage: 'Primeira página',
+    lastPage: 'Última página',
+    nextPage: 'Próxima página',
+    previousPage: 'Página anterior',
+    removeFilter: 'Remover filtro',
+}

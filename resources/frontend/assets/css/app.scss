@@ -1,0 +1,151 @@
+@use "quasar/src/css/index.sass" as *;
+
+/* Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Quasar base */
+@import '@quasar/extras/roboto-font/roboto-font.css';
+@import "@quasar/extras/material-icons/material-icons.css";
+
+
+/* ============================
+   PALETA — Azul Moderna
+   ============================
+   - Primária       : #1E3A8A (azul profundo moderno)
+   - Secundária     : #2563EB (azul vibrante)
+   - Acento         : #22D3EE (ciano elétrico p/ CTAs)
+   - Dark           : #0B1220 (quase preto azulado)
+   - Dark Page      : #0A0F1C
+   - Suporte (status): verde/verm/azul/âmbar clássicos
+*/
+:root {
+    /* === Core em RGB === */
+    --color-primary   : 30 58 138;    /* #1E3A8A */
+    --color-secondary : 37 99 235;    /* #2563EB */
+    --color-accent    : 34 211 238;   /* #22D3EE */
+
+    --color-dark      : 11 18 32;     /* #0B1220 */
+    --color-dark-page : 10 15 28;     /* #0A0F1C */
+
+    --color-positive  : 34 197 94;    /* #22C55E */
+    --color-negative  : 239 68 68;    /* #EF4444 */
+    --color-info      : 59 130 246;   /* #3B82F6 */
+    --color-warning   : 245 158 11;   /* #F59E0B */
+
+    /* === Contrastes sugeridos === */
+    --on-primary      : 255 255 255;
+    --on-secondary    : 255 255 255;
+    --on-accent       : 0 0 0;         /* ciano funciona melhor com texto escuro */
+    --on-dark         : 255 255 255;
+
+    /* === Superfícies auxiliares === */
+    --surface-muted   : 241 245 249;   /* #F1F5F9 — cartões claros azulados */
+    --surface-tint    : 30 41 59;      /* #1E293B — superfícies tonais azul escuro */
+
+    /* === Tokens Quasar === */
+    --q-primary   : #1E3A8A;
+    --q-secondary : #2563EB;
+    --q-accent    : #22D3EE;
+
+    --q-dark      : #0B1220;
+    --q-positive  : #22C55E;
+    --q-negative  : #EF4444;
+    --q-info      : #3B82F6;
+    --q-warning   : #F59E0B;
+}
+
+/* ----------------------------
+   Modo dark
+   ---------------------------- */
+.body--dark, .dark {
+    --color-primary   : 30 58 138;
+    --color-secondary : 37 99 235;
+    --color-accent    : 34 211 238;
+
+    --color-dark      : 10 15 28;
+    --color-dark-page : 10 15 28;
+
+    --surface-muted   : 15 23 42;     /* #0F172A */
+    --surface-tint    : 30 41 59;     /* #1E293B */
+
+    --q-primary   : #1E3A8A;
+    --q-secondary : #2563EB;
+    --q-accent    : #22D3EE;
+    --q-dark      : #0A0F1C;
+    --q-positive  : #22C55E;
+    --q-negative  : #EF4444;
+    --q-info      : #3B82F6;
+    --q-warning   : #F59E0B;
+}
+
+
+/* ============================
+   Helpers úteis (opcionais)
+   ============================ */
+
+/* Fundo em gradiente na família da primária → use em containers amplos */
+.app-page-gradient {
+    background-image:
+        linear-gradient(
+                135deg,
+                rgb(var(--color-primary) / 0.12) 0%,
+                rgb(var(--color-accent)  / 0.10) 100%
+        );
+}
+
+/* Sidebar com primária sólida (texto claro) */
+.sidebar-primary {
+    background: rgb(var(--color-primary));
+    color: rgb(var(--on-primary));
+}
+
+/* Borda/outline tonal sutil */
+.border-tint {
+    border-color: rgb(var(--surface-tint) / 0.35);
+}
+
+/* Botão gradiente (exemplo: aplicar em q-btn via prop `class`) */
+.btn-gradient {
+    background-image: linear-gradient(
+            to right,
+            rgb(var(--color-primary)) 0%,
+            rgb(var(--color-accent)) 100%
+    );
+    color: #fff;
+}
+.btn-gradient:hover { filter: brightness(1.05); }
+
+/* utilitário p/ botões da toolbar */
+.toolbar-icon .q-focus-helper { opacity: 0 !important; }
+.toolbar-icon:hover .q-focus-helper { opacity: 0 !important; }
+/* opcional: garante que não entre overlay extra */
+.toolbar-icon .q-btn__wrapper::before { display: none !important; }
+
+/* ============================
+   (Se usar Tailwind com cores brand.*)
+   No tailwind.config.cjs, você pode mapear:
+   brand.primary: rgb(var(--color-primary) / <alpha-value>)
+   etc., para usar tw-bg-brand-primary/10, tw-text-brand-accent, …
+   ============================ */
+
+/* Corrige alinhamento vertical em QBtn com Tailwind ativo */
+.q-btn { line-height: 1 !important; }
+
+.q-btn__content {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+}
+.q-btn__content .q-icon{
+    line-height: 1 !important;
+}
+.q-btn__content .block {
+    line-height:1 !important;
+    padding-top:0.18rem !important;
+    padding-right: 0.20rem !important;
+}
+/* (opcional) denso */
+.q-btn--dense .q-btn__content { line-height: 1 !important; }
