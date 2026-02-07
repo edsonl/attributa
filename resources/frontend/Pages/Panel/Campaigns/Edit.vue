@@ -16,6 +16,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    affiliate_platforms: {
+        type: Array,
+        required: true,
+    },
 })
 </script>
 
@@ -45,6 +49,7 @@ const props = defineProps({
                     :campaign="campaign"
                     :channels="channels"
                     :countries="countries"
+                    :affiliate_platforms="affiliate_platforms"
                 />
             </q-card-section>
         </q-card>

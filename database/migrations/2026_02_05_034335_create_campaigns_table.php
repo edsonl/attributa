@@ -24,6 +24,9 @@ return new class extends Migration {
             // Canal principal da campanha (ex: Google Ads, Meta Ads, WhatsApp)
             $table->unsignedInteger('channel_id');
 
+            // Canal principal da campanha (ex: DrCash, Hotmart)
+            $table->unsignedInteger("affiliate_platform_id");
+
             // ID da campanha na plataforma externa (Google Ads, Meta, etc.)
             $table->string('external_campaign_id')->nullable();
 
@@ -53,8 +56,9 @@ return new class extends Migration {
 
             // Índices auxiliares para filtros frequentes
             $table->index('status');
-            $table->index('canal_id');
+            $table->index('channel_id');
             $table->index('external_campaign_id');
+            $table->index('affiliate_platform_id');
         });
     }
 

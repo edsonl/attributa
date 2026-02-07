@@ -12,6 +12,9 @@ use App\Http\Controllers\Panel\CampaignController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+
+use App\Http\Controllers\TrackingController;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -24,6 +27,7 @@ use Inertia\Inertia;
 */
 
 Route::view('/', 'site.home')->name('home');
+
 
 // redireciona /home para a home canônica
 Route::redirect('/home', '/');
@@ -81,7 +85,11 @@ Route::middleware(['auth', 'verified'])
         ->name('panel.')
         ->group(function () {
 
+
+
             //Crud Campanhas :
+            Route::get('campaigns/{campaign}/tracking-code', [CampaignController::class, 'tracking_code'])
+                ->name('campaigns.tracking_code');
             Route::resource('campaigns', CampaignController::class);
 
             //CRUD Usuários
@@ -118,4 +126,21 @@ Route::middleware(['auth', 'verified'])
 
         });
 
-// teste de comentário
+
+
+
+// Trakink
+Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
+
+Route::post('/tracking/collect', [TrackingController::class, 'collect'])
+    ->middleware('throttle:tracking')
+    ->name('tracking.collect');
+
+Route::get('/tracking/script.js', function () {
+    return response()
+        ->view('tracking.script')
+        ->header('Content-Type', 'application/javascript')
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        ->header('Pragma', 'no-cache')
+        ->header('Expires', '0');
+});

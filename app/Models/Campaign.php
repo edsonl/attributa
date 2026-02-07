@@ -15,6 +15,8 @@ class Campaign extends Model
         'status',
         'commission_value',
         'channel_id',
+        'affiliate_platform_id',
+        'external_campaign_id'
     ];
 
     protected $casts = [
@@ -28,6 +30,14 @@ class Campaign extends Model
     public function channel()
     {
         return $this->belongsTo(Channel::class);
+    }
+
+    /**
+     * Plataforma (Affiliado) da campanha
+     */
+    public function affiliatePlatform()
+    {
+        return $this->belongsTo(AffiliatePlatform::class);
     }
 
     /**

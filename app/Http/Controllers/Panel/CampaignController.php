@@ -8,6 +8,7 @@ use App\Http\Requests\Panel\UpdateCampaignRequest;
 use App\Models\Campaign;
 use App\Models\Channel;
 use App\Models\Country;
+use App\Models\AffiliatePlatform;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -31,7 +32,8 @@ class CampaignController extends Controller
     {
         return Inertia::render('Panel/Campaigns/Create', [
             'channels'  => Channel::orderBy('name')->get(),
-            'countries' => Country::orderBy('nome')->get(),
+            'countries' => Country::orderBy('name')->get(),
+            'affiliate_platforms' => AffiliatePlatform::orderBy('id')->get(),
         ]);
     }
 
@@ -46,6 +48,7 @@ class CampaignController extends Controller
             'name'       => $data['name'],
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
+            'affiliate_platform_id' => $data['affiliate_platform_id'],
             'commission_value' => $data['commission_value'] ?? null,
         ]);
 
@@ -66,7 +69,8 @@ class CampaignController extends Controller
         return Inertia::render('Panel/Campaigns/Edit', [
             'campaign'  => $campaign->load('countries'),
             'channels'  => Channel::orderBy('name')->get(),
-            'countries' => Country::orderBy('nome')->get(),
+            'countries' => Country::orderBy('name')->get(),
+            'affiliate_platforms' => AffiliatePlatform::orderBy('id')->get(),
         ]);
     }
 
@@ -81,6 +85,7 @@ class CampaignController extends Controller
             'name'       => $data['name'],
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
+            'affiliate_platform_id' => $data['affiliate_platform_id'],
             'commission_value' => $data['commission_value'] ?? null,
         ]);
 
@@ -101,5 +106,14 @@ class CampaignController extends Controller
         return redirect()
             ->route('panel.campaigns.index')
             ->with('success', 'Campanha removida com sucesso.');
+    }
+
+    public function tracking_code(Campaign $campaign)
+    {
+        return response()->json([
+            'script' => view('tracking.snippet', [
+                'code' => $campaign->code,
+            ])->render(),
+        ]);
     }
 }

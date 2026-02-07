@@ -44,6 +44,12 @@ class StoreCampaignRequest extends FormRequest
                 'exists:channels,id',
             ],
 
+            'affiliate_platform_id' => [
+                'required',
+                'integer',
+                'exists:affiliate_platforms,id',
+            ],
+
             'countries' => [
                 'nullable',
                 'array',
@@ -77,6 +83,9 @@ class StoreCampaignRequest extends FormRequest
 
             'channel_id.required' => 'O canal é obrigatório.',
             'channel_id.exists' => 'O canal selecionado é inválido.',
+
+            'affiliate_platform_id.required' => 'A plataforma é obrigatória.',
+            'affiliate_platform_id.exists' => 'O plataforma selecionada é inválida.',
 
             'countries.array' => 'O formato dos países é inválido.',
             'countries.*.exists' => 'Um ou mais países selecionados são inválidos.',

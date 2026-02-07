@@ -4,7 +4,7 @@ return [
     [
         'iso2' => 'AL',
         'iso3' => 'ALB',
-        'nome' => 'Albânia',
+        'name' => 'Albânia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Tirane',
@@ -12,7 +12,7 @@ return [
     [
         'iso2' => 'AT',
         'iso3' => 'AUT',
-        'nome' => 'Áustria',
+        'name' => 'Áustria',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Vienna',
@@ -20,7 +20,7 @@ return [
     [
         'iso2' => 'BE',
         'iso3' => 'BEL',
-        'nome' => 'Bélgica',
+        'name' => 'Bélgica',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Brussels',
@@ -28,7 +28,7 @@ return [
     [
         'iso2' => 'BG',
         'iso3' => 'BGR',
-        'nome' => 'Bulgária',
+        'name' => 'Bulgária',
         'currency' => 'BGN',
         'currency_symbol' => 'лв',
         'timezone_default' => 'Europe/Sofia',
@@ -36,7 +36,7 @@ return [
     [
         'iso2' => 'HR',
         'iso3' => 'HRV',
-        'nome' => 'Croácia',
+        'name' => 'Croácia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Zagreb',
@@ -44,7 +44,7 @@ return [
     [
         'iso2' => 'CY',
         'iso3' => 'CYP',
-        'nome' => 'Chipre',
+        'name' => 'Chipre',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Asia/Nicosia',
@@ -52,7 +52,7 @@ return [
     [
         'iso2' => 'CZ',
         'iso3' => 'CZE',
-        'nome' => 'República Tcheca',
+        'name' => 'República Tcheca',
         'currency' => 'CZK',
         'currency_symbol' => 'Kč',
         'timezone_default' => 'Europe/Prague',
@@ -60,7 +60,7 @@ return [
     [
         'iso2' => 'DK',
         'iso3' => 'DNK',
-        'nome' => 'Dinamarca',
+        'name' => 'Dinamarca',
         'currency' => 'DKK',
         'currency_symbol' => 'kr',
         'timezone_default' => 'Europe/Copenhagen',
@@ -68,7 +68,7 @@ return [
     [
         'iso2' => 'EE',
         'iso3' => 'EST',
-        'nome' => 'Estônia',
+        'name' => 'Estônia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Tallinn',
@@ -76,7 +76,7 @@ return [
     [
         'iso2' => 'FI',
         'iso3' => 'FIN',
-        'nome' => 'Finlândia',
+        'name' => 'Finlândia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Helsinki',
@@ -84,7 +84,7 @@ return [
     [
         'iso2' => 'FR',
         'iso3' => 'FRA',
-        'nome' => 'França',
+        'name' => 'França',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Paris',
@@ -92,7 +92,7 @@ return [
     [
         'iso2' => 'DE',
         'iso3' => 'DEU',
-        'nome' => 'Alemanha',
+        'name' => 'Alemanha',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Berlin',
@@ -100,7 +100,7 @@ return [
     [
         'iso2' => 'GR',
         'iso3' => 'GRC',
-        'nome' => 'Grécia',
+        'name' => 'Grécia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Athens',
@@ -108,7 +108,7 @@ return [
     [
         'iso2' => 'HU',
         'iso3' => 'HUN',
-        'nome' => 'Hungria',
+        'name' => 'Hungria',
         'currency' => 'HUF',
         'currency_symbol' => 'Ft',
         'timezone_default' => 'Europe/Budapest',
@@ -116,7 +116,7 @@ return [
     [
         'iso2' => 'IE',
         'iso3' => 'IRL',
-        'nome' => 'Irlanda',
+        'name' => 'Irlanda',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Dublin',
@@ -124,7 +124,7 @@ return [
     [
         'iso2' => 'IT',
         'iso3' => 'ITA',
-        'nome' => 'Itália',
+        'name' => 'Itália',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Rome',
@@ -132,7 +132,7 @@ return [
     [
         'iso2' => 'LV',
         'iso3' => 'LVA',
-        'nome' => 'Letônia',
+        'name' => 'Letônia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Riga',
@@ -140,7 +140,7 @@ return [
     [
         'iso2' => 'LT',
         'iso3' => 'LTU',
-        'nome' => 'Lituânia',
+        'name' => 'Lituânia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Vilnius',
@@ -148,7 +148,7 @@ return [
     [
         'iso2' => 'LU',
         'iso3' => 'LUX',
-        'nome' => 'Luxemburgo',
+        'name' => 'Luxemburgo',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Luxembourg',
@@ -156,7 +156,7 @@ return [
     [
         'iso2' => 'MT',
         'iso3' => 'MLT',
-        'nome' => 'Malta',
+        'name' => 'Malta',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Malta',
@@ -164,7 +164,7 @@ return [
     [
         'iso2' => 'NL',
         'iso3' => 'NLD',
-        'nome' => 'Holanda',
+        'name' => 'Holanda',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Amsterdam',
@@ -172,7 +172,7 @@ return [
     [
         'iso2' => 'PL',
         'iso3' => 'POL',
-        'nome' => 'Polônia',
+        'name' => 'Polônia',
         'currency' => 'PLN',
         'currency_symbol' => 'zł',
         'timezone_default' => 'Europe/Warsaw',
@@ -180,7 +180,7 @@ return [
     [
         'iso2' => 'PT',
         'iso3' => 'PRT',
-        'nome' => 'Portugal',
+        'name' => 'Portugal',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Lisbon',
@@ -188,7 +188,7 @@ return [
     [
         'iso2' => 'RO',
         'iso3' => 'ROU',
-        'nome' => 'Romênia',
+        'name' => 'Romênia',
         'currency' => 'RON',
         'currency_symbol' => 'lei',
         'timezone_default' => 'Europe/Bucharest',
@@ -196,7 +196,7 @@ return [
     [
         'iso2' => 'SK',
         'iso3' => 'SVK',
-        'nome' => 'Eslováquia',
+        'name' => 'Eslováquia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Bratislava',
@@ -204,7 +204,7 @@ return [
     [
         'iso2' => 'SI',
         'iso3' => 'SVN',
-        'nome' => 'Eslovênia',
+        'name' => 'Eslovênia',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Ljubljana',
@@ -212,7 +212,7 @@ return [
     [
         'iso2' => 'ES',
         'iso3' => 'ESP',
-        'nome' => 'Espanha',
+        'name' => 'Espanha',
         'currency' => 'EUR',
         'currency_symbol' => '€',
         'timezone_default' => 'Europe/Madrid',
@@ -220,7 +220,7 @@ return [
     [
         'iso2' => 'SE',
         'iso3' => 'SWE',
-        'nome' => 'Suécia',
+        'name' => 'Suécia',
         'currency' => 'SEK',
         'currency_symbol' => 'kr',
         'timezone_default' => 'Europe/Stockholm',
@@ -228,7 +228,7 @@ return [
     [
         'iso2' => 'CH',
         'iso3' => 'CHE',
-        'nome' => 'Suíça',
+        'name' => 'Suíça',
         'currency' => 'CHF',
         'currency_symbol' => 'CHF',
         'timezone_default' => 'Europe/Zurich',
@@ -236,7 +236,7 @@ return [
     [
         'iso2' => 'GB',
         'iso3' => 'GBR',
-        'nome' => 'Reino Unido',
+        'name' => 'Reino Unido',
         'currency' => 'GBP',
         'currency_symbol' => '£',
         'timezone_default' => 'Europe/London',
@@ -244,7 +244,7 @@ return [
     [
         'iso2' => 'BR',
         'iso3' => 'BRA',
-        'nome' => 'Brasil',
+        'name' => 'Brasil',
         'currency' => 'BRL',
         'currency_symbol' => 'R$',
         'timezone_default' => 'America/Sao_Paulo',
@@ -252,7 +252,7 @@ return [
     [
         'iso2' => 'AR',
         'iso3' => 'ARG',
-        'nome' => 'Argentina',
+        'name' => 'Argentina',
         'currency' => 'ARS',
         'currency_symbol' => '$',
         'timezone_default' => 'America/Argentina/Buenos_Aires',
@@ -260,7 +260,7 @@ return [
     [
         'iso2' => 'CL',
         'iso3' => 'CHL',
-        'nome' => 'Chile',
+        'name' => 'Chile',
         'currency' => 'CLP',
         'currency_symbol' => '$',
         'timezone_default' => 'America/Santiago',
@@ -268,7 +268,7 @@ return [
     [
         'iso2' => 'CO',
         'iso3' => 'COL',
-        'nome' => 'Colômbia',
+        'name' => 'Colômbia',
         'currency' => 'COP',
         'currency_symbol' => '$',
         'timezone_default' => 'America/Bogota',
@@ -276,7 +276,7 @@ return [
     [
         'iso2' => 'MX',
         'iso3' => 'MEX',
-        'nome' => 'México',
+        'name' => 'México',
         'currency' => 'MXN',
         'currency_symbol' => '$',
         'timezone_default' => 'America/Mexico_City',
@@ -284,7 +284,7 @@ return [
     [
         'iso2' => 'PE',
         'iso3' => 'PER',
-        'nome' => 'Peru',
+        'name' => 'Peru',
         'currency' => 'PEN',
         'currency_symbol' => 'S/',
         'timezone_default' => 'America/Lima',
@@ -292,7 +292,7 @@ return [
     [
         'iso2' => 'US',
         'iso3' => 'USA',
-        'nome' => 'Estados Unidos',
+        'name' => 'Estados Unidos',
         'currency' => 'USD',
         'currency_symbol' => '$',
         'timezone_default' => 'America/New_York',
@@ -300,7 +300,7 @@ return [
     [
         'iso2' => 'CA',
         'iso3' => 'CAN',
-        'nome' => 'Canadá',
+        'name' => 'Canadá',
         'currency' => 'CAD',
         'currency_symbol' => '$',
         'timezone_default' => 'America/Toronto',
@@ -308,7 +308,7 @@ return [
     [
         'iso2' => 'ZA',
         'iso3' => 'ZAF',
-        'nome' => 'África do Sul',
+        'name' => 'África do Sul',
         'currency' => 'ZAR',
         'currency_symbol' => 'R',
         'timezone_default' => 'Africa/Johannesburg',
@@ -316,7 +316,7 @@ return [
     [
         'iso2' => 'EG',
         'iso3' => 'EGY',
-        'nome' => 'Egito',
+        'name' => 'Egito',
         'currency' => 'EGP',
         'currency_symbol' => '£',
         'timezone_default' => 'Africa/Cairo',
@@ -324,7 +324,7 @@ return [
     [
         'iso2' => 'MA',
         'iso3' => 'MAR',
-        'nome' => 'Marrocos',
+        'name' => 'Marrocos',
         'currency' => 'MAD',
         'currency_symbol' => 'د.م.',
         'timezone_default' => 'Africa/Casablanca',
@@ -332,7 +332,7 @@ return [
     [
         'iso2' => 'NG',
         'iso3' => 'NGA',
-        'nome' => 'Nigéria',
+        'name' => 'Nigéria',
         'currency' => 'NGN',
         'currency_symbol' => '₦',
         'timezone_default' => 'Africa/Lagos',
@@ -340,7 +340,7 @@ return [
     [
         'iso2' => 'AU',
         'iso3' => 'AUS',
-        'nome' => 'Austrália',
+        'name' => 'Austrália',
         'currency' => 'AUD',
         'currency_symbol' => '$',
         'timezone_default' => 'Australia/Sydney',
@@ -348,7 +348,7 @@ return [
     [
         'iso2' => 'NZ',
         'iso3' => 'NZL',
-        'nome' => 'Nova Zelândia',
+        'name' => 'Nova Zelândia',
         'currency' => 'NZD',
         'currency_symbol' => '$',
         'timezone_default' => 'Pacific/Auckland',

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->char('iso3', 3)->index();
 
             // Nome do país (exibição principal no sistema)
-            $table->string('nome')->index();
+            $table->string('name')->index();
 
             // Código da moeda padrão do país (ex: BRL, USD, EUR)
             $table->char('currency', 3)->index();
