@@ -13,6 +13,7 @@ class Campaign extends Model
     protected $fillable = [
         'name',
         'status',
+        'pixel_code',
         'commission_value',
         'channel_id',
         'affiliate_platform_id',
@@ -78,5 +79,15 @@ class Campaign extends Model
                 ->generate($channelCode);
         });
 
+    }
+
+    /**
+     * Aplica trim automaticamente ao salvar
+     */
+    public function setPixelCodeAttribute($value)
+    {
+        $this->attributes['pixel_code'] = $value === null
+            ? null
+            : strtoupper(trim((string) $value));
     }
 }

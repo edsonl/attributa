@@ -30,6 +30,8 @@ class UpdateCampaignRequest extends FormRequest
                 'max:255',
             ],
 
+            'pixel_code'=>['string','max:60','nullable'],
+
             'status' => [
                 'required',
                 'boolean',
@@ -74,6 +76,8 @@ class UpdateCampaignRequest extends FormRequest
         return [
             'name.required' => 'O nome da campanha é obrigatório.',
             'name.max' => 'O nome da campanha não pode ter mais de 255 caracteres.',
+
+            'piexl_code.max' => 'O pixel não pode ter mais de 60 caracteres.',
 
             'status.required' => 'O status da campanha é obrigatório.',
             'status.boolean' => 'O status da campanha é inválido.',

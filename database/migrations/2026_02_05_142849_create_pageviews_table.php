@@ -18,9 +18,14 @@ return new class extends Migration {
             $table->text('referrer')->nullable();
             $table->string('user_agent')->nullable();
 
+            $table->string('gclid')->nullable();
+            $table->string('gad_campaignid')->nullable();
+
             // dados técnicos
             $table->ipAddress('ip')->nullable();
             $table->unsignedBigInteger('timestamp_ms')->nullable();
+
+            $table->boolean('conversion')->default(false);
 
             $table->timestamps();
 

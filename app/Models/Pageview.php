@@ -13,6 +13,9 @@ class Pageview extends Model
         'user_agent',
         'ip',
         'timestamp_ms',
+        'gclid',
+        'gad_campaignid',
+        'conversion'
     ];
 
     protected $casts = [

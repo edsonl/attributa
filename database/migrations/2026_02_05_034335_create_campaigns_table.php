@@ -18,6 +18,9 @@ return new class extends Migration {
             // Nome da campanha / produto (exibição interna)
             $table->string('name');
 
+            // Pixel de acompanhamento
+            $table->string('pixel_code')->nullable();
+
             // Status atual da campanha (draft, active, paused, finished, archived)
             $table->string('status')->default('draft');
 

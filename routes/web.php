@@ -10,10 +10,11 @@ use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
 use App\Http\Controllers\Panel\CampaignController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
+use App\Http\Controllers\ConversionCallbackController;
 
-use App\Http\Controllers\TrackingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -132,15 +133,6 @@ Route::middleware(['auth', 'verified'])
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
-Route::post('/tracking/collect', [TrackingController::class, 'collect'])
-    ->middleware('throttle:tracking')
-    ->name('tracking.collect');
 
-Route::get('/tracking/script.js', function () {
-    return response()
-        ->view('tracking.script')
-        ->header('Content-Type', 'application/javascript')
-        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ->header('Pragma', 'no-cache')
-        ->header('Expires', '0');
-});
+
+Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);

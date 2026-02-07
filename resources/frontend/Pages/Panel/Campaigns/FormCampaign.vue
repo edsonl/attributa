@@ -30,6 +30,7 @@ const isEdit = computed(() => !!props.campaign)
  */
 const form = useForm({
     name: props.campaign?.name ?? '',
+    pixel_code: props.campaign?.pixel_code ?? '',
     status: props.campaign?.status ?? true,
     channel_id: props.campaign?.channel_id ?? null,
     affiliate_platform_id: props.campaign?.affiliate_platform_id ?? null,
@@ -144,9 +145,10 @@ function copyTrackingScript() {
             dense
         />
 
-    
+
         <!-- Países -->
         <q-select
+            label="Regiões de segmentação (países)"
             v-model="form.countries"
             :options="countries"
             option-label="name"
@@ -162,11 +164,10 @@ function copyTrackingScript() {
 
         <!-- Código da campanha -->
         <q-input
-            v-if="campaign"
-            :model-value="campaign.code"
-            label="Código da campanha"
+            v-model="form.pixel_code"
+            label="Pixel de acompanhamento"
             outlined
-            readonly
+            dense
         />
 
         <!-- Botão -->

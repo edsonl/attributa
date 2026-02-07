@@ -1,19 +1,63 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import StatusChip from '@/Components/StatusChip.vue'
+import { qTableLangPt } from '@/lang/qtable-pt'
 
 const props = defineProps({
     campaigns: {
         type: Object,
         required: true,
     },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
 })
 
-const rows = computed(() => props.campaigns.data)
+const rows = computed(() => props.campaigns?.data ?? [])
+const search = ref(props.filters?.search ?? '')
+
+const pagination = ref({
+    page: props.campaigns?.current_page ?? 1,
+    rowsPerPage: props.campaigns?.per_page ?? 15,
+    rowsNumber: props.campaigns?.total ?? 0,
+    sortBy: props.filters?.sort ?? 'created_at',
+    descending: (props.filters?.direction ?? 'desc') === 'desc',
+})
+
+watch(
+    () => props.campaigns,
+    (val) => {
+        if (!val) {
+            return
+        }
+        pagination.value.page = val.current_page
+        pagination.value.rowsPerPage = val.per_page
+        pagination.value.rowsNumber = val.total
+    }
+)
+
+watch(
+    () => props.filters,
+    (val) => {
+        pagination.value.sortBy = val?.sort ?? 'created_at'
+        pagination.value.descending = (val?.direction ?? 'desc') === 'desc'
+        if ((val?.search ?? '') !== search.value) {
+            search.value = val?.search ?? ''
+        }
+    }
+)
 
 const columns = [
+    {
+        name: 'code',
+        label: 'Código',
+        field: 'code',
+        align: 'left',
+        sortable: true,
+    },
     {
         name: 'name',
         label: 'Nome',
@@ -38,6 +82,7 @@ const columns = [
         label: 'Status',
         field: 'status',
         align: 'center',
+        sortable: true,
     },
     {
         name: 'actions',
@@ -46,6 +91,41 @@ const columns = [
         align: 'right',
     },
 ]
+
+function fetchTable() {
+    const params = {
+        page: pagination.value.page,
+        per_page: pagination.value.rowsPerPage,
+        sort: pagination.value.sortBy,
+        direction: pagination.value.descending ? 'desc' : 'asc',
+        search: search.value || undefined,
+    }
+
+    router.get(route('panel.campaigns.index'), params, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    })
+}
+
+function onRequest({ pagination: newPagination }) {
+    Object.assign(pagination.value, newPagination)
+    fetchTable()
+}
+
+function onSearch() {
+    pagination.value.page = 1
+    fetchTable()
+}
+
+function onClearSearch() {
+    if (search.value === '') {
+        return
+    }
+    search.value = ''
+    pagination.value.page = 1
+    fetchTable()
+}
 
 function editCampaign(id) {
     router.visit(route('panel.campaigns.edit', id))
@@ -65,14 +145,14 @@ function destroyCampaign(campaign) {
 
     <div class="tw-space-y-3">
         <!-- Header / ações -->
-        <div class="tw-flex tw-items-center tw-justify-between">
+        <div class="tw-flex tw-items-center tw-justify-between tw-flex-col sm:tw-flex-row tw-gap-3">
             <h1 class="tw-text-lg tw-font-semibold">
                 Campanhas
             </h1>
 
             <Link :href="route('panel.campaigns.create')">
                 <q-btn
-                    color="primary"
+                    color="positive"
                     icon="add"
                     label="Nova Campanha"
                     unelevated
@@ -82,13 +162,49 @@ function destroyCampaign(campaign) {
 
         <!-- Tabela -->
         <q-card flat bordered>
-            <q-card-section>
+            <q-card-section class="tw-space-y-3">
+                <div class="tw-flex tw-gap-3 tw-flex-col md:tw-flex-row">
+                    <q-input
+                        v-model="search"
+                        dense
+                        outlined
+                        clearable
+                        placeholder="Pesquisar por código ou nome"
+                        class="md:tw-flex-1"
+                        @keyup.enter="onSearch"
+                        @clear="onClearSearch"
+                    >
+                        <template #append>
+                            <q-icon name="search" class="cursor-pointer" @click="onSearch" />
+                        </template>
+                    </q-input>
+
+                    <q-btn
+                        outline
+                        color="primary"
+                        icon="search"
+                        label="Filtrar"
+                        class="md:tw-w-auto"
+                        @click="onSearch"
+                    />
+                </div>
+
                 <q-table
                     flat
                     :rows="rows"
                     :columns="columns"
                     row-key="id"
-                    no-data-label="Nenhuma campanha cadastrada"
+                    binary-state-sort
+                    v-model:pagination="pagination"
+                    :pagination="pagination"
+                    :rows-per-page-options="[10, 15, 25, 50]"
+                    :no-data-label="qTableLangPt.noData"
+                    :no-results-label="qTableLangPt.noResults"
+                    :loading-label="qTableLangPt.loading"
+                    :rows-per-page-label="qTableLangPt.recordsPerPage"
+                    :all-rows-label="qTableLangPt.allRows"
+                    :pagination-label="qTableLangPt.pagination"
+                    @request="onRequest"
                 >
                     <!-- Países -->
                     <template #body-cell-countries="props">

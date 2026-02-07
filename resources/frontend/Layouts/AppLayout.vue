@@ -279,11 +279,7 @@ import clientIcon from '@/assets/icons/clients.svg'
 const links = [
     { label: 'Dashboard', icon: 'dashboard', route: 'dashboard'},
     { label: 'Usuários', icon: 'people_alt', route: 'panel.users.index'},
-    { label: 'Clientes',  icon:clientIcon,   route: 'panel.clients.index',
-       svg:`<svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 3.5A2.5 2.5 0 1 1 3 3.5 2.5 2.5 0 0 1 8 3.5ZM3 8C1.34 8 0 9.34 0 11v4h8V8H3ZM13 8h-3v7h6v-4c0-1.66-1.34-3-3-3ZM12 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-          </svg>`
-    },
+    { label: 'Campanhas',  icon: 'ads_click',  route: 'panel.campaigns.index' ,svg:''},
     { label: 'Tarefas',  icon: 'checklist',  route: 'panel.tasks.index' ,svg:''},
 ]
 

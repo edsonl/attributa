@@ -1,6 +1,6 @@
 <!-- Attributa Tracking -->
 <script>
-    (function(w,d,s,u,c){
+    (function(w,d,s,u,c,p){
         if (w.__ATTRIBUTA_LOADED__) return;
         w.__ATTRIBUTA_LOADED__ = true;
         var js = d.createElement(s);
@@ -8,6 +8,6 @@
         js.src = u + '?c=' + encodeURIComponent(c);
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document, 'script', '{{ asset('tracking/script.js') }}', '{{ $code }}');
+    })(window, document, 'script','{{ rtrim(config('app.url'), '/') . '/api/tracking/script.js' }}', '{{ $code }}');
 </script>
 <!-- End Attributa Tracking -->

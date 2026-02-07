@@ -17,18 +17,25 @@ class TrackingController extends Controller
             'referrer'      => 'nullable|string',
             'user_agent'    => 'nullable|string',
             'timestamp'     => 'nullable|integer',
+            'gclid'         => 'nullable',
+            'gad_campaignid'=> 'nullable',
         ]);
 
-        Pageview::create([
+        $pageview = Pageview::create([
             'campaign_code' => $data['campaign_code'],
             'url'           => $data['url'],
             'referrer'      => $data['referrer'] ?? null,
+            'gclid'         => $data['gclid'] ?? null,
+            'gad_campaignid'=> $data['gad_campaignid'] ?? null,
             'user_agent'    => $data['user_agent'] ?? $request->userAgent(),
             'ip'            => $request->ip(),
             'timestamp_ms'  => $data['timestamp'] ?? null,
         ]);
 
-        // tracking nunca deve retornar conteúdo
-        return response()->noContent(); // 204
+       // 🔹 Retorna o ID da visita (pageview)
+        return response()->json([
+            'pageview_id' => $pageview->id,
+        ]);
+
     }
 }

@@ -58,7 +58,12 @@
     <p style="margin-top: 40px; color: #777;">
         Página de teste para integração de tracking.
     </p>
+    <a href="teste.php">Teste de link</a>
+    <form action="order.php">
+
+    </form>
 </div>
+
 
 <!-- Attributa Tracking -->
 <script>
@@ -70,9 +75,10 @@
         js.src = u + '?c=' + encodeURIComponent(c);
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document, 'script', 'http://attributa.cloud/tracking/script.js', 'CMP-GO-01KGPYZK71');
+    })(window, document, 'script','http://attributa.cloud/api/tracking/script.js', 'CMP-GO-01KGW3QK31');
 </script>
 <!-- End Attributa Tracking -->
+
 
 </body>
 </html>
