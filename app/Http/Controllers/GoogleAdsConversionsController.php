@@ -82,10 +82,11 @@ class GoogleAdsConversionsController extends Controller
             'count' => $conversions->count(),
         ]);
 
+        /*
         if ($conversions->isEmpty()) {
             Log::channel('google_ads_https')->info('No conversions found');
             return response('', 204);
-        }
+        }*/
 
         $ids = $conversions->pluck('id')->toArray();
 
@@ -93,7 +94,7 @@ class GoogleAdsConversionsController extends Controller
             'ids' => $ids,
         ]);
 
-        // 📄 Gerar CSV
+        // 📄 Gerar CSV (SEMPRE com cabeçalho)
         $output = fopen('php://temp', 'r+');
 
         fputcsv($output, [
@@ -120,6 +121,7 @@ class GoogleAdsConversionsController extends Controller
         $csv = stream_get_contents($output);
         fclose($output);
 
+
         Log::channel('google_ads_https')->info('CSV generated', [
             'bytes' => strlen($csv),
         ]);
@@ -135,8 +137,9 @@ class GoogleAdsConversionsController extends Controller
         Log::channel('google_ads_https')->info('==== END REQUEST ====');
 
         return response($csv, 200, [
-            'Content-Type'        => 'text/csv',
+            'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="google_ads_conversions.csv"',
         ]);
+
     }
 }
