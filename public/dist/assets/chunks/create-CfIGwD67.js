@@ -1,0 +1,1 @@
+import{G as r,H as o,E as s,S as a}from"./vendor-CkK7ip2Q.js";import c from"./formuser-AGBJ0q5j.js";import"./vendor-quasar-C0NOBKaR.js";const n={class:"tw-space-y-4"},l={__name:"Create",setup(m){function t(e){a.post(route("panel.users.store"),e,{preserveScroll:!0})}return(e,p)=>(o(),r("div",n,[s(c,{mode:"create",onSubmit:t})]))}};export{l as default};
