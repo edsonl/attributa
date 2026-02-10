@@ -30,6 +30,7 @@ class TrackingController extends Controller
             'user_agent'    => $data['user_agent'] ?? $request->userAgent(),
             'ip'            => $request->ip(),
             'timestamp_ms'  => $data['timestamp'] ?? null,
+            'conversion'    => 0,
         ]);
 
        // 🔹 Retorna o ID da visita (pageview)

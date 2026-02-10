@@ -131,7 +131,7 @@ onMounted(() => {
             <template #body-cell-conversion="props">
                 <q-td :props="props">
                     <q-badge
-                        v-if="props.value"
+                        v-if="props.value==='1'"
                         color="green"
                         label="Convertido"
                     />
