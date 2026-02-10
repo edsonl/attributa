@@ -41,7 +41,8 @@ return [
     ],
 
     'google_ads' => [
-        'http_token' => env('GOOGLE_ADS_HTTP_TOKEN'),
+        'http_user' => env('GOOGLE_ADS_HTTP_USER'),
+        'http_pass' => env('GOOGLE_ADS_HTTP_PASS'),
     ],
 
 ];
