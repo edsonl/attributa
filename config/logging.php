@@ -127,6 +127,12 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'google_ads_https' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/google-ads-https.log'),
+            'level' => 'debug',
+        ],
+
     ],
 
 ];
