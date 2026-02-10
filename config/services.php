@@ -40,4 +40,8 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
     ],
 
+    'google_ads' => [
+        'http_token' => env('GOOGLE_ADS_HTTP_TOKEN'),
+    ],
+
 ];

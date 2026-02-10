@@ -26,7 +26,7 @@ return new class extends Migration {
             $table->string('currency_code', 10)
                 ->default('USD');
 
-            $table->enum('google_upload_status', ['pending', 'success', 'error'])
+            $table->enum('google_upload_status', ['pending', 'success','exported','error'])
                 ->default('pending');
 
             $table->dateTime('google_uploaded_at')->nullable();

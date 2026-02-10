@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\GoogleAdsConversionsController;
 use App\Http\Controllers\TrackingController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -68,3 +69,5 @@ Route::get('/tracking/script.js', function (Request $request) {
     );
 });
 
+
+Route::get('/google-ads/conversions', [GoogleAdsConversionsController::class, 'index']);
