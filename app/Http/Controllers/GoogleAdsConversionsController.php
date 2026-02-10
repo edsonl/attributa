@@ -15,14 +15,14 @@ class GoogleAdsConversionsController extends Controller
         | Autenticação simples por token
         |--------------------------------------------------------------------------
         */
-        $expectedToken = config('services.google_ads.http_token');
-        $authHeader   = $request->header('Authorization');
-
+        //$expectedToken = config('services.google_ads.http_token');
+        //$authHeader   = $request->header('Authorization');
+        /*
         if (!$authHeader || $authHeader !== 'Bearer ' . $expectedToken) {
             return response()->json([
                 'error' => 'Unauthorized'
             ], 401);
-        }
+        }*/
 
         /*
         |--------------------------------------------------------------------------
