@@ -17,7 +17,8 @@ class Campaign extends Model
         'commission_value',
         'channel_id',
         'affiliate_platform_id',
-        'external_campaign_id'
+        'external_campaign_id',
+        'google_ads_account_id'
     ];
 
     protected $casts = [

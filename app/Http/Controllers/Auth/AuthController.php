@@ -29,7 +29,7 @@ class AuthController extends Controller
 
         if (FacadesAuth::attempt($credentials, true)) {
             $request->session()->regenerate();
-            return redirect()->intended(route('dashboard')); // ajuste a rota destino
+            return redirect()->intended(route('panel.atividade.pageviews')); // ajuste a rota destino
         }
 
         return back()->withErrors([
@@ -63,7 +63,7 @@ class AuthController extends Controller
         FacadesAuth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard')); // ajuste se quiser
+        return redirect()->intended(route('panel.atividade.pageviews')); // ajuste se quiser
     }
 
     // POST /logout

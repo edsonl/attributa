@@ -2,18 +2,20 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\AuthPasswordController;
+use App\Http\Controllers\ConversionCallbackController;
 use App\Http\Controllers\Panel\AccountController;
+use App\Http\Controllers\Panel\ActivityController;
+use App\Http\Controllers\Panel\CampaignController;
 use App\Http\Controllers\Panel\ClientController;
 use App\Http\Controllers\Panel\CompanyController;
+use App\Http\Controllers\Panel\ConversionsController;
+use App\Http\Controllers\Panel\GoogleAdsAccountController;
+use App\Http\Controllers\Panel\GoogleAuthController;
 use App\Http\Controllers\Panel\TaskController;
 use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
-use App\Http\Controllers\Panel\CampaignController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
-
-use App\Http\Controllers\ConversionCallbackController;
 
 
 /*
@@ -87,6 +89,47 @@ Route::middleware(['auth', 'verified'])
         ->group(function () {
 
 
+        // =========================
+        // Atividade
+        // =========================
+        Route::prefix('atividade')
+            ->name('atividade.')
+            ->group(function () {
+
+                // Tela (Inertia)
+                Route::get('/pageviews', [ActivityController::class, 'pageviews'])
+                    ->name('pageviews');
+
+                // API
+                Route::get('/pageviews/data', [ActivityController::class, 'data'])
+                    ->name('pageviews.data');
+
+                Route::get('/campaigns', [ActivityController::class, 'campaigns'])
+                    ->name('campaigns');
+            });
+
+            Route::prefix('conversoes')
+                ->name('conversoes.')
+                ->group(function () {
+                    // Tela (Inertia)
+                    Route::get('/', [ConversionsController::class, 'index'])->name('index');
+                    // API (dados)
+                    Route::get('/data', [ConversionsController::class, 'data'])->name('data');
+                    // Campanhas (filtro)
+                    Route::get('/campaigns', [ConversionsController::class, 'campaigns'])->name('campaigns');
+            });
+
+
+            Route::prefix('configuracoes')->middleware(['auth'])->group(function () {
+                Route::get('contas-anuncios', [GoogleAdsAccountController::class, 'index'])
+                    ->name('ads-accounts.index');
+                Route::patch(
+                    'configuracoes/contas-anuncios/{account}/toggle',
+                    [GoogleAdsAccountController::class, 'toggle']
+                )->name('ads-accounts.toggle');
+
+            });
+
 
             //Crud Campanhas :
             Route::get('campaigns/{campaign}/tracking-code', [CampaignController::class, 'tracking_code'])
@@ -128,11 +171,27 @@ Route::middleware(['auth', 'verified'])
         });
 
 
+        Route::prefix('painel')->group(function () {
+
+            Route::get('/autenticacao/google',
+                [GoogleAuthController::class, 'redirect']
+            )->name('panel.google.auth');
+
+            Route::get('/autenticacao/google/callback',
+                [GoogleAuthController::class, 'callback']
+            )->name('panel.google.callback');
+
+        });
+
+
 
 
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
-
-
+//Resposta de conversão plataforma de afiliado
 Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
+
+
+
+

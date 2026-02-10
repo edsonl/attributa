@@ -16,6 +16,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    googleAdsAccounts: {
+        type: Array,
+        required: true,
+    },
 })
 </script>
 <template>
@@ -42,6 +46,7 @@ const props = defineProps({
                 <FormCampaign
                     :channels="channels"
                     :countries="countries"
+                    :googleAdsAccounts="googleAdsAccounts"
                     :affiliate_platforms="affiliate_platforms"
                 />
             </q-card-section>

@@ -75,10 +75,9 @@
         js.src = u + '?c=' + encodeURIComponent(c);
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document, 'script','http://attributa.cloud/api/tracking/script.js', 'CMP-GO-01KGW3QK31');
+    })(window, document, 'script','http://attributa.cloud/api/tracking/script.js', 'CMP-GO-01KGWSGN56');
 </script>
 <!-- End Attributa Tracking -->
-
 
 </body>
 </html>

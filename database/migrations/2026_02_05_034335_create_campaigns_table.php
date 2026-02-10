@@ -12,6 +12,8 @@ return new class extends Migration {
             // ID interno da campanha
             $table->bigIncrements('id');
 
+            $table->unsignedBigInteger('google_ads_account_id')->nullable();
+
             // Código único da campanha (até 20 caracteres), usado para tracking e integrações
             $table->string('code', 20)->unique();
 
@@ -56,6 +58,11 @@ return new class extends Migration {
 
             // Soft delete para preservar histórico da campanha
             $table->softDeletes();
+
+
+            $table->foreign('google_ads_account_id')
+                ->references('id')
+                ->on('google_ads_accounts');
 
             // Índices auxiliares para filtros frequentes
             $table->index('status');

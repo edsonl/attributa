@@ -21,6 +21,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    googleAdsAccounts: {
+        type: Array,
+        required: true,
+    },
 })
 
 const isEdit = computed(() => !!props.campaign)
@@ -34,6 +38,7 @@ const form = useForm({
     status: props.campaign?.status ?? true,
     channel_id: props.campaign?.channel_id ?? null,
     affiliate_platform_id: props.campaign?.affiliate_platform_id ?? null,
+    google_ads_account_id: props.campaign?.google_ads_account_id ?? null,
     countries: props.campaign?.countries
         ? props.campaign.countries.map(c => c.id)
         : [],
@@ -145,7 +150,6 @@ function copyTrackingScript() {
             dense
         />
 
-
         <!-- Países -->
         <q-select
             label="Regiões de segmentação (países)"
@@ -160,6 +164,18 @@ function copyTrackingScript() {
             use-input
             outlined
             dense
+        />
+
+        <q-select
+            v-model="form.google_ads_account_id"
+            :options="googleAdsAccounts"
+            option-value="id"
+            option-label="label"
+            emit-value
+            map-options
+            clearable
+            label="Conta de Anúncios"
+            hint="Selecione a conta do Google Ads desta campanha"
         />
 
         <!-- Código da campanha -->

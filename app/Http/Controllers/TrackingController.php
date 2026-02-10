@@ -17,8 +17,8 @@ class TrackingController extends Controller
             'referrer'      => 'nullable|string',
             'user_agent'    => 'nullable|string',
             'timestamp'     => 'nullable|integer',
-            'gclid'         => 'nullable',
-            'gad_campaignid'=> 'nullable',
+            'gclid'         => 'nullable|string',
+            'gad_campaignid'=> 'nullable|string',
         ]);
 
         $pageview = Pageview::create([

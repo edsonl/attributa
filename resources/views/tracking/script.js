@@ -3,10 +3,10 @@
     if (window.__ATTRIBUTA_PAGEVIEW_SENT__) return;
     window.__ATTRIBUTA_PAGEVIEW_SENT__ = true;
 
-    // 🔹 Código da campanha definido no backend (pode vir null)
+    // Código da campanha definido no backend (pode vir null)
     let CAMPAIGN_CODE = '{CAMPAIGN_CODE}';
 
-    // 🔹 Validação final
+    // Validação final
     if (!CAMPAIGN_CODE) {
         console.warn('[Attributa] Campaign code não informado');
         return;

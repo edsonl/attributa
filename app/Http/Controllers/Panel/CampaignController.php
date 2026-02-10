@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Channel;
 use App\Models\Country;
 use App\Models\AffiliatePlatform;
+use App\Models\GoogleAdsAccount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -64,6 +65,14 @@ class CampaignController extends Controller
             'channels'  => Channel::orderBy('name')->get(),
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => AffiliatePlatform::orderBy('id')->get(),
+            'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
+                ->where('active', true)
+                ->orderBy('google_ads_customer_id')
+                ->get()
+                ->map(fn ($acc) => [
+                    'id'    => $acc->id,
+                    'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
+                ]),
         ]);
     }
 
@@ -80,6 +89,7 @@ class CampaignController extends Controller
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],
+            'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
         ]);
 
@@ -98,6 +108,14 @@ class CampaignController extends Controller
     public function edit(Campaign $campaign)
     {
         return Inertia::render('Panel/Campaigns/Edit', [
+            'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
+                ->where('active', true)
+                ->orderBy('google_ads_customer_id')
+                ->get()
+                ->map(fn ($acc) => [
+                    'id'    => $acc->id,
+                    'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
+             ]),
             'campaign'  => $campaign->load('countries'),
             'channels'  => Channel::orderBy('name')->get(),
             'countries' => Country::orderBy('name')->get(),
@@ -118,6 +136,7 @@ class CampaignController extends Controller
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],
+            'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
         ]);
 

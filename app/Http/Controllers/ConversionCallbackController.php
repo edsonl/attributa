@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AdsConversion;
 use App\Models\Campaign;
 use App\Models\Pageview;
+use App\Services\GoogleAdsConversionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -62,15 +63,39 @@ class ConversionCallbackController extends Controller
 
         if (!$campaign) {return "";}
 
+        if (!$gclid) {
+            Log::warning('ADS CALLBACK: conversão sem gclid', [
+                'pageview_id' => $pageview->id,
+                'campaign_id' => $campaign->id,
+            ]);
+        }
+
+        $existingConversion = AdsConversion::where('pageview_id', $pageview->id)
+            ->where('campaign_id', $campaign->id)
+            ->first();
+
+        if ($existingConversion) {
+            Log::info('ADS CALLBACK: conversão já registrada', [
+                'pageview_id' => $pageview->id,
+                'campaign_id' => $campaign->id,
+            ]);
+            return 'ok';
+        }
+
         // 💾 Salvar conversão
-        AdsConversion::create([
-            'pageview_id'      => $pageview->id,
-            'conversion_name'  => $campaign->pixel_code,
-            'conversion_value' => $request->query('amount', 1.00),
-            'currency_code'    => $request->query('cy', 'USD'),
-            'gclid'            => $gclid,
-            'campaign_id'      => $campaign->id,
+        $conversion =  AdsConversion::create([
+            'campaign_id'           => $campaign->id,
+            'pageview_id'           => $pageview->id,
+            'gclid'                 => $gclid,
+            'conversion_name'       => $campaign->pixel_code, // mapeia com conversion_action
+            'conversion_value'      => (float) $request->query('amount', 1.00),
+            'currency_code'         => $request->query('cy', 'USD'),
+            'conversion_event_time' => now(), // venda confirmada
+            'google_upload_status'  => 'pending',
         ]);
+
+        // 🔥 ENVIO DIRETO
+        app(GoogleAdsConversionService::class)->send($conversion);
 
         return 'ok';
     }

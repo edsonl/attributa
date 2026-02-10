@@ -65,6 +65,8 @@ export default defineConfig(({ mode }) => {
                     'resources/frontend/**',
                     'resources/views/**/*.blade.php',  // se você usa Blade
                 ],
+
+                buildDirectory: 'dist',
             }),
             vue({ template: { transformAssetUrls } }),
             quasar({
@@ -103,6 +105,7 @@ export default defineConfig(({ mode }) => {
         css: { devSourcemap: false },
         build: {
             chunkSizeWarningLimit: 900,
+            emptyOutDir: true,
             rollupOptions: {
                 output: {
                     // nome dos CHUNKS (lazy/dinâmicos)

@@ -1,6 +1,6 @@
 <!-- Attributa Tracking -->
 <script>
-    (function(w,d,s,u,c,p){
+    (function(w,d,s,u,c){
         if (w.__ATTRIBUTA_LOADED__) return;
         w.__ATTRIBUTA_LOADED__ = true;
         var js = d.createElement(s);

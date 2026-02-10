@@ -24,6 +24,7 @@ storage/logs/*
 # Inertia / Vite / Frontend
 # ===============================
 /public/build
+/public/dist
 /public/hot
 .vite
 

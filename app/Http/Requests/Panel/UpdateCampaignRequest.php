@@ -65,6 +65,11 @@ class UpdateCampaignRequest extends FormRequest
                 'min:0',
             ],
 
+            'google_ads_account_id' => [
+                'nullable',
+                'exists:google_ads_accounts,id',
+            ],
+
         ];
     }
 
