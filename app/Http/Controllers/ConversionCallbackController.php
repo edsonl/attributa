@@ -95,7 +95,7 @@ class ConversionCallbackController extends Controller
         ]);
 
         // 🔥 ENVIO DIRETO
-        app(GoogleAdsConversionService::class)->send($conversion);
+        //app(GoogleAdsConversionService::class)->send($conversion);
 
         return 'ok';
     }
