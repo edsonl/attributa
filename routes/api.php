@@ -70,4 +70,4 @@ Route::get('/tracking/script.js', function (Request $request) {
 });
 
 
-Route::get('/google-ads/conversions', [GoogleAdsConversionsController::class, 'index']);
+Route::get('/google-ads/conversions.csv', [GoogleAdsConversionsController::class, 'index']);
