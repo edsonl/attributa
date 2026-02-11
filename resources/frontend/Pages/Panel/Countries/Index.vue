@@ -8,7 +8,7 @@ const rows = ref([])
 const loading = ref(false)
 const pagination = ref({
     page: 1,
-    rowsPerPage: 20,
+    rowsPerPage: 10,
     rowsNumber: 0,
     sortBy: 'name',
     descending: false,

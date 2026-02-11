@@ -17,7 +17,7 @@ class CountryController extends Controller
 
     public function data(Request $request)
     {
-        $perPage    = (int) $request->get('per_page', 20);
+        $perPage    = (int) $request->get('per_page', 10);
         $perPage    = max(1, min($perPage, 100));
         $sortBy     = $request->get('sortBy', 'name');
         $descending = filter_var($request->get('descending', false), FILTER_VALIDATE_BOOLEAN);

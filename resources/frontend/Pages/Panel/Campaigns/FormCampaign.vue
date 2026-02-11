@@ -58,6 +58,12 @@ const form = useForm({
     commission_value: props.campaign?.commission_value ?? null,
 })
 
+const countryError = computed(() => {
+    if (form.errors.countries) return form.errors.countries
+    const entry = Object.entries(form.errors).find(([key]) => key.startsWith('countries.'))
+    return entry ? entry[1] : null
+})
+
 function submit() {
     if (isEdit.value) {
         form.put(route('panel.campaigns.update', props.campaign.id))
@@ -169,6 +175,8 @@ function copyTrackingScript() {
             label="Nome da campanha"
             outlined
             dense
+            :error="Boolean(form.errors.name)"
+            :error-message="form.errors.name"
         />
 
         <!-- Canal -->
@@ -182,6 +190,8 @@ function copyTrackingScript() {
             label="Canal"
             outlined
             dense
+            :error="Boolean(form.errors.channel_id)"
+            :error-message="form.errors.channel_id"
         />
 
        <q-select
@@ -194,6 +204,8 @@ function copyTrackingScript() {
             label="Plataforma de Afiliado"
             outlined
             dense
+            :error="Boolean(form.errors.affiliate_platform_id)"
+            :error-message="form.errors.affiliate_platform_id"
         />
 
         <!-- Países -->
@@ -213,6 +225,8 @@ function copyTrackingScript() {
             @update:model-value="closeCountriesPopup"
             outlined
             dense
+            :error="Boolean(countryError)"
+            :error-message="countryError"
         />
 
         <q-select
@@ -225,6 +239,8 @@ function copyTrackingScript() {
             clearable
             label="Conta de Anúncios"
             hint="Selecione a conta do Google Ads desta campanha"
+            :error="Boolean(form.errors.google_ads_account_id)"
+            :error-message="form.errors.google_ads_account_id"
         />
 
         <!-- Código da campanha -->
@@ -233,6 +249,8 @@ function copyTrackingScript() {
             label="Pixel de acompanhamento"
             outlined
             dense
+            :error="Boolean(form.errors.pixel_code)"
+            :error-message="form.errors.pixel_code"
         />
 
         <!-- Botão -->
