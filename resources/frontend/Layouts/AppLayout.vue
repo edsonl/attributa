@@ -284,6 +284,7 @@ const links = [
     { label: 'Usuários', icon: 'people_alt', route: 'panel.users.index'},
     { label: 'Tarefas',  icon: 'checklist',  route: 'panel.tasks.index' ,svg:''},
     { label: 'Contas de anúncio', icon: 'insights', route: 'panel.ads-accounts.index'},
+    { label: 'Países', icon: 'public', route: 'panel.countries.index'},
 
 ]
 

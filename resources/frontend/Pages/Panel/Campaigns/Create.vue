@@ -20,6 +20,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    defaults: {
+        type: Object,
+        default: () => ({}),
+    },
 })
 </script>
 <template>
@@ -48,6 +52,7 @@ const props = defineProps({
                     :countries="countries"
                     :googleAdsAccounts="googleAdsAccounts"
                     :affiliate_platforms="affiliate_platforms"
+                    :defaults="defaults"
                 />
             </q-card-section>
         </q-card>

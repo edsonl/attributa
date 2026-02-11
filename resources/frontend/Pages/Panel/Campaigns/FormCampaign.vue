@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useForm, router } from '@inertiajs/vue3'
 import { Notify } from 'quasar'
 import axios from 'axios'
@@ -25,6 +25,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    defaults: {
+        type: Object,
+        default: () => ({}),
+    },
 })
 
 const isEdit = computed(() => !!props.campaign)
@@ -32,12 +36,21 @@ const isEdit = computed(() => !!props.campaign)
 /**
  * ===== FORM =====
  */
+const countryOptions = ref(props.countries ?? [])
+const filteredCountries = ref([...(props.countries ?? [])])
+const countrySelectRef = ref(null)
+
+watch(() => props.countries, (val = []) => {
+    countryOptions.value = val
+    filteredCountries.value = [...val]
+})
+
 const form = useForm({
     name: props.campaign?.name ?? '',
     pixel_code: props.campaign?.pixel_code ?? '',
     status: props.campaign?.status ?? true,
-    channel_id: props.campaign?.channel_id ?? null,
-    affiliate_platform_id: props.campaign?.affiliate_platform_id ?? null,
+    channel_id: props.campaign?.channel_id ?? props.defaults?.channel_id ?? null,
+    affiliate_platform_id: props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null,
     google_ads_account_id: props.campaign?.google_ads_account_id ?? null,
     countries: props.campaign?.countries
         ? props.campaign.countries.map(c => c.id)
@@ -50,6 +63,39 @@ function submit() {
         form.put(route('panel.campaigns.update', props.campaign.id))
     } else {
         form.post(route('panel.campaigns.store'))
+    }
+}
+
+function filterCountries(val, update, abort) {
+    if (!countryOptions.value.length) {
+        return abort()
+    }
+
+    const needle = (val || '').trim().toLowerCase()
+
+    update(() => {
+        if (!needle) {
+            filteredCountries.value = [...countryOptions.value]
+            return
+        }
+
+        filteredCountries.value = countryOptions.value.filter(country => {
+            const name = (country.name || '').toLowerCase()
+            const iso2 = (country.iso2 || '').toLowerCase()
+            const iso3 = (country.iso3 || '').toLowerCase()
+
+            return (
+                name.includes(needle) ||
+                iso2.includes(needle) ||
+                iso3.includes(needle)
+            )
+        })
+    })
+}
+
+function closeCountriesPopup() {
+    if (countrySelectRef.value?.hidePopup) {
+        countrySelectRef.value.hidePopup()
     }
 }
 
@@ -152,9 +198,10 @@ function copyTrackingScript() {
 
         <!-- Países -->
         <q-select
+            ref="countrySelectRef"
             label="Regiões de segmentação (países)"
             v-model="form.countries"
-            :options="countries"
+            :options="filteredCountries"
             option-label="name"
             option-value="id"
             emit-value
@@ -162,6 +209,8 @@ function copyTrackingScript() {
             multiple
             use-chips
             use-input
+            @filter="filterCountries"
+            @update:model-value="closeCountriesPopup"
             outlined
             dense
         />

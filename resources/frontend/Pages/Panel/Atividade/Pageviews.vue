@@ -24,7 +24,8 @@ const columns = [
     { name: 'campaign_code', label: 'Cód/Campanha', field: 'campaign_code', sortable: true, align: 'left' },
     { name: 'url', label: 'URL', field: 'url', sortable: true, align: 'left' },
     { name: 'ip', label: 'IP', field: 'ip', sortable: true, align: 'left' },
-    { name: 'conversion', label: 'Conversão', field: 'conversion', sortable: true, align: 'left' }
+    { name: 'conversion', label: 'Conversão', field: 'conversion', sortable: true, align: 'left' },
+    { name: 'actions', label: 'Ações', field: 'id', align: 'right' }
 ]
 
 function formatDateBR(date) {
@@ -51,7 +52,7 @@ function fetchPageviews(props) {
         descending
     } = props.pagination
 
-    axios.get(route('panel.atividade.pageviews.data'), {
+    return axios.get(route('panel.atividade.pageviews.data'), {
         params: {
             page,
             per_page: rowsPerPage,
@@ -76,6 +77,36 @@ function fetchPageviews(props) {
         .finally(() => {
             loading.value = false
         })
+}
+
+async function deletePageview(id) {
+    if (!id) return
+
+    let confirmed = true
+    const hasWindow = typeof window !== 'undefined'
+    const confirmDialog = hasWindow ? window.$confirm : null
+
+    if (confirmDialog) {
+        confirmed = await confirmDialog({
+            title: 'Excluir pageview',
+            message: 'Esta ação é permanente. Deseja realmente remover?',
+            okLabel: 'Remover',
+            okColor: 'negative'
+        })
+    } else if (hasWindow) {
+        confirmed = window.confirm('Excluir este pageview?')
+    }
+
+    if (!confirmed) return
+
+    loading.value = true
+
+    try {
+        await axios.delete(route('panel.atividade.pageviews.destroy', id))
+        await fetchPageviews({ pagination: pagination.value })
+    } finally {
+        loading.value = false
+    }
 }
 
 
@@ -140,6 +171,18 @@ onMounted(() => {
                         color="grey-4"
                         text-color="dark"
                         label="Não convertido"
+                    />
+                </q-td>
+            </template>
+
+            <template #body-cell-actions="props">
+                <q-td :props="props" class="tw-text-right">
+                    <q-btn
+                        dense
+                        flat
+                        icon="delete"
+                        color="negative"
+                        @click="deletePageview(props.row.id)"
                     />
                 </q-td>
             </template>

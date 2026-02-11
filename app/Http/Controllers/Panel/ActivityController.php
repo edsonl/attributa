@@ -70,4 +70,16 @@ class ActivityController extends Controller
             ->orderBy('name')
             ->get();
     }
+
+    /**
+     * API: remove um pageview específico
+     */
+    public function destroy(Pageview $pageview)
+    {
+        $pageview->delete();
+
+        return response()->json([
+            'message' => 'Pageview excluído com sucesso.',
+        ]);
+    }
 }

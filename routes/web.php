@@ -9,6 +9,7 @@ use App\Http\Controllers\Panel\CampaignController;
 use App\Http\Controllers\Panel\ClientController;
 use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\ConversionsController;
+use App\Http\Controllers\Panel\CountryController;
 use App\Http\Controllers\Panel\GoogleAdsAccountController;
 use App\Http\Controllers\Panel\GoogleAuthController;
 use App\Http\Controllers\Panel\TaskController;
@@ -92,9 +93,9 @@ Route::middleware(['auth', 'verified'])
         // =========================
         // Atividade
         // =========================
-        Route::prefix('atividade')
-            ->name('atividade.')
-            ->group(function () {
+            Route::prefix('atividade')
+                ->name('atividade.')
+                ->group(function () {
 
                 // Tela (Inertia)
                 Route::get('/pageviews', [ActivityController::class, 'pageviews'])
@@ -103,6 +104,9 @@ Route::middleware(['auth', 'verified'])
                 // API
                 Route::get('/pageviews/data', [ActivityController::class, 'data'])
                     ->name('pageviews.data');
+
+                Route::delete('/pageviews/{pageview}', [ActivityController::class, 'destroy'])
+                    ->name('pageviews.destroy');
 
                 Route::get('/campaigns', [ActivityController::class, 'campaigns'])
                     ->name('campaigns');
@@ -167,6 +171,17 @@ Route::middleware(['auth', 'verified'])
                 ->name('clients.bulk-delete');
             Route::resource('clients', ClientController::class)->except(['show']);
 
+            // Countries (AJAX-first CRUD)
+            Route::prefix('countries')
+                ->name('countries.')
+                ->group(function () {
+                    Route::get('/', [CountryController::class, 'index'])->name('index');
+                    Route::get('/data', [CountryController::class, 'data'])->name('data');
+                    Route::post('/', [CountryController::class, 'store'])->name('store');
+                    Route::put('/{country}', [CountryController::class, 'update'])->name('update');
+                    Route::delete('/{country}', [CountryController::class, 'destroy'])->name('destroy');
+                });
+
 
         });
 
@@ -191,7 +206,5 @@ Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
 //Resposta de conversão plataforma de afiliado
 Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
-
-
 
 

@@ -62,9 +62,9 @@ class CampaignController extends Controller
     public function create()
     {
         return Inertia::render('Panel/Campaigns/Create', [
-            'channels'  => Channel::orderBy('name')->get(),
+            'channels'  => $this->channelOptions(),
             'countries' => Country::orderBy('name')->get(),
-            'affiliate_platforms' => AffiliatePlatform::orderBy('id')->get(),
+            'affiliate_platforms' => $this->affiliatePlatformOptions(),
             'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
                 ->where('active', true)
                 ->orderBy('google_ads_customer_id')
@@ -73,6 +73,7 @@ class CampaignController extends Controller
                     'id'    => $acc->id,
                     'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
                 ]),
+            'defaults' => $this->campaignDefaults(),
         ]);
     }
 
@@ -117,9 +118,9 @@ class CampaignController extends Controller
                     'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
              ]),
             'campaign'  => $campaign->load('countries'),
-            'channels'  => Channel::orderBy('name')->get(),
+            'channels'  => $this->channelOptions(),
             'countries' => Country::orderBy('name')->get(),
-            'affiliate_platforms' => AffiliatePlatform::orderBy('id')->get(),
+            'affiliate_platforms' => $this->affiliatePlatformOptions(),
         ]);
     }
 
@@ -168,5 +169,36 @@ class CampaignController extends Controller
                 'platform' => $platform->slug,
             ])->render(),
         ]);
+    }
+
+    protected function channelOptions()
+    {
+        return Channel::query()
+            ->withCount('campaigns')
+            ->orderByDesc('campaigns_count')
+            ->orderBy('name')
+            ->get();
+    }
+
+    protected function affiliatePlatformOptions()
+    {
+        return AffiliatePlatform::query()
+            ->withCount('campaigns')
+            ->orderByDesc('campaigns_count')
+            ->orderBy('name')
+            ->get();
+    }
+
+    protected function campaignDefaults(): array
+    {
+        $lastCampaign = Campaign::query()
+            ->latest('created_at')
+            ->select(['channel_id', 'affiliate_platform_id'])
+            ->first();
+
+        return [
+            'channel_id' => $lastCampaign?->channel_id,
+            'affiliate_platform_id' => $lastCampaign?->affiliate_platform_id,
+        ];
     }
 }

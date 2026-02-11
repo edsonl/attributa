@@ -44,7 +44,8 @@ export default defineConfig(({ mode }) => {
     const port = Number(env.VITE_PORT ?? 5173)
     const origin = env.VITE_ORIGIN ?? `http://${host}:${port}`
     const hmrProtocol = env.VITE_HMR_PROTOCOL ?? 'ws'
-    const usePolling = (env.VITE_USE_POLLING ?? 'true') === 'true'
+    //const usePolling = (env.VITE_USE_POLLING ?? 'true') === 'true'
+    const usePolling = false; //No windows não funciona com true
     const enableCors = (env.VITE_CORS ?? 'true') === 'true'
 
     return {

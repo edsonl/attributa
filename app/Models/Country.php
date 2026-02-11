@@ -12,10 +12,15 @@ class Country extends Model
     protected $fillable = [
         'iso2',
         'iso3',
-        'nome',
+        'name',
         'currency',
         'currency_symbol',
         'timezone_default',
+        'active',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
     ];
 
     /**
