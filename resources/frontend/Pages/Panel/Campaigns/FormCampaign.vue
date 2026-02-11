@@ -183,7 +183,7 @@ function copyTrackingScript() {
         <q-select
             v-model="form.channel_id"
             :options="channels"
-            option-label="name"
+            option-label="label"
             option-value="id"
             emit-value
             map-options
@@ -197,7 +197,7 @@ function copyTrackingScript() {
        <q-select
             v-model="form.affiliate_platform_id"
             :options="affiliate_platforms"
-            option-label="name"
+            option-label="label"
             option-value="id"
             emit-value
             map-options

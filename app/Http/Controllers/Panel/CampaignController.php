@@ -181,6 +181,7 @@ class CampaignController extends Controller
             ->map(fn ($channel) => [
                 'id' => $channel->id,
                 'name' => $channel->name,
+                'label' => $channel->name,
                 'campaigns_count' => $channel->campaigns_count,
             ]);
     }
@@ -195,6 +196,7 @@ class CampaignController extends Controller
             ->map(fn ($platform) => [
                 'id' => $platform->id,
                 'name' => $platform->name,
+                'label' => $platform->name,
                 'campaigns_count' => $platform->campaigns_count,
             ]);
     }
