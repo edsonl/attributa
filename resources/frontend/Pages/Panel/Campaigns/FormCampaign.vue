@@ -39,6 +39,20 @@ const isEdit = computed(() => !!props.campaign)
 const countryOptions = ref(props.countries ?? [])
 const filteredCountries = ref([...(props.countries ?? [])])
 const countrySelectRef = ref(null)
+const channelOptions = computed(() =>
+    (props.channels ?? []).map(option => ({
+        ...option,
+        value: option.id,
+        label: option.label ?? option.name,
+    })),
+)
+const affiliateOptions = computed(() =>
+    (props.affiliate_platforms ?? []).map(option => ({
+        ...option,
+        value: option.id,
+        label: option.label ?? option.name,
+    })),
+)
 
 watch(() => props.countries, (val = []) => {
     countryOptions.value = val
@@ -182,9 +196,9 @@ function copyTrackingScript() {
         <!-- Canal -->
         <q-select
             v-model="form.channel_id"
-            :options="channels"
+            :options="channelOptions"
             option-label="label"
-            option-value="id"
+            option-value="value"
             emit-value
             map-options
             label="Canal"
@@ -196,9 +210,9 @@ function copyTrackingScript() {
 
        <q-select
             v-model="form.affiliate_platform_id"
-            :options="affiliate_platforms"
+            :options="affiliateOptions"
             option-label="label"
-            option-value="id"
+            option-value="value"
             emit-value
             map-options
             label="Plataforma de Afiliado"

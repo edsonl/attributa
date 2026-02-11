@@ -1,10 +1,6 @@
 {
-  "_AuthLayout-CvoEeGOv.css": {
-    "file": "assets/AuthLayout-CvoEeGOv.css",
-    "src": "_AuthLayout-CvoEeGOv.css"
-  },
-  "_AuthLayout-DwBfPvTb.js": {
-    "file": "assets/chunks/AuthLayout-DwBfPvTb.js",
+  "_AuthLayout-BF4UOWaE.js": {
+    "file": "assets/chunks/AuthLayout-BF4UOWaE.js",
     "name": "AuthLayout",
     "imports": [
       "_vendor-quasar-CLzIisyG.js",
@@ -14,6 +10,10 @@
     "css": [
       "assets/AuthLayout-CvoEeGOv.css"
     ]
+  },
+  "_AuthLayout-CvoEeGOv.css": {
+    "file": "assets/AuthLayout-CvoEeGOv.css",
+    "src": "_AuthLayout-CvoEeGOv.css"
   },
   "_IndexTable-DGl9RNp1.js": {
     "file": "assets/chunks/IndexTable-DGl9RNp1.js",
@@ -91,19 +91,19 @@
     ]
   },
   "resources/frontend/Pages/Auth/Createuser.vue": {
-    "file": "assets/chunks/createuser-5TdwsMUy.js",
+    "file": "assets/chunks/createuser-Bof1eCd3.js",
     "name": "Createuser",
     "src": "resources/frontend/Pages/Auth/Createuser.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-CLzIisyG.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-DwBfPvTb.js",
+      "_AuthLayout-BF4UOWaE.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/EditAccount.vue": {
-    "file": "assets/chunks/editaccount-vUb_tJnC.js",
+    "file": "assets/chunks/editaccount-B-8F2iww.js",
     "name": "EditAccount",
     "src": "resources/frontend/Pages/Auth/EditAccount.vue",
     "isDynamicEntry": true,
@@ -114,38 +114,38 @@
     ]
   },
   "resources/frontend/Pages/Auth/ForgotPassword.vue": {
-    "file": "assets/chunks/forgotpassword-C1zINia3.js",
+    "file": "assets/chunks/forgotpassword-DQFpDmYw.js",
     "name": "ForgotPassword",
     "src": "resources/frontend/Pages/Auth/ForgotPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-CLzIisyG.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-DwBfPvTb.js",
+      "_AuthLayout-BF4UOWaE.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/Login.vue": {
-    "file": "assets/chunks/login-BW5OMS2v.js",
+    "file": "assets/chunks/login-Blur_XuF.js",
     "name": "Login",
     "src": "resources/frontend/Pages/Auth/Login.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-CLzIisyG.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-DwBfPvTb.js",
+      "_AuthLayout-BF4UOWaE.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/ResetPassword.vue": {
-    "file": "assets/chunks/resetpassword-sNpM7_Um.js",
+    "file": "assets/chunks/resetpassword-DulY4MTw.js",
     "name": "ResetPassword",
     "src": "resources/frontend/Pages/Auth/ResetPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-CLzIisyG.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-DwBfPvTb.js",
+      "_AuthLayout-BF4UOWaE.js",
       "resources/frontend/app.js"
     ]
   },
@@ -212,7 +212,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/Create.vue": {
-    "file": "assets/chunks/create-BH3eZw_E.js",
+    "file": "assets/chunks/create-BzwP9ok7.js",
     "name": "Create",
     "src": "resources/frontend/Pages/Panel/Campaigns/Create.vue",
     "isDynamicEntry": true,
@@ -223,7 +223,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/Edit.vue": {
-    "file": "assets/chunks/edit-7eHBvgEp.js",
+    "file": "assets/chunks/edit-iLyKKvsf.js",
     "name": "Edit",
     "src": "resources/frontend/Pages/Panel/Campaigns/Edit.vue",
     "isDynamicEntry": true,
@@ -234,7 +234,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/FormCampaign.vue": {
-    "file": "assets/chunks/formcampaign-Bm9WPJfv.js",
+    "file": "assets/chunks/formcampaign-DuJLmmpI.js",
     "name": "FormCampaign",
     "src": "resources/frontend/Pages/Panel/Campaigns/FormCampaign.vue",
     "isDynamicEntry": true,
@@ -505,7 +505,7 @@
     ]
   },
   "resources/frontend/app.js": {
-    "file": "assets/app-CMbRr4tS.js",
+    "file": "assets/app-DMoj1wtS.js",
     "name": "app",
     "src": "resources/frontend/app.js",
     "isEntry": true,
