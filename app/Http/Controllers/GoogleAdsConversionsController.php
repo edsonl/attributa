@@ -8,6 +8,32 @@ use App\Models\AdsConversion;
 
 class GoogleAdsConversionsController extends Controller
 {
+
+    /*
+    |--------------------------------------------------------------------------
+    | ⚠️ IMPORTANTE — CSV FICTÍCIO PARA INTEGRAÇÃO GOOGLE ADS
+    |--------------------------------------------------------------------------
+    |
+    | O Google Ads (importação via HTTPS) NÃO aceita resposta vazia (204)
+    | nem arquivo CSV sem pelo menos cabeçalho + uma linha.
+    |
+    | Quando não há conversões no banco, o Google interpreta como erro
+    | de integração e pode marcar o endpoint como inválido.
+    |
+    | Para manter a integração ativa e validada:
+    | - Sempre retornamos um CSV válido
+    | - Com cabeçalho obrigatório
+    | - E uma linha fictícia de teste
+    |
+    | Neste cenário:
+    | - NÃO marcamos registros como exported (pois não existem)
+    | - Apenas mantemos o formato esperado pelo Google
+    |
+    | Esse comportamento foi necessário após testes reais de integração
+    | onde respostas vazias estavam sendo rejeitadas.
+    |
+    |--------------------------------------------------------------------------
+    */
     public function index(Request $request)
     {
         Log::channel('google_ads_https')->info('==== Google Ads HTTPS HIT ====');
@@ -82,11 +108,48 @@ class GoogleAdsConversionsController extends Controller
             'count' => $conversions->count(),
         ]);
 
-        /*
+
         if ($conversions->isEmpty()) {
-            Log::channel('google_ads_https')->info('No conversions found');
-            return response('', 204);
-        }*/
+
+            Log::channel('google_ads_https')->info('No conversions found - generating fake data');
+
+            $output = fopen('php://temp', 'r+');
+
+            // Cabeçalho
+            fputcsv($output, [
+                'Google Click ID',
+                'Conversion Name',
+                'Conversion Time',
+                'Conversion Value',
+                'Conversion Currency',
+                'Order ID',
+            ]);
+
+            // Linha fictícia
+            fputcsv($output, [
+                'TEST-GCLID-1234567890',
+                'Test Conversion',
+                now()->format('Y-m-d H:i:s'),
+                '1.00',
+                'USD',
+                'PV-TEST-001',
+            ]);
+
+            rewind($output);
+            $csv = stream_get_contents($output);
+            fclose($output);
+
+            Log::channel('google_ads_https')->info('Fake CSV generated', [
+                'bytes' => strlen($csv),
+            ]);
+
+            Log::channel('google_ads_https')->info('==== END REQUEST (FAKE DATA) ====');
+
+            return response($csv, 200, [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => 'attachment; filename="google_ads_conversions.csv"',
+            ]);
+        }
 
         $ids = $conversions->pluck('id')->toArray();
 
