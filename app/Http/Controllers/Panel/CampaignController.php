@@ -177,7 +177,12 @@ class CampaignController extends Controller
             ->withCount('campaigns')
             ->orderByDesc('campaigns_count')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(fn ($channel) => [
+                'id' => $channel->id,
+                'name' => $channel->name,
+                'campaigns_count' => $channel->campaigns_count,
+            ]);
     }
 
     protected function affiliatePlatformOptions()
@@ -186,7 +191,12 @@ class CampaignController extends Controller
             ->withCount('campaigns')
             ->orderByDesc('campaigns_count')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(fn ($platform) => [
+                'id' => $platform->id,
+                'name' => $platform->name,
+                'campaigns_count' => $platform->campaigns_count,
+            ]);
     }
 
     protected function campaignDefaults(): array
