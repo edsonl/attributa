@@ -97,6 +97,7 @@ class GoogleAdsConversionsController extends Controller
 
         // 📦 Buscar conversões
         $conversions = AdsConversion::query()
+            ->where('google_upload_status', 'pending')
             ->whereNotNull('gclid')
             ->whereNotNull('conversion_name')
             ->whereNotNull('conversion_event_time')
