@@ -89,7 +89,7 @@ export default defineConfig(({ mode }) => {
             origin,
             hmr: { host, port, protocol: hmrProtocol },
             strictPort: true,
-            watch: { usePolling },
+            watch: { usePolling:usePolling },
             cors: enableCors,
             // Ignora o que não precisa observar
             ignored: [
