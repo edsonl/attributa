@@ -69,5 +69,8 @@ Route::get('/tracking/script.js', function (Request $request) {
     );
 });
 
-
-Route::get('/google-ads/conversions.csv', [GoogleAdsConversionsController::class, 'index']);
+Route::get(
+    '/google-ads/conversions/{pixel}.csv',
+    [GoogleAdsConversionsController::class, 'index']
+);
+//Route::get('/google-ads/conversions.csv', [GoogleAdsConversionsController::class, 'index']);

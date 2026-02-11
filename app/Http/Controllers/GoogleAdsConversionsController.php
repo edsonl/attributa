@@ -34,7 +34,7 @@ class GoogleAdsConversionsController extends Controller
     |
     |--------------------------------------------------------------------------
     */
-    public function index(Request $request)
+    public function index(Request $request,$pixel=null)
     {
         Log::channel('google_ads_https')->info('==== Google Ads HTTPS HIT ====');
 
@@ -95,8 +95,13 @@ class GoogleAdsConversionsController extends Controller
 
         Log::channel('google_ads_https')->info('Authentication OK');
 
+        Log::channel('google_ads_https')->info('Pixel requested', [
+            'pixel' => $pixel,
+        ]);
+
         // 📦 Buscar conversões
         $conversions = AdsConversion::query()
+            ->where('conversion_name', $pixel)
             ->where('google_upload_status', 'pending')
             ->whereNotNull('gclid')
             ->whereNotNull('conversion_name')
