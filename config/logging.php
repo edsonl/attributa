@@ -135,7 +135,7 @@ return [
 
         'affiliate_platform_callback' => [
             'driver' => 'single',
-            'path' => storage_path('logs/affiliate_platform_callback.log'),
+            'path' => storage_path('logs/affiliate-platform-callback.log'),
             'level' => 'info',
         ],
 

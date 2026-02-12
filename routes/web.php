@@ -15,6 +15,8 @@ use App\Http\Controllers\Panel\GoogleAuthController;
 use App\Http\Controllers\Panel\TaskController;
 use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
+use App\Jobs\ProcessIpClassificationJob;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -38,9 +40,21 @@ Route::redirect('/home', '/');
 
 Route::redirect('/campanhas', '/painel/campaigns');
 
-Route::get('/sobre', function () {
-    return Inertia::render('About', []);
-})->name('sobre');
+Route::get('/teste', function () {
+
+
+    //$response = Http::timeout(10)
+       // ->withoutVerifying() // 👈 desativa verificação SSL
+       // ->get('https://ipqualityscore.com/api/json/ip/' . config('services.ipqualityscore.key') . '/8.8.8.8')
+       // ->json();
+
+   // return $response;
+
+    //ProcessIpClassificationJob::dispatch();
+   // return response()->json([
+   //     'message' => 'Processamento de IPs iniciado com sucesso.'
+   // ]);
+})->name('teste');
 
 //Route::get('/dashboard', function () {
 //    return Inertia::render('Dashboard', ['title' => 'Dashboard']);

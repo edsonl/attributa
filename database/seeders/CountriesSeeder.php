@@ -10,7 +10,7 @@ class CountriesSeeder extends Seeder
 {
     public function run(): void
     {
-        $countries = require database_path('seeders/data/countries_without_asia_and_russia.php');
+        $countries = require database_path('seeders/data/countries.php');
 
         foreach ($countries as $country) {
             DB::table('countries')->updateOrInsert(

@@ -45,4 +45,8 @@ return [
         'http_pass' => env('GOOGLE_ADS_HTTP_PASS'),
     ],
 
+    'ipqualityscore' => [
+        'key' => env('IPQUALITYSCORE_KEY'),
+    ],
+
 ];
