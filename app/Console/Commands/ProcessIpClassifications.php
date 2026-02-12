@@ -27,8 +27,8 @@ class ProcessIpClassifications extends Command
      */
     public function handle()
     {
-        ProcessIpClassificationJob::dispatch();
-
+        //ProcessIpClassificationJob::dispatch();
+        app(ProcessIpClassificationJob::class)->handle();
         $this->info('Job de classificação de IP disparado.');
         //
     }
