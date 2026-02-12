@@ -22,7 +22,7 @@ class ConversionCallbackController extends Controller
         // 🔎 Testa sub1 → sub5
         for ($i = 1; $i <= 5; $i++) {
 
-            $sub = $request->query("sub{$i}");
+            $sub = $request->query("subid{$i}");
 
             if (!$sub) {
                 continue;
