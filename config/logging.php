@@ -133,6 +133,12 @@ return [
             'level' => 'debug',
         ],
 
+        'affiliate_platform_callback' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/affiliate_platform_callback.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];

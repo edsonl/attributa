@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\AdsConversion;
 use App\Models\Campaign;
 use App\Models\Pageview;
-use App\Services\GoogleAdsConversionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -13,12 +12,14 @@ class ConversionCallbackController extends Controller
 {
     public function handle(Request $request)
     {
-        Log::info('ADS CALLBACK RAW', $request->query());
+        $log = Log::channel('affiliate_platform_callback');
+
+        $log->info('CALLBACK RAW', $request->query());
 
         $campaignCode = null;
         $pageviewId   = null;
 
-        // 🔎 Testa sub1 → sub5 (ordem importa)
+        // 🔎 Testa sub1 → sub5
         for ($i = 1; $i <= 5; $i++) {
 
             $sub = $request->query("sub{$i}");
@@ -27,16 +28,31 @@ class ConversionCallbackController extends Controller
                 continue;
             }
 
-            // Formato: CMP-GO-01KGW3QK31-56
-            if (preg_match('/^(CMP-.+)-([0-9]+)$/i', $sub, $matches)) {
-                $campaignCode = $matches[1];
+            /**
+             * Formato esperado:
+             * CMP-GO-01KH6EF278-30
+             *
+             * Banco salva:
+             * CMP-GO-01KH6EF278
+             */
+            if (preg_match('/^(CMP-[A-Z]{2}-[A-Z0-9]+)-(\d+)$/i', trim($sub), $matches)) {
+                $campaignCode = strtoupper($matches[1]);
                 $pageviewId   = (int) $matches[2];
+
+                $log->info('SUB MATCH', [
+                    'sub'           => $sub,
+                    'campaign_code' => $campaignCode,
+                    'pageview_id'   => $pageviewId,
+                ]);
+
                 break;
             }
         }
 
         if (!$campaignCode || !$pageviewId) {
-            Log::warning('ADS CALLBACK: código CMP inválido');
+            $log->warning('Código CMP inválido', [
+                'query' => $request->query()
+            ]);
             return 'ignored';
         }
 
@@ -44,13 +60,12 @@ class ConversionCallbackController extends Controller
         $pageview = Pageview::find($pageviewId);
 
         if (!$pageview) {
-            Log::warning('ADS CALLBACK: pageview não encontrada', [
+            $log->warning('Pageview não encontrada', [
                 'pageview_id' => $pageviewId
             ]);
             return 'ignored';
         }
 
-        // 🔑 GCLID vem da pageview
         $gclid = $pageview->gclid;
 
         // ✅ Marca conversão (idempotente)
@@ -58,24 +73,30 @@ class ConversionCallbackController extends Controller
             $pageview->update(['conversion' => 1]);
         }
 
-        // 🔎 Buscar campanha pelo código completo
+        // 🔎 Buscar campanha
         $campaign = Campaign::where('code', $campaignCode)->first();
 
-        if (!$campaign) {return "";}
+        if (!$campaign) {
+            $log->warning('Campanha não encontrada', [
+                'campaign_code' => $campaignCode
+            ]);
+            return 'ignored';
+        }
 
         if (!$gclid) {
-            Log::warning('ADS CALLBACK: conversão sem gclid', [
+            $log->warning('Conversão sem GCLID', [
                 'pageview_id' => $pageview->id,
                 'campaign_id' => $campaign->id,
             ]);
         }
 
+        // 🔁 Verifica duplicidade
         $existingConversion = AdsConversion::where('pageview_id', $pageview->id)
             ->where('campaign_id', $campaign->id)
             ->first();
 
         if ($existingConversion) {
-            Log::info('ADS CALLBACK: conversão já registrada', [
+            $log->info('Conversão já registrada', [
                 'pageview_id' => $pageview->id,
                 'campaign_id' => $campaign->id,
             ]);
@@ -83,19 +104,20 @@ class ConversionCallbackController extends Controller
         }
 
         // 💾 Salvar conversão
-        $conversion =  AdsConversion::create([
+        $conversion = AdsConversion::create([
             'campaign_id'           => $campaign->id,
             'pageview_id'           => $pageview->id,
             'gclid'                 => $gclid,
-            'conversion_name'       => $campaign->pixel_code, // mapeia com conversion_action
+            'conversion_name'       => $campaign->pixel_code,
             'conversion_value'      => (float) $request->query('amount', 1.00),
             'currency_code'         => $request->query('cy', 'USD'),
-            'conversion_event_time' => now(), // venda confirmada
+            'conversion_event_time' => now(),
             'google_upload_status'  => 'pending',
         ]);
 
-        // 🔥 ENVIO DIRETO
-        //app(GoogleAdsConversionService::class)->send($conversion);
+        $log->info('Conversão criada', [
+            'conversion_id' => $conversion->id
+        ]);
 
         return 'ok';
     }
