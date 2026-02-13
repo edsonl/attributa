@@ -49,7 +49,7 @@ const columns = [
     { name: 'country_code', label: 'País', field: 'country_code', sortable: true, align: 'left' },
     { name: 'region_name', label: 'Região', field: 'region_name', sortable: true, align: 'left' },
     { name: 'city', label: 'Cidade', field: 'city', sortable: true, align: 'left' },
-    { name: 'url', label: 'URL', field: 'url', sortable: true, align: 'left' },
+    //{ name: 'url', label: 'URL', field: 'url', sortable: true, align: 'left' },
     { name: 'gclid', label: 'GCLID', field: 'gclid', sortable: true, align: 'left' },
     { name: 'conversion', label: 'Conversão', field: 'conversion', sortable: true, align: 'left' },
     { name: 'details', label: 'Detalhes', field: 'id', align: 'center' },
