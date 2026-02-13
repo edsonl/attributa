@@ -98,7 +98,7 @@ class ActivityController extends Controller
     public function show(Pageview $pageview)
     {
         $pageview->loadMissing([
-            'ipCategory:id,name,color_hex',
+            'ipCategory:id,name,color_hex,description',
             'campaign:id,name,code',
         ]);
 
@@ -109,7 +109,7 @@ class ActivityController extends Controller
 
         if ($pageview->ip) {
             $ipLookup = IpLookupCache::query()
-                ->with('ipCategory:id,name,color_hex')
+                ->with('ipCategory:id,name,color_hex,description')
                 ->where('ip', $pageview->ip)
                 ->first();
         }
