@@ -39,7 +39,7 @@ class ActivityController extends Controller
             'country_code'  => 'pageviews.country_code',
             'region_name'   => 'pageviews.region_name',
             'city'          => 'pageviews.city',
-            'url'           => 'pageviews.url',
+            //'url'           => 'pageviews.url',
             'gclid'         => 'pageviews.gclid',
             'conversion'    => 'pageviews.conversion',
             'ip'            => 'pageviews.ip',
