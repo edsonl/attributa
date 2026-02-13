@@ -122,6 +122,9 @@ Route::middleware(['auth', 'verified'])
                 Route::get('/pageviews/{pageview}', [ActivityController::class, 'show'])
                     ->name('pageviews.show');
 
+                Route::delete('/pageviews', [ActivityController::class, 'bulkDestroy'])
+                    ->name('pageviews.bulk-destroy');
+
                 Route::delete('/pageviews/{pageview}', [ActivityController::class, 'destroy'])
                     ->name('pageviews.destroy');
 
@@ -223,4 +226,3 @@ Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
 //Resposta de conversão plataforma de afiliado
 Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
-

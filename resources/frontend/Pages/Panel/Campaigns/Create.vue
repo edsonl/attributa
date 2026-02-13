@@ -58,3 +58,8 @@ const props = defineProps({
         </q-card>
     </div>
 </template>
+<style lang="css" scoped>
+  .bg-white-campanha {
+    background-color: #fff;
+  }
+</style>

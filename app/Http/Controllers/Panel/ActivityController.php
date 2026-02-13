@@ -93,6 +93,24 @@ class ActivityController extends Controller
     }
 
     /**
+     * API: remove múltiplos pageviews
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['integer', 'exists:pageviews,id'],
+        ]);
+
+        $deleted = Pageview::whereIn('id', $data['ids'])->delete();
+
+        return response()->json([
+            'message' => 'Pageviews excluídos com sucesso.',
+            'deleted' => $deleted,
+        ]);
+    }
+
+    /**
      * API: detalhes completos de um pageview (AJAX)
      */
     public function show(Pageview $pageview)

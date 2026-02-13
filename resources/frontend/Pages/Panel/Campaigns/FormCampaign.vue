@@ -334,3 +334,8 @@ function copyTrackingScript() {
         </q-card>
     </q-dialog>
 </template>
+<style lang="css" scoped>
+  .bg-white-campanha {
+    background-color: #fff;
+  }
+</style>

@@ -32,6 +32,7 @@ const FALLBACK_IP_CATEGORY_DETAIL = {
 const detailDialog = ref(false)
 const detailLoading = ref(false)
 const detailPayload = ref(null)
+const selected = ref([])
 const detailPageview = computed(() => detailPayload.value?.pageview ?? {})
 const detailUrl = computed(() => detailPayload.value?.url ?? { full: null, origin: null, path: null, query_params: {} })
 const detailGeo = computed(() => detailPayload.value?.geo ?? {})
@@ -49,6 +50,7 @@ const detailNetworkCategoryColor = computed(() => detailNetworkCategory.value?.c
 const detailNetworkCategoryName = computed(() => detailNetworkCategory.value?.name ?? '-')
 const detailNetworkCategoryDescription = computed(() => detailNetworkCategory.value?.description ?? 'Sem descrição.')
 const detailCleanUrl = computed(() => stripQueryString(detailUrl.value?.full || ''))
+const hasSelection = computed(() => selected.value.length > 0)
 
 const columns = [
     { name: 'created_at', label: 'Data', field: 'created_at', sortable: true, align: 'left' },
@@ -140,6 +142,7 @@ function fetchPageviews(props) {
         })
         .then(res => {
             rows.value = res.data.data
+            selected.value = []
 
             pagination.value = {
                 ...pagination.value,
@@ -185,6 +188,39 @@ async function deletePageview(id) {
     }
 }
 
+async function deleteSelected() {
+    if (!hasSelection.value) return
+
+    let confirmed = true
+    const hasWindow = typeof window !== 'undefined'
+    const confirmDialog = hasWindow ? window.$confirm : null
+    const message = `Você selecionou ${selected.value.length} registro(s). Deseja remover?`
+
+    if (confirmDialog) {
+        confirmed = await confirmDialog({
+            title: 'Remover pageviews',
+            message,
+            okLabel: 'Remover',
+            okColor: 'negative',
+        })
+    } else if (hasWindow) {
+        confirmed = window.confirm(message)
+    }
+
+    if (!confirmed) return
+
+    loading.value = true
+
+    try {
+        await axios.delete(route('panel.atividade.pageviews.bulk-destroy'), {
+            data: { ids: selected.value.map(row => row.id) },
+        })
+        await fetchPageviews({ pagination: pagination.value })
+    } finally {
+        loading.value = false
+    }
+}
+
 async function openDetails(row) {
     detailDialog.value = true
     detailLoading.value = true
@@ -212,8 +248,8 @@ onMounted(() => {
 <template>
     <Head title="Relatório de atividade" />
     <q-card flat bordered class="tw-rounded-2xl tw-p-4">
-        <div class="row q-mb-md items-center">
-            <div class="col-12 col-md-4">
+        <div class="row q-mb-md items-center q-col-gutter-md">
+            <div class="col-12 col-md-4 q-mb-sm q-mb-md-0">
                 <q-select
                     ref="tableRef"
                     v-model="campaignId"
@@ -226,6 +262,15 @@ onMounted(() => {
                     label="Filtrar por campanha"
                 />
             </div>
+            <div class="col-12 col-md-4 col-lg-3 q-mt-sm q-mt-md-0 q-pl-md-sm">
+                <q-btn
+                    color="negative"
+                    label="Remover selecionados"
+                    :disable="!hasSelection"
+                    @click="deleteSelected"
+                    class="tw-w-full lg:tw-w-auto bulk-delete-btn"
+                />
+            </div>
         </div>
 
         <q-table
@@ -236,6 +281,8 @@ onMounted(() => {
             v-model:pagination="pagination"
             :binary-state-sort="true"
             @request="fetchPageviews"
+            selection="multiple"
+            v-model:selected="selected"
         >
             <template #body-cell-created_at="props">
                 <q-td :props="props">
@@ -566,6 +613,18 @@ onMounted(() => {
 
 .section-body--stack > * + * {
     margin-top: 1rem;
+}
+
+.rounded-borders {
+    border: none;
+}
+
+.bulk-delete-btn:disabled {
+    background-color: #e2e8f0 !important;
+    color: #94a3b8 !important;
+    opacity: 0.4;
+    box-shadow: none;
+    border-color: transparent;
 }
 
 .detail-label {
