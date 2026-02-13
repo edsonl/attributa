@@ -84,6 +84,12 @@ function isConverted(value) {
     return value === true || value === 1 || value === '1'
 }
 
+function hasGclid(value) {
+    if (value === true || value === 1 || value === '1') return true
+    if (typeof value === 'string') return value.trim().length > 0 && value !== '0'
+    return false
+}
+
 function fetchCampaigns() {
     axios.get(route('panel.atividade.campaigns')).then(res => {
         campaigns.value = res.data
@@ -322,7 +328,7 @@ onMounted(() => {
             <template #body-cell-gclid="props">
                 <q-td :props="props">
                     <q-badge
-                        v-if="props.value"
+                        v-if="hasGclid(props.value)"
                         color="primary"
                         label="Sim"
                     />
