@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { useQuasar } from 'quasar'
 
 const FALLBACK_IP_CATEGORY_DETAIL = {
     name: 'Não determinado',
@@ -27,10 +28,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const $q = useQuasar()
 
 const detailDrawer = computed({
     get: () => props.modelValue,
     set: value => emit('update:modelValue', value),
+})
+const drawerWidth = computed(() => {
+    if ($q.screen.lt.lg) return $q.screen.width
+    return Math.round($q.screen.width * 0.8)
 })
 
 const detailPageview = computed(() => props.payload?.pageview ?? {})
@@ -87,22 +93,24 @@ function formatParamValue(value) {
 </script>
 
 <template>
-    <q-dialog
+    <q-drawer
         v-model="detailDrawer"
-        position="right"
-        transition-show="slide-left"
-        transition-hide="slide-right"
+        side="right"
+        overlay
+        bordered
+        :width="drawerWidth"
+        class="pageview-detail-drawer"
     >
-        <q-card class="pageview-detail-drawer">
-            <q-card-section class="tw-flex tw-justify-end">
+        <div class="drawer-shell">
+            <div class="drawer-header">
                 <q-btn icon="close" flat round dense @click="detailDrawer = false" />
-            </q-card-section>
+            </div>
 
             <q-linear-progress v-if="loading" indeterminate color="primary" />
 
-            <q-card-section
+            <div
                 v-if="!loading"
-                class="tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2"
+                class="drawer-content tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2"
             >
                 <section class="detail-section">
                     <div class="section-card">
@@ -273,24 +281,39 @@ function formatParamValue(value) {
                         </div>
                     </div>
                 </section>
-            </q-card-section>
-        </q-card>
-    </q-dialog>
+            </div>
+        </div>
+    </q-drawer>
 </template>
 
 <style scoped>
 .pageview-detail-drawer {
-    width: 100vw;
     max-width: 100vw;
-    height: 100%;
-    max-height: 100%;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
 }
 
-@media (min-width: 1024px) {
-    .pageview-detail-drawer {
-        width: 80vw;
-        max-width: 80vw;
-    }
+.pageview-detail-drawer :deep(.q-drawer__content) {
+    height: 100%;
+}
+
+.drawer-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5rem 0.75rem;
+}
+
+.drawer-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0 1rem 1rem;
 }
 
 .detail-section {
