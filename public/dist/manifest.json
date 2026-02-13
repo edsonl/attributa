@@ -1,6 +1,6 @@
 {
-  "_AuthLayout-BgHVtIIP.js": {
-    "file": "assets/chunks/AuthLayout-BgHVtIIP.js",
+  "_AuthLayout-CiYifjQk.js": {
+    "file": "assets/chunks/AuthLayout-CiYifjQk.js",
     "name": "AuthLayout",
     "imports": [
       "_vendor-quasar-C1KtC9YM.js",
@@ -91,19 +91,19 @@
     ]
   },
   "resources/frontend/Pages/Auth/Createuser.vue": {
-    "file": "assets/chunks/createuser-CszJrYEW.js",
+    "file": "assets/chunks/createuser-D6Rqnj-P.js",
     "name": "Createuser",
     "src": "resources/frontend/Pages/Auth/Createuser.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-C1KtC9YM.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-BgHVtIIP.js",
+      "_AuthLayout-CiYifjQk.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/EditAccount.vue": {
-    "file": "assets/chunks/editaccount-f1iYlbGV.js",
+    "file": "assets/chunks/editaccount-C5ESXXUJ.js",
     "name": "EditAccount",
     "src": "resources/frontend/Pages/Auth/EditAccount.vue",
     "isDynamicEntry": true,
@@ -114,38 +114,38 @@
     ]
   },
   "resources/frontend/Pages/Auth/ForgotPassword.vue": {
-    "file": "assets/chunks/forgotpassword-DSPtcXM-.js",
+    "file": "assets/chunks/forgotpassword-GiTCr8wO.js",
     "name": "ForgotPassword",
     "src": "resources/frontend/Pages/Auth/ForgotPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-C1KtC9YM.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-BgHVtIIP.js",
+      "_AuthLayout-CiYifjQk.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/Login.vue": {
-    "file": "assets/chunks/login-Dvvfc1o6.js",
+    "file": "assets/chunks/login-VPNq4NG-.js",
     "name": "Login",
     "src": "resources/frontend/Pages/Auth/Login.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-C1KtC9YM.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-BgHVtIIP.js",
+      "_AuthLayout-CiYifjQk.js",
       "resources/frontend/app.js"
     ]
   },
   "resources/frontend/Pages/Auth/ResetPassword.vue": {
-    "file": "assets/chunks/resetpassword-DirD5Dsz.js",
+    "file": "assets/chunks/resetpassword-COfLkyob.js",
     "name": "ResetPassword",
     "src": "resources/frontend/Pages/Auth/ResetPassword.vue",
     "isDynamicEntry": true,
     "imports": [
       "_vendor-quasar-C1KtC9YM.js",
       "_vendor-D8nj3W7R.js",
-      "_AuthLayout-BgHVtIIP.js",
+      "_AuthLayout-CiYifjQk.js",
       "resources/frontend/app.js"
     ]
   },
@@ -202,7 +202,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Atividade/PageviewDetailDrawer.vue": {
-    "file": "assets/chunks/pageviewdetaildrawer-DWoZr8zi.js",
+    "file": "assets/chunks/pageviewdetaildrawer-CJs7321U.js",
     "name": "PageviewDetailDrawer",
     "src": "resources/frontend/Pages/Panel/Atividade/PageviewDetailDrawer.vue",
     "isDynamicEntry": true,
@@ -212,11 +212,11 @@
       "_vendor-D8nj3W7R.js"
     ],
     "css": [
-      "assets/PageviewDetailDrawer-BcDyaqBC.css"
+      "assets/PageviewDetailDrawer-fuo9GpHW.css"
     ]
   },
   "resources/frontend/Pages/Panel/Atividade/PageviewDetailModal.vue": {
-    "file": "assets/chunks/pageviewdetailmodal-Dwbn0t2_.js",
+    "file": "assets/chunks/pageviewdetailmodal-DFqJu9Gg.js",
     "name": "PageviewDetailModal",
     "src": "resources/frontend/Pages/Panel/Atividade/PageviewDetailModal.vue",
     "isDynamicEntry": true,
@@ -226,11 +226,11 @@
       "_vendor-D8nj3W7R.js"
     ],
     "css": [
-      "assets/PageviewDetailModal-CaAdHZKt.css"
+      "assets/PageviewDetailModal-CQS6qA3Y.css"
     ]
   },
   "resources/frontend/Pages/Panel/Atividade/Pageviews.vue": {
-    "file": "assets/chunks/pageviews-h9FdVCet.js",
+    "file": "assets/chunks/pageviews-CjQk7FCv.js",
     "name": "Pageviews",
     "src": "resources/frontend/Pages/Panel/Atividade/Pageviews.vue",
     "isDynamicEntry": true,
@@ -242,11 +242,11 @@
       "resources/frontend/app.js"
     ],
     "css": [
-      "assets/Pageviews-DYrDyPYw.css"
+      "assets/Pageviews-CMNx8Nvw.css"
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/Create.vue": {
-    "file": "assets/chunks/create-B-1tg4Vb.js",
+    "file": "assets/chunks/create-CTzVMFZi.js",
     "name": "Create",
     "src": "resources/frontend/Pages/Panel/Campaigns/Create.vue",
     "isDynamicEntry": true,
@@ -261,7 +261,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/Edit.vue": {
-    "file": "assets/chunks/edit-BOXBg306.js",
+    "file": "assets/chunks/edit-uDoVScxs.js",
     "name": "Edit",
     "src": "resources/frontend/Pages/Panel/Campaigns/Edit.vue",
     "isDynamicEntry": true,
@@ -276,7 +276,7 @@
     ]
   },
   "resources/frontend/Pages/Panel/Campaigns/FormCampaign.vue": {
-    "file": "assets/chunks/formcampaign-CDDVYL4C.js",
+    "file": "assets/chunks/formcampaign-Cchf5Izk.js",
     "name": "FormCampaign",
     "src": "resources/frontend/Pages/Panel/Campaigns/FormCampaign.vue",
     "isDynamicEntry": true,
@@ -551,7 +551,7 @@
     ]
   },
   "resources/frontend/app.js": {
-    "file": "assets/app-Ben3eMxq.js",
+    "file": "assets/app-jU-UGa9k.js",
     "name": "app",
     "src": "resources/frontend/app.js",
     "isEntry": true,

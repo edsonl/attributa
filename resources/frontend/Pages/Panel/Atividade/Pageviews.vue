@@ -32,7 +32,7 @@ const detailLoading = ref(false)
 const detailPayload = ref(null)
 const selected = ref([])
 const hasSelection = computed(() => selected.value.length > 0)
-const usePopup = ref(false)
+const usePopup = ref(true)
 const assetBaseUrl = (
     import.meta.env.VITE_ASSET_URL
         ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')

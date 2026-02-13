@@ -132,7 +132,7 @@ async function copyParamValue(value) {
                 v-if="!loading"
                 class="tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2"
             >
-                <section class="detail-section">
+                <section class="detail-section first-row-section">
                     <div class="section-card">
                         <div class="section-card__header">VISITA</div>
                         <div class="section-card__body">
@@ -206,7 +206,7 @@ async function copyParamValue(value) {
                     </div>
                 </section>
 
-                <section class="detail-section">
+                <section class="detail-section first-row-section">
                     <div class="section-card">
                         <div class="section-card__header">GEOLOCALIZAÇÃO</div>
                         <div class="section-card__body">
@@ -468,5 +468,11 @@ async function copyParamValue(value) {
     height: 100%;
     pointer-events: none;
     background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 80%);
+}
+
+@media (min-width: 1024px) {
+    .first-row-section > .section-card {
+        height: 100%;
+    }
 }
 </style>
