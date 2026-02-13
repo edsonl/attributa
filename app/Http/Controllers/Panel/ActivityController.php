@@ -7,7 +7,9 @@ use Illuminate\Http\Request;
 use App\Models\Pageview;
 use App\Models\Campaign;
 use App\Models\IpLookupCache;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\DB;
 
 class ActivityController extends Controller
 {
@@ -52,11 +54,19 @@ class ActivityController extends Controller
             ->leftJoin('campaigns', 'campaigns.id', '=', 'pageviews.campaign_id')
             ->leftJoin('ip_categories', 'ip_categories.id', '=', 'pageviews.ip_category_id')
             ->select([
-                'pageviews.*',
+                'pageviews.id',
+                DB::raw("DATE_FORMAT(pageviews.created_at, '%d/%m/%Y, %H:%i:%s') as created_at_formatted"),
+                'pageviews.ip',
+                //'pageviews.created_at',
+                'pageviews.country_code',
+                'pageviews.region_name',
+                'pageviews.city',
+                'pageviews.conversion',
+                DB::raw("CASE WHEN pageviews.gclid IS NOT NULL AND pageviews.gclid <> '' THEN 1 ELSE 0 END as has_gclid"),
                 'campaigns.name as campaign_name',
-                'campaigns.id as campaign_internal_id',
                 'ip_categories.name as ip_category_name',
                 'ip_categories.color_hex as ip_category_color',
+                'ip_categories.description as ip_category_description',
             ])
             ->orderBy($orderColumn, $orderDir);
 
@@ -64,9 +74,9 @@ class ActivityController extends Controller
             $query->where('pageviews.campaign_id', $request->campaign_id);
         }
 
-        return response()->json(
-            $query->paginate($perPage)
-        );
+        $paginator = $query->paginate($perPage);
+
+        return response()->json($paginator);
     }
 
     /**
@@ -120,6 +130,8 @@ class ActivityController extends Controller
             'campaign:id,name,code',
         ]);
 
+        $pageview->created_at_formatted = optional($pageview->created_at)->format('d/m/Y, H:i:s');
+
         $urlData = $this->extractUrlData($pageview->url);
 
         $ipLookup = null;
@@ -159,6 +171,7 @@ class ActivityController extends Controller
             'fraud_score'   => $ipLookup->fraud_score ?? null,
             'ip_category'   => $ipLookup?->ipCategory,
             'last_checked'  => $ipLookup?->last_checked_at,
+            'last_checked_formatted' => optional($ipLookup?->last_checked_at)->format('d/m/Y, H:i:s'),
         ];
 
         return response()->json([

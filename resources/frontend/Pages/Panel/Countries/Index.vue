@@ -34,6 +34,10 @@ const defaultForm = () => ({
 
 const form = ref(defaultForm())
 const isEditing = computed(() => Boolean(form.value.id))
+const assetBaseUrl = (
+    import.meta.env.VITE_ASSET_URL
+        ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
+).replace(/\/$/, '')
 
 const columns = [
     { name: 'name', label: 'Nome', field: 'name', sortable: true, align: 'left' },
@@ -53,6 +57,15 @@ function formatDate(date) {
         dateStyle: 'short',
         timeStyle: 'short',
     })
+}
+
+function resolveCountryFlag(row) {
+    const code = row?.iso2
+    if (!code) return null
+
+    const lowerCode = String(code).toLowerCase()
+    const base = assetBaseUrl || ''
+    return `${base}/assets/country-flags/${lowerCode}.svg`
 }
 
 function fetchCountries(props) {
@@ -235,6 +248,19 @@ onMounted(() => {
                 :binary-state-sort="true"
                 @request="fetchCountries"
             >
+                <template #body-cell-name="props">
+                    <q-td :props="props">
+                        <div class="tw-flex tw-items-center tw-gap-2">
+                            <img
+                                v-if="resolveCountryFlag(props.row)"
+                                :src="resolveCountryFlag(props.row)"
+                                :alt="props.row.iso2"
+                                class="tw-w-6 tw-h-4 tw-rounded-sm tw-object-cover tw-border tw-border-gray-200"
+                            />
+                            <span>{{ props.value || '-' }}</span>
+                        </div>
+                    </q-td>
+                </template>
                 <template #body-cell-active="props">
                     <q-td :props="props">
                         <q-badge

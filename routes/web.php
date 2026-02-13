@@ -39,6 +39,7 @@ Route::view('/', 'site.home')->name('home');
 Route::redirect('/home', '/');
 
 Route::redirect('/campanhas', '/painel/campaigns');
+Route::redirect('/painel', '/painel/atividade/pageviews');
 
 Route::get('/teste', function () {
 

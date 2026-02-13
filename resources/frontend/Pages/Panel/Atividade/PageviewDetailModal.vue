@@ -1,0 +1,347 @@
+<script setup>
+import { computed } from 'vue'
+
+const FALLBACK_IP_CATEGORY_DETAIL = {
+    name: 'Não determinado',
+    color_hex: '#FCE7F3',
+    description: 'Categoria ainda não determinada.',
+}
+
+const props = defineProps({
+    modelValue: {
+        type: Boolean,
+        required: true,
+    },
+    loading: {
+        type: Boolean,
+        default: false,
+    },
+    payload: {
+        type: Object,
+        default: () => null,
+    },
+    assetBaseUrl: {
+        type: String,
+        default: '',
+    },
+})
+
+const emit = defineEmits(['update:modelValue'])
+
+const detailDialog = computed({
+    get: () => props.modelValue,
+    set: value => emit('update:modelValue', value),
+})
+
+const detailPageview = computed(() => props.payload?.pageview ?? {})
+const detailUrl = computed(() => props.payload?.url ?? { full: null, origin: null, path: null, query_params: {} })
+const detailGeo = computed(() => props.payload?.geo ?? {})
+const detailNetwork = computed(() => props.payload?.network ?? {})
+const detailUrlParams = computed(() => {
+    const params = detailUrl.value?.query_params ?? {}
+    return Object.entries(params)
+})
+const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
+const detailCampaignName = computed(() => detailPageview.value?.campaign?.name ?? '-')
+const detailNetworkFlags = computed(() => detailNetwork.value?.flags ?? {})
+const detailPageviewCategory = computed(() => detailPageview.value?.ip_category ?? FALLBACK_IP_CATEGORY_DETAIL)
+const detailNetworkCategory = computed(() => detailNetwork.value?.ip_category ?? null)
+const detailNetworkCategoryColor = computed(() => detailNetworkCategory.value?.color_hex ?? '#475569')
+const detailNetworkCategoryName = computed(() => detailNetworkCategory.value?.name ?? '-')
+const detailNetworkCategoryDescription = computed(() => detailNetworkCategory.value?.description ?? 'Sem descrição.')
+const detailCleanUrl = computed(() => stripQueryString(detailUrl.value?.full || ''))
+const detailCountryFlag = computed(() => {
+    const code = detailGeo.value?.country_code
+    if (!code) return null
+    return `${props.assetBaseUrl}/assets/country-flags/${String(code).toLowerCase()}.svg`
+})
+
+function stripQueryString(value) {
+    if (!value) return '-'
+
+    try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://placeholder.local'
+        const parsedUrl = new URL(value, origin)
+        return `${parsedUrl.origin}${parsedUrl.pathname}`
+    } catch (error) {
+        return value.split('?')[0] ?? value
+    }
+}
+
+function formatFlag(value) {
+    if (value === null || value === undefined) return '-'
+    return value ? 'Sim' : 'Não'
+}
+
+function formatParamValue(value) {
+    if (value === null || value === undefined) return '-'
+    if (Array.isArray(value) || typeof value === 'object') {
+        try {
+            return JSON.stringify(value)
+        } catch (error) {
+            return String(value)
+        }
+    }
+    return String(value)
+}
+</script>
+
+<template>
+    <q-dialog v-model="detailDialog" transition-show="scale" transition-hide="scale">
+        <q-card class="pageview-detail-card">
+            <q-card-section class="tw-flex tw-justify-end">
+                <q-btn icon="close" flat round dense @click="detailDialog = false" />
+            </q-card-section>
+
+            <q-linear-progress v-if="loading" indeterminate color="primary" />
+
+            <q-card-section
+                v-if="!loading"
+                class="tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2"
+            >
+                <section class="detail-section">
+                    <div class="section-card">
+                        <div class="section-card__header">VISITA</div>
+                        <div class="section-card__body">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                                <div>
+                                    <div class="detail-label">Data/Horário</div>
+                                    <div class="detail-value">
+                                        {{ detailPageview.created_at_formatted }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Campanha</div>
+                                    <div class="detail-value">
+                                        {{ detailCampaignName }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">IP</div>
+                                    <div class="detail-value">
+                                        {{ detailPageview.ip || '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Categoria de IP</div>
+                                    <div class="tw-mt-1">
+                                        <div
+                                            class="ip-category-label"
+                                            :style="{ color: detailPageviewCategory.color_hex }"
+                                        >
+                                            {{ detailPageviewCategory.name }}
+                                        </div>
+                                        <div class="ip-category-description">
+                                            {{ detailPageviewCategory.description || 'Sem descrição.' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Conversão</div>
+                                    <div class="tw-mt-1">
+                                        <q-badge
+                                            v-if="detailPageview.conversion"
+                                            color="green"
+                                            label="Convertido"
+                                        />
+                                        <q-badge
+                                            v-else
+                                            color="grey-4"
+                                            text-color="dark"
+                                            label="Não convertido"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="detail-section">
+                    <div class="section-card">
+                        <div class="section-card__header">GEOLOCALIZAÇÃO</div>
+                        <div class="section-card__body">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                                <div>
+                                    <div class="detail-label">País</div>
+                                    <div class="detail-value tw-flex tw-items-center tw-gap-2">
+                                        <img
+                                            v-if="detailCountryFlag"
+                                            :src="detailCountryFlag"
+                                            :alt="detailGeo.country_code"
+                                            class="tw-w-6 tw-h-4 tw-rounded-sm tw-object-cover tw-border tw-border-gray-200"
+                                        />
+                                        <span>{{ detailGeo.country_name ?? '-' }}</span>
+                                    </div>
+                                </div>
+                                <div v-for="field in [{ label: 'Código', key: 'country_code' }, { label: 'Região', key: 'region_name' }, { label: 'Cidade', key: 'city' }, { label: 'Latitude', key: 'latitude' }, { label: 'Longitude', key: 'longitude' }, { label: 'Timezone', key: 'timezone' }]" :key="field.key">
+                                    <div class="detail-label">{{ field.label }}</div>
+                                    <div class="detail-value">
+                                        {{ detailGeo[field.key] ?? '-' }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="detail-section xl:tw-col-span-2">
+                    <div class="section-card">
+                        <div class="section-card__header">ORIGEM DA URL</div>
+                        <div class="section-card__body section-body--stack">
+                            <div>
+                                <div class="detail-label">Página (sem parâmetros)</div>
+                                <div class="detail-value tw-break-all">
+                                    {{ detailCleanUrl }}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="detail-label">Parâmetros</div>
+                                <div class="tw-mt-2">
+                                    <q-list v-if="hasUrlParams" class="rounded-borders">
+                                        <q-item v-for="([key, value]) in detailUrlParams" :key="`${key}-${value}`">
+                                            <q-item-section>
+                                                <div class="tw-text-xs tw-uppercase tw-text-slate-500">{{ key }}</div>
+                                                <div class="tw-text-sm tw-font-medium tw-break-all">{{ formatParamValue(value) }}</div>
+                                            </q-item-section>
+                                        </q-item>
+                                    </q-list>
+                                    <div v-else class="tw-text-sm tw-text-slate-500">Sem parâmetros na URL.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="detail-section xl:tw-col-span-2">
+                    <div class="section-card">
+                        <div class="section-card__header">REDE &amp; SEGURANÇA</div>
+                        <div class="section-card__body">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                                <div>
+                                    <div class="detail-label">ISP</div>
+                                    <div class="detail-value">
+                                        {{ detailNetwork.isp || '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Organização</div>
+                                    <div class="detail-value">
+                                        {{ detailNetwork.organization || '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Categoria IP (Lookup)</div>
+                                    <div class="tw-mt-1">
+                                        <div
+                                            class="ip-category-label"
+                                            :style="{ color: detailNetworkCategoryColor }"
+                                        >
+                                            {{ detailNetworkCategoryName }}
+                                        </div>
+                                        <div class="ip-category-description">
+                                            {{ detailNetworkCategoryDescription }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Fraud Score</div>
+                                    <div class="detail-value">
+                                        {{ detailNetwork.fraud_score ?? '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Última verificação</div>
+                                    <div class="detail-value">
+                                        {{ detailNetwork.last_checked_formatted ?? detailNetwork.last_checked ?? '-' }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-3 tw-mt-4">
+                                <div v-for="flag in [{ key: 'is_proxy', label: 'Proxy' }, { key: 'is_vpn', label: 'VPN' }, { key: 'is_tor', label: 'Tor' }, { key: 'is_datacenter', label: 'Datacenter' }, { key: 'is_bot', label: 'Bot' }]" :key="flag.key">
+                                    <div class="detail-label">{{ flag.label }}</div>
+                                    <div class="detail-value">
+                                        {{ formatFlag(detailNetworkFlags[flag.key]) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </q-card-section>
+        </q-card>
+    </q-dialog>
+</template>
+
+<style scoped>
+.pageview-detail-card {
+    width: 100vw;
+    max-width: 100vw;
+}
+
+@media (min-width: 1024px) {
+    .pageview-detail-card {
+        width: 80vw;
+        max-width: 80vw;
+    }
+}
+
+.detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.section-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.section-card__header {
+    background: #f8fafc;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #475569;
+}
+
+.section-card__body {
+    padding: 1rem;
+}
+
+.section-body--stack > * + * {
+    margin-top: 1rem;
+}
+
+.rounded-borders {
+    border: none;
+}
+
+.detail-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+}
+
+.detail-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.ip-category-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.ip-category-description {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 0.15rem;
+}
+</style>
