@@ -14,8 +14,8 @@ class IpClassifierService
 
     public function __construct()
     {
-        $this->apiKey = config('services.ipqualityscore.key');
-        $this->apiUrl = 'https://ipqualityscore.com/api/json/ip/';
+        $this->apiKey = config('services.ipgeolocation.key');
+        $this->apiUrl = 'https://api.ipgeolocation.io/v3/ipgeo';
     }
 
     /**
@@ -23,14 +23,13 @@ class IpClassifierService
      */
     public function classify(string $ip, ?string $userAgent = null): array
     {
-        // 1️⃣ Verifica cache
+        // 1️⃣ Cache
         $cached = IpLookupCache::where('ip', $ip)->first();
-
         if ($cached) {
             return $this->formatCacheResult($cached);
         }
 
-        // 2️⃣ Verifica Googlebot
+        // 2️⃣ Googlebot
         if ($this->isGooglebot($ip, $userAgent)) {
             return $this->storeGooglebot($ip);
         }
@@ -40,47 +39,65 @@ class IpClassifierService
     }
 
     /**
-     * Consulta API externa
+     * Consulta ipgeolocation
      */
     protected function queryApiAndStore(string $ip): array
     {
         try {
 
             $response = Http::timeout(10)
-                ->when(app()->environment('local'), fn($http) => $http->withoutVerifying())
-                ->get("{$this->apiUrl}{$this->apiKey}/{$ip}")
+                ->withoutVerifying()
+                ->get($this->apiUrl, [
+                    'apiKey' => $this->apiKey,
+                    'ip'     => $ip,
+                ])
                 ->json();
 
-            if (!isset($response['success']) || $response['success'] !== true) {
-                throw new \Exception('API returned unsuccessful response');
+            if (!isset($response['ip'])) {
+                throw new \Exception('Invalid API response');
             }
 
-            $categorySlug = $this->determineCategory($response);
+            $location = $response['location'] ?? [];
+            $asn      = $response['asn'] ?? [];
+            $tz       = $response['time_zone'] ?? [];
+
+            $categorySlug = $this->determineCategory($asn);
             $category = IpCategory::where('slug', $categorySlug)->first();
 
             $cache = IpLookupCache::create([
                 'ip' => $ip,
                 'ip_category_id' => $category?->id,
 
-                'is_proxy' => $response['proxy'] ?? false,
-                'is_vpn' => $response['vpn'] ?? false,
-                'is_tor' => $response['tor'] ?? false,
-                'is_datacenter' => $response['hosting'] ?? false,
-                'is_bot' => $response['bot_status'] ?? false,
-                'fraud_score' => $response['fraud_score'] ?? null,
+                // ⚠️ API não fornece esses dados → boolean como false
+                'is_proxy'      => false,
+                'is_vpn'        => false,
+                'is_tor'        => false,
+                'is_bot'        => false,
 
-                'country_code' => $response['country_code'] ?? null,
-                'country_name' => $response['country'] ?? null,
-                'region_name' => $response['region'] ?? null,
-                'city' => $response['city'] ?? null,
-                'latitude' => $response['latitude'] ?? null,
-                'longitude' => $response['longitude'] ?? null,
-                'timezone' => $response['timezone'] ?? null,
+                // Heurística simples para datacenter
+                'is_datacenter' => $this->isDatacenter($asn),
 
-                'isp' => $response['ISP'] ?? null,
-                'organization' => $response['organization'] ?? null,
+                // Não existe fraud_score → numérico null
+                'fraud_score'   => null,
 
-                'api_response' => $response,
+                // Geo
+                'country_code'  => $location['country_code2'] ?? null,
+                'country_name'  => $location['country_name'] ?? null,
+                'region_name'   => $location['state_prov'] ?? null,
+                'city'          => $location['city'] ?? null,
+                'latitude'      => isset($location['latitude'])
+                    ? (float) $location['latitude']
+                    : null,
+                'longitude'     => isset($location['longitude'])
+                    ? (float) $location['longitude']
+                    : null,
+                'timezone'      => $tz['name'] ?? null,
+
+                // ASN / ISP
+                'isp'           => $asn['organization'] ?? null,
+                'organization'  => $asn['organization'] ?? null,
+
+                'api_response'  => $response,
                 'last_checked_at' => now(),
             ]);
 
@@ -88,7 +105,7 @@ class IpClassifierService
 
         } catch (\Throwable $e) {
 
-            Log::error('IP classification API error', [
+            Log::error('IPGeolocation API error', [
                 'ip' => $ip,
                 'error' => $e->getMessage(),
             ]);
@@ -103,39 +120,49 @@ class IpClassifierService
     }
 
     /**
-     * Determina categoria com base na resposta da API
+     * Determina categoria
      */
-    protected function determineCategory(array $response): string
+    protected function determineCategory(array $asn): string
     {
-        if (($response['tor'] ?? false) === true) {
-            return 'tor';
-        }
-
-        if (($response['vpn'] ?? false) === true) {
-            return 'vpn';
-        }
-
-        if (($response['proxy'] ?? false) === true) {
-            return 'proxy';
-        }
-
-        if (($response['hosting'] ?? false) === true) {
+        if ($this->isDatacenter($asn)) {
             return 'datacenter';
-        }
-
-        if (($response['bot_status'] ?? false) === true) {
-            return 'bot';
-        }
-
-        if (($response['is_crawler'] ?? false) === true) {
-            return 'bot';
         }
 
         return 'real';
     }
 
     /**
-     * Detecta Googlebot via DNS reverso
+     * Heurística para detectar datacenter
+     */
+    protected function isDatacenter(array $asn): bool
+    {
+        $org = strtolower($asn['organization'] ?? '');
+
+        $keywords = [
+            'google cloud',
+            'amazon',
+            'aws',
+            'digitalocean',
+            'ovh',
+            'microsoft',
+            'azure',
+            'vultr',
+            'linode',
+            'cloudflare',
+            'oracle'
+        ];
+
+        foreach ($keywords as $keyword) {
+            if (str_contains($org, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Detecta Googlebot real via DNS reverso
      */
     protected function isGooglebot(string $ip, ?string $userAgent): bool
     {
@@ -155,7 +182,7 @@ class IpClassifierService
     }
 
     /**
-     * Salva Googlebot no cache
+     * Salva Googlebot
      */
     protected function storeGooglebot(string $ip): array
     {
@@ -165,6 +192,11 @@ class IpClassifierService
             'ip' => $ip,
             'ip_category_id' => $category?->id,
             'is_bot' => true,
+            'is_proxy' => false,
+            'is_vpn' => false,
+            'is_tor' => false,
+            'is_datacenter' => false,
+            'fraud_score' => null,
             'last_checked_at' => now(),
         ]);
 
@@ -172,7 +204,7 @@ class IpClassifierService
     }
 
     /**
-     * Formata retorno padrão
+     * Retorno padrão
      */
     protected function formatCacheResult(IpLookupCache $cache): array
     {
@@ -181,11 +213,11 @@ class IpClassifierService
             'geo' => [
                 'country_code' => $cache->country_code,
                 'country_name' => $cache->country_name,
-                'region_name' => $cache->region_name,
-                'city' => $cache->city,
-                'latitude' => $cache->latitude,
-                'longitude' => $cache->longitude,
-                'timezone' => $cache->timezone,
+                'region_name'  => $cache->region_name,
+                'city'         => $cache->city,
+                'latitude'     => $cache->latitude,
+                'longitude'    => $cache->longitude,
+                'timezone'     => $cache->timezone,
             ],
         ];
     }

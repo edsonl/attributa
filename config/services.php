@@ -49,4 +49,9 @@ return [
         'key' => env('IPQUALITYSCORE_KEY'),
     ],
 
+    'ipgeolocation' => [
+        'key' => env('IPGEOLOCATION_KEY'),
+    ],
+    
+
 ];

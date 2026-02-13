@@ -43,12 +43,12 @@ Route::redirect('/campanhas', '/painel/campaigns');
 Route::get('/teste', function () {
 
 
-    //$response = Http::timeout(10)
-       // ->withoutVerifying() // 👈 desativa verificação SSL
-       // ->get('https://ipqualityscore.com/api/json/ip/' . config('services.ipqualityscore.key') . '/8.8.8.8')
-       // ->json();
+    $response = Http::timeout(10)
+        ->withoutVerifying() // 👈 desativa verificação SSL
+        ->get('https://api.ipgeolocation.io/v3/ipgeo?apiKey=' . config('services.ipgeolocation.key') . '&ip=8.8.8.8')
+        ->json();
 
-   // return $response;
+    return $response;
 
     //ProcessIpClassificationJob::dispatch();
    // return response()->json([
@@ -118,6 +118,9 @@ Route::middleware(['auth', 'verified'])
                 // API
                 Route::get('/pageviews/data', [ActivityController::class, 'data'])
                     ->name('pageviews.data');
+
+                Route::get('/pageviews/{pageview}', [ActivityController::class, 'show'])
+                    ->name('pageviews.show');
 
                 Route::delete('/pageviews/{pageview}', [ActivityController::class, 'destroy'])
                     ->name('pageviews.destroy');
@@ -220,5 +223,4 @@ Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
 //Resposta de conversão plataforma de afiliado
 Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
-
 

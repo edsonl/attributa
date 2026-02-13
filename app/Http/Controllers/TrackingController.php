@@ -20,8 +20,12 @@ class TrackingController extends Controller
             'gclid'         => 'nullable|string',
             'gad_campaignid'=> 'nullable|string',
         ]);
+        
+        //Obter campanha
+        $campaign = Campaign::where('code', $data['campaign_code'])->first();
 
         $pageview = Pageview::create([
+            'campaign_id'   => $campaign->id,
             'campaign_code' => $data['campaign_code'],
             'url'           => $data['url'],
             'referrer'      => $data['referrer'] ?? null,

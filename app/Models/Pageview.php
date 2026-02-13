@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\IpCategory;
+use App\Models\Campaign;
 
 class Pageview extends Model
 {
     protected $fillable = [
 
         // Originais
+        'campaign_id',
         'campaign_code',
         'url',
         'referrer',
@@ -50,4 +52,11 @@ class Pageview extends Model
     {
         return $this->belongsTo(IpCategory::class);
     }
+
+
+    public function campaign()
+    {
+        return $this->belongsTo(Campaign::class);
+    }
+
 }
