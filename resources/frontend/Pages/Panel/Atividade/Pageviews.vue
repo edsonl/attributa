@@ -450,7 +450,7 @@ onMounted(() => {
                         <div>
                             <div class="detail-label">Parâmetros</div>
                             <div class="tw-mt-2">
-                                <q-list v-if="hasUrlParams" bordered class="rounded-borders">
+                                <q-list v-if="hasUrlParams" class="rounded-borders">
                                     <q-item v-for="([key, value]) in detailUrlParams" :key="`${key}-${value}`">
                                         <q-item-section>
                                             <div class="tw-text-xs tw-uppercase tw-text-slate-500">{{ key }}</div>
