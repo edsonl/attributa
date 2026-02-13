@@ -56,6 +56,7 @@ const detailNetworkCategoryColor = computed(() => detailNetworkCategory.value?.c
 const detailNetworkCategoryName = computed(() => detailNetworkCategory.value?.name ?? '-')
 const detailNetworkCategoryDescription = computed(() => detailNetworkCategory.value?.description ?? 'Sem descrição.')
 const detailCleanUrl = computed(() => stripQueryString(detailUrl.value?.full || ''))
+const detailResolvedGclid = computed(() => resolveGclid())
 const detailCountryFlag = computed(() => {
     const code = detailGeo.value?.country_code
     if (!code) return null
@@ -90,9 +91,40 @@ function formatParamValue(value) {
     }
     return String(value)
 }
+
+function hasText(value) {
+    return value !== null && value !== undefined && String(value).trim() !== ''
+}
+
+function isGclidParam(key) {
+    return String(key || '').toLowerCase() === 'gclid'
+}
+
+function resolveGclid() {
+    const pageviewGclid = detailPageview.value?.gclid
+    if (hasText(pageviewGclid)) return String(pageviewGclid)
+
+    const queryParams = detailUrl.value?.query_params ?? {}
+    const match = Object.entries(queryParams).find(([key]) => isGclidParam(key))
+    if (!match) return ''
+
+    return formatParamValue(match[1])
+}
+
+async function copyParamValue(value) {
+    const text = formatParamValue(value)
+
+    try {
+        await navigator.clipboard.writeText(text)
+        $q.notify({ type: 'positive', message: 'GCLID copiado.' })
+    } catch (error) {
+        $q.notify({ type: 'negative', message: 'Nao foi possivel copiar.' })
+    }
+}
 </script>
 
 <template>
+    <div v-if="detailDrawer" class="detail-drawer-backdrop" @click="detailDrawer = false" />
     <q-drawer
         v-model="detailDrawer"
         side="right"
@@ -165,6 +197,22 @@ function formatParamValue(value) {
                                         />
                                     </div>
                                 </div>
+                                <div v-if="hasText(detailResolvedGclid)">
+                                    <div class="detail-label">GCLID</div>
+                                    <div class="gclid-param-row">
+                                        <div class="gclid-preview">{{ detailResolvedGclid }}</div>
+                                        <q-btn
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyParamValue(detailResolvedGclid)"
+                                        >
+                                            <q-tooltip>Copiar GCLID</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -211,14 +259,29 @@ function formatParamValue(value) {
                             <div>
                                 <div class="detail-label">Parâmetros</div>
                                 <div class="tw-mt-2">
-                                    <q-list v-if="hasUrlParams" class="rounded-borders">
-                                        <q-item v-for="([key, value]) in detailUrlParams" :key="`${key}-${value}`">
-                                            <q-item-section>
-                                                <div class="tw-text-xs tw-uppercase tw-text-slate-500">{{ key }}</div>
-                                                <div class="tw-text-sm tw-font-medium tw-break-all">{{ formatParamValue(value) }}</div>
-                                            </q-item-section>
-                                        </q-item>
-                                    </q-list>
+                                    <div v-if="hasUrlParams" class="url-params-inline">
+                                        <div
+                                            v-for="([key, value]) in detailUrlParams"
+                                            :key="`${key}-${value}`"
+                                            class="url-param-chip"
+                                        >
+                                            <div class="url-param-key">{{ key }}</div>
+                                            <div v-if="isGclidParam(key)" class="gclid-param-row">
+                                                <div class="gclid-preview">{{ formatParamValue(value) }}</div>
+                                                <q-btn
+                                                    dense
+                                                    flat
+                                                    round
+                                                    size="sm"
+                                                    icon="content_copy"
+                                                    @click="copyParamValue(value)"
+                                                >
+                                                    <q-tooltip>Copiar GCLID</q-tooltip>
+                                                </q-btn>
+                                            </div>
+                                            <div v-else class="url-param-value">{{ formatParamValue(value) }}</div>
+                                        </div>
+                                    </div>
                                     <div v-else class="tw-text-sm tw-text-slate-500">Sem parâmetros na URL.</div>
                                 </div>
                             </div>
@@ -230,7 +293,7 @@ function formatParamValue(value) {
                     <div class="section-card">
                         <div class="section-card__header">REDE &amp; SEGURANÇA</div>
                         <div class="section-card__body">
-                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4">
                                 <div>
                                     <div class="detail-label">ISP</div>
                                     <div class="detail-value">
@@ -270,7 +333,7 @@ function formatParamValue(value) {
                                     </div>
                                 </div>
                             </div>
-                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-3 tw-mt-4">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-3 tw-mt-4">
                                 <div v-for="flag in [{ key: 'is_proxy', label: 'Proxy' }, { key: 'is_vpn', label: 'VPN' }, { key: 'is_tor', label: 'Tor' }, { key: 'is_datacenter', label: 'Datacenter' }, { key: 'is_bot', label: 'Bot' }]" :key="flag.key">
                                     <div class="detail-label">{{ flag.label }}</div>
                                     <div class="detail-value">
@@ -289,13 +352,10 @@ function formatParamValue(value) {
 <style scoped>
 .pageview-detail-drawer {
     max-width: 100vw;
-    top: 0 !important;
-    bottom: 0 !important;
-    height: 100vh !important;
 }
 
-.pageview-detail-drawer :deep(.q-drawer__content) {
-    height: 100%;
+:deep(.q-drawer.pageview-detail-drawer) {
+    z-index: 3100 !important;
 }
 
 .drawer-shell {
@@ -351,6 +411,46 @@ function formatParamValue(value) {
     border: none;
 }
 
+.detail-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.36);
+    z-index: 3000;
+}
+
+.url-params-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.url-param-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    background: #f8fafc;
+    max-width: 100%;
+}
+
+.url-param-key {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.url-param-value {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #0f172a;
+    word-break: break-all;
+}
+
 .detail-label {
     font-size: 0.65rem;
     text-transform: uppercase;
@@ -373,5 +473,33 @@ function formatParamValue(value) {
     font-size: 0.75rem;
     color: #94a3b8;
     margin-top: 0.15rem;
+}
+
+.gclid-param-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.gclid-preview {
+    position: relative;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    padding-right: 18px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #0f172a;
+}
+
+.gclid-preview::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 24px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 80%);
 }
 </style>
