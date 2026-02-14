@@ -2,170 +2,113 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConversionGoal;
+use App\Models\ConversionGoalLog;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use App\Models\AdsConversion;
 
 class GoogleAdsConversionsController extends Controller
 {
-
-    /*
-    |--------------------------------------------------------------------------
-    | ⚠️ IMPORTANTE — CSV FICTÍCIO PARA INTEGRAÇÃO GOOGLE ADS
-    |--------------------------------------------------------------------------
-    |
-    | O Google Ads (importação via HTTPS) NÃO aceita resposta vazia (204)
-    | nem arquivo CSV sem pelo menos cabeçalho + uma linha.
-    |
-    | Quando não há conversões no banco, o Google interpreta como erro
-    | de integração e pode marcar o endpoint como inválido.
-    |
-    | Para manter a integração ativa e validada:
-    | - Sempre retornamos um CSV válido
-    | - Com cabeçalho obrigatório
-    | - E uma linha fictícia de teste
-    |
-    | Neste cenário:
-    | - NÃO marcamos registros como exported (pois não existem)
-    | - Apenas mantemos o formato esperado pelo Google
-    |
-    | Esse comportamento foi necessário após testes reais de integração
-    | onde respostas vazias estavam sendo rejeitadas.
-    |
-    |--------------------------------------------------------------------------
-    */
-    public function index(Request $request,$pixel=null)
+    public function goalExport(Request $request, string $userSlugId, string $goalCode)
     {
-        Log::channel('google_ads_https')->info('==== Google Ads HTTPS HIT ====');
+        // Resolve a meta diretamente pelos segmentos da URL de integração.
+        $goal = ConversionGoal::query()
+            ->with('timezone:id,identifier')
+            ->where('user_slug_id', $userSlugId)
+            ->where('goal_code', strtoupper(trim($goalCode)))
+            ->first();
 
-        // 🔍 Request info
-        Log::channel('google_ads_https')->info('Request info', [
-            'ip'          => $request->ip(),
-            'method'      => $request->method(),
-            'url'         => $request->fullUrl(),
-            'user_agent'  => $request->userAgent(),
-        ]);
+        if (!$goal) {
+            return response('Not Found', 404);
+        }
 
-        // 🔐 Authorization header
-        $authHeader = $request->header('Authorization');
+        $this->writeGoalLog($goal, 'Requisição CSV do Google Ads recebida.');
 
-        Log::channel('google_ads_https')->info('Authorization header', [
-            'present' => (bool) $authHeader,
-            'value'   => $authHeader ? substr($authHeader, 0, 30) . '...' : null,
-        ]);
+        $expectedUser = 'googleads-' . $goal->user_slug_id;
+        $expectedPass = (string) $goal->googleads_password;
 
-        if (!$authHeader || !str_starts_with($authHeader, 'Basic ')) {
-            Log::channel('google_ads_https')->warning('Missing or invalid Authorization header');
+        // Basic Auth por meta (usuário/senha específicos da integração dessa meta).
+        if (!$this->authenticateBasic($request, $expectedUser, $expectedPass, $goal)) {
+            $this->writeGoalLog($goal, 'Falha na autenticação da requisição CSV.');
             return response('Unauthorized', 401, [
                 'WWW-Authenticate' => 'Basic realm="Google Ads Conversions"'
             ]);
         }
 
-        // 🔓 Decode Basic Auth
+        $this->writeGoalLog($goal, 'Autenticação da requisição CSV realizada com sucesso.');
+
+        return $this->exportConversionsByGoal($goal, $userSlugId);
+    }
+
+    protected function authenticateBasic(Request $request, string $expectedUser, string $expectedPass, ?ConversionGoal $goal = null): bool
+    {
+        $authHeader = $request->header('Authorization');
+
+        if (!$authHeader || !str_starts_with($authHeader, 'Basic ')) {
+            if ($goal) {
+                $this->writeGoalLog($goal, 'Header Authorization ausente ou inválido.');
+            }
+            return false;
+        }
+
         $decoded = base64_decode(substr($authHeader, 6));
-
-        Log::channel('google_ads_https')->info('Decoded auth string', [
-            'decoded' => $decoded,
-        ]);
-
-        if (!str_contains($decoded, ':')) {
-            Log::channel('google_ads_https')->error('Invalid Basic Auth format');
-            return response('Unauthorized', 401);
+        if (!str_contains((string) $decoded, ':')) {
+            if ($goal) {
+                $this->writeGoalLog($goal, 'Formato de Basic Auth inválido.');
+            }
+            return false;
         }
 
         [$user, $pass] = explode(':', $decoded, 2);
 
-        Log::channel('google_ads_https')->info('Auth credentials received', [
-            'user' => $user,
-            'pass_length' => strlen($pass),
-        ]);
-
-        if (
-            $user !== config('services.google_ads.http_user') ||
-            $pass !== config('services.google_ads.http_pass')
-        ) {
-            Log::channel('google_ads_https')->error('Authentication failed', [
-                'expected_user' => config('services.google_ads.http_user'),
-            ]);
-
-            return response('Unauthorized', 401, [
-                'WWW-Authenticate' => 'Basic realm="Google Ads Conversions"'
-            ]);
+        // Garante que a credencial usada pertence à URL/Meta solicitada.
+        if ($user !== $expectedUser || $pass !== $expectedPass) {
+            if ($goal) {
+                $this->writeGoalLog($goal, 'Credenciais inválidas para requisição CSV.');
+            }
+            return false;
         }
 
-        Log::channel('google_ads_https')->info('Authentication OK');
+        return true;
+    }
 
-        Log::channel('google_ads_https')->info('Pixel requested', [
-            'pixel' => $pixel,
-        ]);
+    protected function exportConversionsByGoal(ConversionGoal $goal, string $userSlugId)
+    {
+        $timezoneIdentifier = $goal->timezone?->identifier ?: 'UTC';
 
-        // 📦 Buscar conversões
+        // Busca conversões vinculadas exatamente ao goal da URL e ao usuário dono da meta.
         $conversions = AdsConversion::query()
-            ->where('conversion_name', $pixel)
+            ->join('campaigns', 'campaigns.id', '=', 'ads_conversions.campaign_id')
+            ->join('conversion_goals', 'conversion_goals.id', '=', 'campaigns.conversion_goal_id')
+            ->where('ads_conversions.conversion_name', $goal->goal_code)
+            ->where('ads_conversions.user_id', $goal->user_id)
+            ->where('conversion_goals.user_id', $goal->user_id)
+            ->where('conversion_goals.id', $goal->id)
+            ->where('conversion_goals.user_slug_id', $userSlugId)
+            ->where('conversion_goals.goal_code', $goal->goal_code)
             ->where('google_upload_status', 'pending')
-            ->whereNotNull('gclid')
-            ->whereNotNull('conversion_name')
-            ->whereNotNull('conversion_event_time')
-            ->orderBy('conversion_event_time', 'asc')
+            ->whereNotNull('ads_conversions.gclid')
+            ->whereNotNull('ads_conversions.conversion_name')
+            ->whereNotNull('ads_conversions.conversion_event_time')
+            ->orderBy('ads_conversions.conversion_event_time', 'asc')
             ->limit(1000)
+            ->select('ads_conversions.*')
             ->get();
 
-        Log::channel('google_ads_https')->info('Conversions fetched', [
-            'count' => $conversions->count(),
-        ]);
+        $this->writeGoalLog(
+            $goal,
+            'Conversões encontradas: ' . $conversions->count() . ' registro(s).'
+        );
 
+        return $this->buildCsvAndMark($conversions, $timezoneIdentifier, $goal);
+    }
 
-        if ($conversions->isEmpty()) {
-
-            Log::channel('google_ads_https')->info('No conversions found - generating fake data');
-
-            $output = fopen('php://temp', 'r+');
-
-            // Cabeçalho
-            fputcsv($output, [
-                'Google Click ID',
-                'Conversion Name',
-                'Conversion Time',
-                'Conversion Value',
-                'Conversion Currency',
-                'Order ID',
-            ]);
-
-            // Linha fictícia
-            fputcsv($output, [
-                'TEST-GCLID-1234567890',
-                'Test Conversion',
-                now()->format('Y-m-d H:i:s'),
-                '1.00',
-                'USD',
-                'PV-TEST-001',
-            ]);
-
-            rewind($output);
-            $csv = stream_get_contents($output);
-            fclose($output);
-
-            Log::channel('google_ads_https')->info('Fake CSV generated', [
-                'bytes' => strlen($csv),
-            ]);
-
-            Log::channel('google_ads_https')->info('==== END REQUEST (FAKE DATA) ====');
-
-            return response($csv, 200, [
-                'Content-Type' => 'text/csv',
-                'Content-Disposition' => 'attachment; filename="google_ads_conversions.csv"',
-            ]);
-        }
-
-        $ids = $conversions->pluck('id')->toArray();
-
-        Log::channel('google_ads_https')->info('Conversion IDs', [
-            'ids' => $ids,
-        ]);
-
-        // 📄 Gerar CSV (SEMPRE com cabeçalho)
+    protected function buildCsvAndMark($conversions, string $timezoneIdentifier, ?ConversionGoal $goal = null)
+    {
         $output = fopen('php://temp', 'r+');
 
+        // Cabeçalho sempre presente, mesmo sem linhas de conversão.
         fputcsv($output, [
             'Google Click ID',
             'Conversion Name',
@@ -176,10 +119,16 @@ class GoogleAdsConversionsController extends Controller
         ]);
 
         foreach ($conversions as $c) {
+            // A data é salva em UTC no banco e aqui é convertida para coincidir
+            // com o fuso da conta do usuário no Google Ads.
+            $eventTime = Carbon::parse($c->conversion_event_time, 'UTC')
+                ->setTimezone($timezoneIdentifier)
+                ->format('Y-m-d H:i:sP');
+
             fputcsv($output, [
                 $c->gclid,
                 $c->conversion_name,
-                $c->conversion_event_time->format('Y-m-d H:i:s'),
+                $eventTime,
                 number_format((float) $c->conversion_value, 2, '.', ''),
                 $c->currency_code,
                 'PV-' . $c->pageview_id,
@@ -190,25 +139,43 @@ class GoogleAdsConversionsController extends Controller
         $csv = stream_get_contents($output);
         fclose($output);
 
+        $ids = $conversions->pluck('id')->toArray();
 
-        Log::channel('google_ads_https')->info('CSV generated', [
-            'bytes' => strlen($csv),
-        ]);
+        if ($goal) {
+            $this->writeGoalLog(
+                $goal,
+                'CSV gerado (' . strlen((string) $csv) . ' bytes, timezone ' . $timezoneIdentifier . ').'
+            );
+        }
 
-        // ✅ Marcar como exported
-        AdsConversion::whereIn('id', $ids)->update([
-            'google_upload_status' => 'exported',
-            'google_uploaded_at'   => now(),
-        ]);
+        if (!empty($ids)) {
+            // Após exportar o lote, marca os registros para evitar reexportação imediata.
+            AdsConversion::whereIn('id', $ids)->update([
+                'google_upload_status' => 'prossecing',
+                'google_uploaded_at'   => now(),
+            ]);
 
-        Log::channel('google_ads_https')->info('Conversions marked as exported');
-
-        Log::channel('google_ads_https')->info('==== END REQUEST ====');
+            if ($goal) {
+                $this->writeGoalLog(
+                    $goal,
+                    'Conversões marcadas como prossecing: ' . count($ids) . ' item(ns).'
+                );
+            }
+        } elseif ($goal) {
+            $this->writeGoalLog($goal, 'Nenhuma conversão para marcar como prossecing.');
+        }
 
         return response($csv, 200, [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="google_ads_conversions.csv"',
         ]);
+    }
 
+    protected function writeGoalLog(ConversionGoal $goal, string $message): void
+    {
+        ConversionGoalLog::query()->create([
+            'goal_id' => $goal->id,
+            'message' => mb_substr($message, 0, 255),
+        ]);
     }
 }

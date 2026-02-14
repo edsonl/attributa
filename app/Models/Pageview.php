@@ -9,6 +9,7 @@ use App\Models\Campaign;
 class Pageview extends Model
 {
     protected $fillable = [
+        'user_id',
 
         // Originais
         'campaign_id',

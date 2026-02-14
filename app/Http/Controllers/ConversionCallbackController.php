@@ -74,7 +74,9 @@ class ConversionCallbackController extends Controller
         }
 
         // 🔎 Buscar campanha
-        $campaign = Campaign::where('code', $campaignCode)->first();
+        $campaign = Campaign::with('conversionGoal')
+            ->where('code', $campaignCode)
+            ->first();
 
         if (!$campaign) {
             $log->warning('Campanha não encontrada', [
@@ -105,10 +107,11 @@ class ConversionCallbackController extends Controller
 
         // 💾 Salvar conversão
         $conversion = AdsConversion::create([
+            'user_id'               => $campaign->user_id,
             'campaign_id'           => $campaign->id,
             'pageview_id'           => $pageview->id,
             'gclid'                 => $gclid,
-            'conversion_name'       => $campaign->pixel_code,
+            'conversion_name'       => $campaign->conversionGoal?->goal_code,
             'conversion_value'      => (float) $request->query('amount', 1.00),
             'currency_code'         => $request->query('cy', 'USD'),
             'conversion_event_time' => now(),

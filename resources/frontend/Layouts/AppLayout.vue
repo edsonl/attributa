@@ -275,17 +275,14 @@ function toggleMini () { if (isDesktop.value) miniWanted.value = !miniWanted.val
 function go (name) { router.visit(route(name)) }
 
 // Links
-import clientIcon from '@/assets/icons/clients.svg'
 const links = [
-
     { label: 'Atividade', icon: 'insights', route: 'panel.atividade.pageviews'},
-    { label: 'Converções', icon: 'paid', route: 'panel.conversoes.index'},
+    { label: 'Conversões', icon: 'paid', route: 'panel.conversoes.index'},
     { label: 'Campanhas',  icon: 'ads_click',  route: 'panel.campaigns.index' ,svg:''},
+    { label: 'Metas de conversao',  icon: 'flag',  route: 'panel.conversion-goals.index' ,svg:''},
     { label: 'Usuários', icon: 'people_alt', route: 'panel.users.index'},
-    { label: 'Tarefas',  icon: 'checklist',  route: 'panel.tasks.index' ,svg:''},
     { label: 'Contas de anúncio', icon: 'insights', route: 'panel.ads-accounts.index'},
     { label: 'Países', icon: 'public', route: 'panel.countries.index'},
-
 ]
 
 // Usuário (foto/nome/iniciais)

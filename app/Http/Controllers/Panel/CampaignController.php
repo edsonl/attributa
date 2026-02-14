@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Channel;
 use App\Models\Country;
 use App\Models\AffiliatePlatform;
+use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -31,7 +32,7 @@ class CampaignController extends Controller
             $sort = 'created_at';
         }
 
-        $campaignsQuery = Campaign::with(['channel', 'countries']);
+        $campaignsQuery = Campaign::with(['channel', 'countries', 'conversionGoal']);
 
         if ($search !== '') {
             $campaignsQuery->where(function ($query) use ($search) {
@@ -73,6 +74,15 @@ class CampaignController extends Controller
                     'id'    => $acc->id,
                     'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
                 ]),
+            'conversionGoals' => ConversionGoal::query()
+                ->where('active', true)
+                ->orderBy('goal_code')
+                ->get(['id', 'goal_code', 'active'])
+                ->map(fn ($goal) => [
+                    'id' => $goal->id,
+                    'label' => $goal->goal_code,
+                    'active' => (bool) $goal->active,
+                ]),
             'defaults' => $this->campaignDefaults(),
         ]);
     }
@@ -85,8 +95,9 @@ class CampaignController extends Controller
         $data = $request->validated();
 
         $campaign = Campaign::create([
+            'user_id'    => auth()->id(),
             'name'       => $data['name'],
-            'pixel_code' => $data['pixel_code'],
+            'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],
@@ -121,6 +132,21 @@ class CampaignController extends Controller
             'channels'  => $this->channelOptions(),
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
+            'conversionGoals' => ConversionGoal::query()
+                ->where(function ($query) use ($campaign) {
+                    $query->where('active', true);
+
+                    if ($campaign->conversion_goal_id) {
+                        $query->orWhere('id', $campaign->conversion_goal_id);
+                    }
+                })
+                ->orderBy('goal_code')
+                ->get(['id', 'goal_code', 'active'])
+                ->map(fn ($goal) => [
+                    'id' => $goal->id,
+                    'label' => $goal->goal_code,
+                    'active' => (bool) $goal->active,
+                ]),
         ]);
     }
 
@@ -133,7 +159,7 @@ class CampaignController extends Controller
 
         $campaign->update([
             'name'       => $data['name'],
-            'pixel_code' => $data['pixel_code'],
+            'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],

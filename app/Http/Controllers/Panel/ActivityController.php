@@ -55,7 +55,7 @@ class ActivityController extends Controller
             ->leftJoin('ip_categories', 'ip_categories.id', '=', 'pageviews.ip_category_id')
             ->select([
                 'pageviews.id',
-                DB::raw("DATE_FORMAT(pageviews.created_at, '%d/%m/%Y, %H:%i:%s') as created_at_formatted"),
+                'pageviews.created_at',
                 'pageviews.ip',
                 //'pageviews.created_at',
                 'pageviews.country_code',
@@ -75,6 +75,17 @@ class ActivityController extends Controller
         }
 
         $paginator = $query->paginate($perPage);
+        $tz = 'America/Sao_Paulo';
+
+        $paginator->getCollection()->transform(function ($row) use ($tz) {
+            $row->created_at_formatted = $row->created_at
+                ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                : null;
+
+            unset($row->created_at);
+
+            return $row;
+        });
 
         return response()->json($paginator);
     }
@@ -95,10 +106,18 @@ class ActivityController extends Controller
      */
     public function destroy(Pageview $pageview)
     {
+        if ((int) $pageview->conversion === 1) {
+            return response()->json([
+                'message' => 'Pageview convertido não pode ser excluído.',
+                'deleted' => false,
+            ]);
+        }
+
         $pageview->delete();
 
         return response()->json([
             'message' => 'Pageview excluído com sucesso.',
+            'deleted' => true,
         ]);
     }
 
@@ -112,11 +131,18 @@ class ActivityController extends Controller
             'ids.*' => ['integer', 'exists:pageviews,id'],
         ]);
 
-        $deleted = Pageview::whereIn('id', $data['ids'])->delete();
+        $query = Pageview::whereIn('id', $data['ids']);
+        $totalSelected = count($data['ids']);
+        $convertedCount = (clone $query)->where('conversion', 1)->count();
+        $deleted = (clone $query)->where('conversion', 0)->delete();
 
         return response()->json([
-            'message' => 'Pageviews excluídos com sucesso.',
+            'message' => $convertedCount > 0
+                ? 'Pageviews não convertidos excluídos. Os convertidos foram ignorados.'
+                : 'Pageviews excluídos com sucesso.',
             'deleted' => $deleted,
+            'ignored_converted' => $convertedCount,
+            'selected' => $totalSelected,
         ]);
     }
 
@@ -130,7 +156,10 @@ class ActivityController extends Controller
             'campaign:id,name,code',
         ]);
 
-        $pageview->created_at_formatted = optional($pageview->created_at)->format('d/m/Y, H:i:s');
+        $tz = 'America/Sao_Paulo';
+        $pageview->created_at_formatted = optional($pageview->created_at)
+            ? Carbon::parse($pageview->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+            : null;
 
         $urlData = $this->extractUrlData($pageview->url);
 
@@ -171,7 +200,9 @@ class ActivityController extends Controller
             'fraud_score'   => $ipLookup->fraud_score ?? null,
             'ip_category'   => $ipLookup?->ipCategory,
             'last_checked'  => $ipLookup?->last_checked_at,
-            'last_checked_formatted' => optional($ipLookup?->last_checked_at)->format('d/m/Y, H:i:s'),
+            'last_checked_formatted' => optional($ipLookup?->last_checked_at)
+                ? Carbon::parse($ipLookup?->last_checked_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                : null,
         ];
 
         return response()->json([

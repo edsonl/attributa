@@ -2,12 +2,13 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import axios from 'axios'
 import { Head } from '@inertiajs/vue3'
+import { useQuasar } from 'quasar'
 import PageviewDetailModal from './PageviewDetailModal.vue'
-import PageviewDetailDrawer from './PageviewDetailDrawer.vue'
 
 const rows = ref([])
 const loading = ref(false)
 const tableRef = ref(null)
+const $q = useQuasar()
 
 const pagination = ref({
     page: 1,
@@ -27,12 +28,10 @@ const FALLBACK_IP_CATEGORY = {
 }
 
 const detailDialog = ref(false)
-const detailDrawer = ref(false)
 const detailLoading = ref(false)
 const detailPayload = ref(null)
 const selected = ref([])
 const hasSelection = computed(() => selected.value.length > 0)
-const usePopup = ref(true)
 const assetBaseUrl = (
     import.meta.env.VITE_ASSET_URL
         ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
@@ -152,8 +151,26 @@ async function deletePageview(id) {
     loading.value = true
 
     try {
-        await axios.delete(route('panel.atividade.pageviews.destroy', id))
+        const { data } = await axios.delete(route('panel.atividade.pageviews.destroy', id))
+
+        if (data?.deleted === false) {
+            $q.notify({
+                type: 'warning',
+                message: data?.message || 'Pageview convertido não pode ser excluído.',
+            })
+            return
+        }
+
+        $q.notify({
+            type: 'positive',
+            message: data?.message || 'Pageview excluído com sucesso.',
+        })
         await fetchPageviews({ pagination: pagination.value })
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Falha ao excluir pageview.',
+        })
     } finally {
         loading.value = false
     }
@@ -183,18 +200,43 @@ async function deleteSelected() {
     loading.value = true
 
     try {
-        await axios.delete(route('panel.atividade.pageviews.bulk-destroy'), {
+        const { data } = await axios.delete(route('panel.atividade.pageviews.bulk-destroy'), {
             data: { ids: selected.value.map(row => row.id) },
         })
+
+        const deleted = Number(data?.deleted || 0)
+        const ignored = Number(data?.ignored_converted || 0)
+
+        if (deleted > 0 && ignored > 0) {
+            $q.notify({
+                type: 'warning',
+                message: `${deleted} removido(s). ${ignored} convertido(s) ignorado(s).`,
+            })
+        } else if (deleted > 0) {
+            $q.notify({
+                type: 'positive',
+                message: data?.message || 'Pageviews excluídos com sucesso.',
+            })
+        } else {
+            $q.notify({
+                type: 'warning',
+                message: data?.message || 'Nenhum pageview elegível para exclusão.',
+            })
+        }
+
         await fetchPageviews({ pagination: pagination.value })
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Falha ao remover os pageviews selecionados.',
+        })
     } finally {
         loading.value = false
     }
 }
 
 async function openDetails(row) {
-    detailDialog.value = usePopup.value
-    detailDrawer.value = !usePopup.value
+    detailDialog.value = true
     detailLoading.value = true
     detailPayload.value = null
 
@@ -241,14 +283,6 @@ onMounted(() => {
                     :disable="!hasSelection"
                     @click="deleteSelected"
                     class="tw-w-full lg:tw-w-auto bulk-delete-btn"
-                />
-            </div>
-            <div class="col-12 col-md-4 col-lg-3 q-mt-sm q-mt-md-0">
-                <q-toggle
-                    v-model="usePopup"
-                    :label="`Popup: ${usePopup ? 'true' : 'false'}`"
-                    color="primary"
-                    keep-color
                 />
             </div>
         </div>
@@ -387,12 +421,6 @@ onMounted(() => {
 
     <PageviewDetailModal
         v-model="detailDialog"
-        :loading="detailLoading"
-        :payload="detailPayload"
-        :asset-base-url="assetBaseUrl"
-    />
-    <PageviewDetailDrawer
-        v-model="detailDrawer"
         :loading="detailLoading"
         :payload="detailPayload"
         :asset-base-url="assetBaseUrl"

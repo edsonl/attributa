@@ -12,6 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('ip_categories', function (Blueprint $table) {
+            // ID interno da categoria
             $table->id();
 
             // Nome visível da categoria
@@ -29,6 +30,7 @@ return new class extends Migration
             // Controle para categorias internas do sistema
             $table->boolean('is_system')->default(true);
 
+            // Timestamps padrão do Laravel
             $table->timestamps();
         });
     }

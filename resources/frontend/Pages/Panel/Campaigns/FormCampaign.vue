@@ -25,6 +25,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    conversionGoals: {
+        type: Array,
+        required: true,
+    },
     defaults: {
         type: Object,
         default: () => ({}),
@@ -53,6 +57,15 @@ const affiliateOptions = computed(() =>
         label: option.label ?? option.name,
     })),
 )
+const conversionGoalOptions = computed(() =>
+    (props.conversionGoals ?? []).map(option => ({
+        ...option,
+        value: option.id,
+        label: option.active === false
+            ? `${option.label ?? option.goal_code} (inativa)`
+            : (option.label ?? option.goal_code),
+    })),
+)
 
 watch(() => props.countries, (val = []) => {
     countryOptions.value = val
@@ -61,7 +74,7 @@ watch(() => props.countries, (val = []) => {
 
 const form = useForm({
     name: props.campaign?.name ?? '',
-    pixel_code: props.campaign?.pixel_code ?? '',
+    conversion_goal_id: props.campaign?.conversion_goal_id ?? null,
     status: props.campaign?.status ?? true,
     channel_id: props.campaign?.channel_id ?? props.defaults?.channel_id ?? null,
     affiliate_platform_id: props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null,
@@ -257,14 +270,20 @@ function copyTrackingScript() {
             :error-message="form.errors.google_ads_account_id"
         />
 
-        <!-- Código da campanha -->
-        <q-input
-            v-model="form.pixel_code"
-            label="Pixel de acompanhamento"
+        <q-select
+            v-model="form.conversion_goal_id"
+            :options="conversionGoalOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            clearable
+            label="Meta de conversao"
+            hint="Selecione a meta/codigo de conversao vinculada a campanha"
             outlined
             dense
-            :error="Boolean(form.errors.pixel_code)"
-            :error-message="form.errors.pixel_code"
+            :error="Boolean(form.errors.conversion_goal_id)"
+            :error-message="form.errors.conversion_goal_id"
         />
 
         <!-- Botão -->

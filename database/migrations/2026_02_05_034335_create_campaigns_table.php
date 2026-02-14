@@ -11,7 +11,9 @@ return new class extends Migration {
 
             // ID interno da campanha
             $table->bigIncrements('id');
+            $table->unsignedBigInteger('user_id');
 
+            // Conta Google Ads vinculada (opcional)
             $table->unsignedBigInteger('google_ads_account_id')->nullable();
 
             // Código único da campanha (até 20 caracteres), usado para tracking e integrações
@@ -20,8 +22,8 @@ return new class extends Migration {
             // Nome da campanha / produto (exibição interna)
             $table->string('name');
 
-            // Pixel de acompanhamento
-            $table->string('pixel_code')->nullable();
+            // Meta de conversão vinculada à campanha
+            $table->unsignedBigInteger('conversion_goal_id')->nullable();
 
             // Status atual da campanha (draft, active, paused, finished, archived)
             $table->string('status')->default('draft');
@@ -63,12 +65,21 @@ return new class extends Migration {
             $table->foreign('google_ads_account_id')
                 ->references('id')
                 ->on('google_ads_accounts');
+            $table->foreign('user_id')
+                ->references('id')
+                ->on('users')
+                ->onDelete('cascade');
+            $table->foreign('conversion_goal_id')
+                ->references('id')
+                ->on('conversion_goals');
 
             // Índices auxiliares para filtros frequentes
+            $table->index('user_id');
             $table->index('status');
             $table->index('channel_id');
             $table->index('external_campaign_id');
             $table->index('affiliate_platform_id');
+            $table->index('conversion_goal_id');
         });
     }
 

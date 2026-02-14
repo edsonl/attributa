@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Timezone extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'identifier',
+        'label',
+        'utc_offset',
+        'active',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
+    ];
+
+    public function conversionGoals()
+    {
+        return $this->hasMany(ConversionGoal::class);
+    }
+}

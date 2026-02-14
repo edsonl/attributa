@@ -16,6 +16,7 @@ class AdsConversion extends Model
      * Campos que podem ser atribuídos em massa
      */
     protected $fillable = [
+        'user_id',
         'campaign_id',
         'pageview_id',
         'gclid',

@@ -72,6 +72,12 @@ const columns = [
         align: 'left',
     },
     {
+        name: 'conversion_goal',
+        label: 'Meta de conversao',
+        field: row => row.conversion_goal?.goal_code ?? '-',
+        align: 'left',
+    },
+    {
         name: 'countries',
         label: 'Países',
         field: 'countries',

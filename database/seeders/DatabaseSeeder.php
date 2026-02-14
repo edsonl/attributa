@@ -18,7 +18,19 @@ class DatabaseSeeder extends Seeder
             AffiliatePlatformsSeeder::class,
             ChannelsSeeder::class,
             CountriesSeeder::class,
+            TimezonesSeeder::class,
             DevUserSeeder::class,
+            TestCampaignSeeder::class,
+            TestPageviewsSeeder::class,
+            TestAdsConversionsSeeder::class,
         ]);
+
+        if (app()->environment('local')) {
+            $this->call([
+                TestCampaignSeeder::class,
+                TestPageviewsSeeder::class,
+                TestAdsConversionsSeeder::class,
+            ]);
+        }
     }
 }

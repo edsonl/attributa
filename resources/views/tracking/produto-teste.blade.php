@@ -66,6 +66,7 @@
 
 
 <!-- Attributa Tracking -->
+<!-- Attributa Tracking -->
 <script>
     (function(w,d,s,u,c){
         if (w.__ATTRIBUTA_LOADED__) return;
@@ -75,7 +76,7 @@
         js.src = u + '?c=' + encodeURIComponent(c);
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document, 'script','http://attributa.cloud/api/tracking/script.js', 'CMP-GO-01KGWSGN56');
+    })(window, document, 'script','http://attributa.site/api/tracking/script.js', 'CMP-GA-N5E5KK3685');
 </script>
 <!-- End Attributa Tracking -->
 

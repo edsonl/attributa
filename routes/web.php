@@ -2,13 +2,13 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\AuthPasswordController;
-use App\Http\Controllers\ConversionCallbackController;
 use App\Http\Controllers\Panel\AccountController;
 use App\Http\Controllers\Panel\ActivityController;
 use App\Http\Controllers\Panel\CampaignController;
 use App\Http\Controllers\Panel\ClientController;
 use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\ConversionsController;
+use App\Http\Controllers\Panel\ConversionGoalController;
 use App\Http\Controllers\Panel\CountryController;
 use App\Http\Controllers\Panel\GoogleAdsAccountController;
 use App\Http\Controllers\Panel\GoogleAuthController;
@@ -39,7 +39,7 @@ Route::view('/', 'site.home')->name('home');
 Route::redirect('/home', '/');
 
 Route::redirect('/campanhas', '/painel/campaigns');
-Route::redirect('/painel', '/painel/atividade/pageviews');
+Route::redirect('/painel', '/painel/atividade/pageviews')->name('panel.index');
 
 Route::get('/teste', function () {
 
@@ -160,37 +160,17 @@ Route::middleware(['auth', 'verified'])
             Route::get('campaigns/{campaign}/tracking-code', [CampaignController::class, 'tracking_code'])
                 ->name('campaigns.tracking_code');
             Route::resource('campaigns', CampaignController::class);
+            Route::get('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'logs'])
+                ->name('conversion-goals.logs');
+            Route::delete('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'destroyLogs'])
+                ->name('conversion-goals.logs.destroy');
+            Route::resource('conversion-goals', ConversionGoalController::class)->except(['show']);
 
             //CRUD Usuários
             // bulk delete
             Route::delete('users/bulk', [UserController::class, 'bulkDestroy'])
                 ->name('users.bulk-destroy');
             Route::resource('users', UserController::class)->except(['show']);
-
-            //CRUD Tarefas
-            Route::resource('tasks', TaskController::class);
-            // GET painel/tasks/{task}/description
-            Route::get('tasks/{task}/description', [TaskController::class, 'description'])->name('tasks.description');
-            // Atualizar status da tarefa (AJAX)
-            Route::patch('tasks/{task}/status', [TaskController::class, 'updateStatus'])
-                ->name('tasks.updateStatus');
-            // Atualizar Priority da tarefa (AJAX)
-            Route::patch('tasks/{task}/priority', [TaskController::class, 'updatePriority'])
-                ->name('tasks.updatePriority');
-
-            Route::get('tasks/{task}/notes', [TaskNoteController::class, 'index'])->name('tasks.notes.index');
-            Route::post('tasks/{task}/notes', [TaskNoteController::class, 'store'])->name('tasks.notes.store');
-            Route::delete('tasks/{task}/notes/{note}', [TaskNoteController::class, 'destroy'])->name('tasks.notes.destroy');
-            Route::put('tasks/{task}/notes/{note}', [TaskNoteController::class, 'update'])->name('tasks.notes.update');
-
-            Route::resource('companies', CompanyController::class)->except(['show']);
-
-
-            // CRUD Clients
-            // bulk delete
-            Route::delete('clients/bulk-delete', [ClientController::class, 'bulkDestroy'])
-                ->name('clients.bulk-delete');
-            Route::resource('clients', ClientController::class)->except(['show']);
 
             // Countries (AJAX-first CRUD)
             Route::prefix('countries')
@@ -225,5 +205,4 @@ Route::middleware(['auth', 'verified'])
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
 
-//Resposta de conversão plataforma de afiliado
-Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
+

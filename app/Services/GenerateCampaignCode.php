@@ -15,11 +15,14 @@ class GenerateCampaignCode
     public function generate(string $channelCode): string
     {
         do {
-            // Entropia baseada em ULID
+            // ULID em Base32 (26 chars): os 10 primeiros sao timestamp e os 16 finais sao randomicos.
             $entropy = strtoupper(Str::ulid()->toBase32());
 
-            // Pega só 8 chars seguros
-            $body = substr($entropy, 0, 8);
+            // Usa somente o bloco randomico para reduzir previsibilidade e colisao em alta concorrencia.
+            $body = substr($entropy, 10, 8);
+            if (strlen($body) < 8) {
+                $body = strtoupper(Str::random(8));
+            }
 
             $base = "CMP-{$channelCode}-{$body}";
 

@@ -12,6 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('google_ads_accounts', function (Blueprint $table) {
+            // ID interno da conta conectada
             $table->bigIncrements('id');
 
             // Dono da conta dentro do Attributa
@@ -31,6 +32,7 @@ return new class extends Migration
             // Status da integração
             $table->boolean('active')->default(true);
 
+            // Timestamps padrão do Laravel
             $table->timestamps();
 
             // Índices

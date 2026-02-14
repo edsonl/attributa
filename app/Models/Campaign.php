@@ -11,9 +11,10 @@ class Campaign extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'status',
-        'pixel_code',
+        'conversion_goal_id',
         'commission_value',
         'channel_id',
         'affiliate_platform_id',
@@ -42,6 +43,11 @@ class Campaign extends Model
         return $this->belongsTo(AffiliatePlatform::class);
     }
 
+    public function conversionGoal()
+    {
+        return $this->belongsTo(ConversionGoal::class);
+    }
+
     /**
      * Países associados à campanha
      */
@@ -62,19 +68,7 @@ class Campaign extends Model
                 return;
             }
 
-            // Extrai somente letras do nome do canal
-            $rawChannelName = optional($campaign->channel)->name ?? '';
-
-            $lettersOnly = strtoupper(
-                preg_replace('/[^A-Z]/i', '', $rawChannelName)
-            );
-
-            // Garante sempre 2 letras
-            $channelCode = substr($lettersOnly, 0, 2);
-
-            if (strlen($channelCode) < 2) {
-                $channelCode = 'XX';
-            }
+            $channelCode = self::resolveChannelCode(optional($campaign->channel)->name ?? null);
 
             $campaign->code = app(GenerateCampaignCode::class)
                 ->generate($channelCode);
@@ -82,13 +76,29 @@ class Campaign extends Model
 
     }
 
-    /**
-     * Aplica trim automaticamente ao salvar
-     */
-    public function setPixelCodeAttribute($value)
+    protected static function resolveChannelCode(?string $rawChannelName): string
     {
-        $this->attributes['pixel_code'] = $value === null
-            ? null
-            : strtoupper(trim((string) $value));
+        $normalized = trim((string) preg_replace('/[^A-Za-z]+/', ' ', (string) $rawChannelName));
+        if ($normalized === '') {
+            return 'XX';
+        }
+
+        $words = preg_split('/\s+/', $normalized) ?: [];
+        if (count($words) >= 2) {
+            $first = strtoupper(substr((string) $words[0], 0, 1));
+            $second = strtoupper(substr((string) $words[1], 0, 1));
+            $code = $first . $second;
+        } else {
+            $word = strtoupper((string) ($words[0] ?? ''));
+            $code = substr($word, 0, 2);
+        }
+
+        $code = preg_replace('/[^A-Z]/', '', (string) $code) ?? '';
+        if (strlen($code) < 2) {
+            $code = str_pad($code, 2, 'X');
+        }
+
+        return substr($code, 0, 2);
     }
+
 }

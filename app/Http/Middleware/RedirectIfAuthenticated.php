@@ -16,7 +16,7 @@ class RedirectIfAuthenticated
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->user()) {
-            return redirect()->route('home'); // ajuste se quiser outro destino
+            return redirect()->route('panel.index');
         }
         return $next($request);
     }

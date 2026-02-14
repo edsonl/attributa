@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('ip_lookup_cache', function (Blueprint $table) {
 
+            // ID interno do cache de consulta
             $table->id();
 
             // =============================
@@ -65,6 +66,7 @@ return new class extends Migration
             // Controle de revalidação futura
             $table->timestamp('last_checked_at')->nullable();
 
+            // Timestamps padrão do Laravel
             $table->timestamps();
         });
     }

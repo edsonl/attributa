@@ -33,7 +33,11 @@ class StoreCampaignRequest extends FormRequest
                 'max:255',
             ],
 
-            'pixel_code'=>['string','max:60','nullable'],
+            'conversion_goal_id' => [
+                'nullable',
+                'integer',
+                'exists:conversion_goals,id',
+            ],
 
             'status' => [
                 'required',
@@ -85,7 +89,7 @@ class StoreCampaignRequest extends FormRequest
             'name.required' => 'O nome da campanha é obrigatório.',
             'name.max' => 'O nome da campanha não pode ter mais de 255 caracteres.',
 
-            'pixel_code.max' => 'O pixel não pode ter mais de 60 caracteres.',
+            'conversion_goal_id.exists' => 'A meta de conversão selecionada é inválida.',
 
             'status.required' => 'O status da campanha é obrigatório.',
             'status.boolean' => 'O status da campanha é inválido.',

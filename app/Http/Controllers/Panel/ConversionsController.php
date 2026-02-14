@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Campaign;
 use App\Models\AdsConversion;
+use Illuminate\Support\Carbon;
 
 class ConversionsController extends Controller
 {
@@ -38,9 +39,11 @@ class ConversionsController extends Controller
             'conversion_name'       => 'ads_conversions.conversion_name',
             'conversion_value'      => 'ads_conversions.conversion_value',
             'currency_code'         => 'ads_conversions.currency_code',
-            'gclid'                 => 'ads_conversions.gclid',
-            'pageview_url'          => 'pageviews.url',
-            'pageview_ip'           => 'pageviews.ip',
+            'pageview_id'           => 'pageviews.id',
+            'country_code'          => 'pageviews.country_code',
+            'region_name'           => 'pageviews.region_name',
+            'city'                  => 'pageviews.city',
+            'google_upload_status'  => 'ads_conversions.google_upload_status',
             'created_at'            => 'ads_conversions.created_at',
         ];
 
@@ -54,8 +57,10 @@ class ConversionsController extends Controller
                 'ads_conversions.*',
                 'campaigns.name as campaign_name',
                 'campaigns.code as campaign_code',
-                'pageviews.url as pageview_url',
-                'pageviews.ip as pageview_ip',
+                'pageviews.id as pageview_id',
+                'pageviews.country_code',
+                'pageviews.region_name',
+                'pageviews.city',
             ])
             ->orderBy($orderColumn, $orderDir);
 
@@ -64,9 +69,22 @@ class ConversionsController extends Controller
             $query->where('ads_conversions.campaign_id', (int) $request->campaign_id);
         }
 
-        return response()->json(
-            $query->paginate($perPage)
-        );
+        $paginator = $query->paginate($perPage);
+        $tz = 'America/Sao_Paulo';
+
+        $paginator->getCollection()->transform(function ($row) use ($tz) {
+            $row->conversion_event_time_formatted = $row->conversion_event_time
+                ? Carbon::parse($row->conversion_event_time, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                : null;
+
+            $row->created_at_formatted = $row->created_at
+                ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                : null;
+
+            return $row;
+        });
+
+        return response()->json($paginator);
     }
 
     /**

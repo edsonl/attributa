@@ -24,6 +24,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    conversionGoals: {
+        type: Array,
+        required: true,
+    },
 })
 </script>
 
@@ -55,6 +59,7 @@ const props = defineProps({
                     :countries="countries"
                     :googleAdsAccounts="googleAdsAccounts"
                     :affiliate_platforms="affiliate_platforms"
+                    :conversion-goals="conversionGoals"
                 />
             </q-card-section>
         </q-card>

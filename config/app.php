@@ -66,7 +66,7 @@ return [
     */
 
     //'timezone' => 'UTC',
-    'timezone' => env('APP_TIMEZONE', 'America/Sao_Paulo'),
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
     /*
     |--------------------------------------------------------------------------
@@ -123,5 +123,13 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
+
+    'hashids' => [
+        'salt' => env('HASHIDS_SALT', 'attributa-2026'),
+        'min_length' => (int) env('HASHIDS_MIN_LENGTH', 6),
+    ],
+
+    'conversions_processing_to_exported_hours' => (int) env('CONVERSIONS_PROCESSING_TO_EXPORTED_HOURS', 1),
+    'conversion_goal_logs_retention_days' => (int) env('CONVERSION_GOAL_LOGS_RETENTION_DAYS', 10),
 
 ];

@@ -9,6 +9,7 @@
         "php": "^8.2",
         "google/apiclient": "2.15",
         "googleads/google-ads-php": "^32.1",
+        "hashids/hashids": "^5.0",
         "inertiajs/inertia-laravel": "^2.0",
         "intervention/image": "*",
         "intervention/image-laravel": "*",
