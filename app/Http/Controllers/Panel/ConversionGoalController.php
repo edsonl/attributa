@@ -15,6 +15,7 @@ class ConversionGoalController extends Controller
 {
     public function index(Request $request)
     {
+        $userId = (int) auth()->id();
         $search = (string) $request->string('search')->trim();
         $sort = $request->input('sort', 'created_at');
         $direction = strtolower($request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -27,8 +28,12 @@ class ConversionGoalController extends Controller
         }
 
         $query = ConversionGoal::query()
+            ->where('user_id', $userId)
             ->with([
-                'campaigns:id,name,conversion_goal_id',
+                'campaigns' => function ($query) use ($userId) {
+                    $query->where('campaigns.user_id', $userId)
+                        ->select(['campaigns.id', 'campaigns.name', 'campaigns.conversion_goal_id']);
+                },
                 'timezone:id,identifier,label,utc_offset',
             ]);
 
@@ -87,9 +92,14 @@ class ConversionGoalController extends Controller
 
     public function edit(ConversionGoal $conversionGoal)
     {
+        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $conversionGoal->load([
             'campaigns' => function ($query) {
                 $query->select(['campaigns.id', 'campaigns.name', 'campaigns.conversion_goal_id'])
+                    ->where('campaigns.user_id', (int) auth()->id())
                     ->orderBy('campaigns.name');
             },
         ]);
@@ -102,6 +112,10 @@ class ConversionGoalController extends Controller
 
     public function update(UpdateConversionGoalRequest $request, ConversionGoal $conversionGoal)
     {
+        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $data = $request->validated();
 
         $conversionGoal->update([
@@ -117,6 +131,10 @@ class ConversionGoalController extends Controller
 
     public function destroy(ConversionGoal $conversionGoal)
     {
+        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $conversionGoal->delete();
 
         return redirect()

@@ -27,6 +27,7 @@ class ConversionsController extends Controller
      */
     public function data(Request $request)
     {
+        $userId = (int) auth()->id();
         $perPage    = (int) $request->get('per_page', 20);
         $sortBy     = $request->get('sortBy', 'conversion_event_time');
         $descending = filter_var($request->get('descending', true), FILTER_VALIDATE_BOOLEAN);
@@ -51,6 +52,7 @@ class ConversionsController extends Controller
         $orderDir    = $descending ? 'desc' : 'asc';
 
         $query = AdsConversion::query()
+            ->where('ads_conversions.user_id', $userId)
             ->leftJoin('campaigns', 'campaigns.id', '=', 'ads_conversions.campaign_id')
             ->leftJoin('pageviews', 'pageviews.id', '=', 'ads_conversions.pageview_id')
             ->select([
@@ -93,6 +95,7 @@ class ConversionsController extends Controller
     public function campaigns()
     {
         return Campaign::query()
+            ->where('user_id', (int) auth()->id())
             ->select('id', 'name', 'code')
             ->orderBy('name')
             ->get();

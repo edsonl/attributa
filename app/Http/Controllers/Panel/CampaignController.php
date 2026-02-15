@@ -21,6 +21,7 @@ class CampaignController extends Controller
      */
     public function index(Request $request)
     {
+        $userId = (int) auth()->id();
         $search = (string) $request->string('search')->trim();
         $sort = $request->input('sort', 'created_at');
         $direction = strtolower($request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -32,7 +33,8 @@ class CampaignController extends Controller
             $sort = 'created_at';
         }
 
-        $campaignsQuery = Campaign::with(['channel', 'countries', 'conversionGoal']);
+        $campaignsQuery = Campaign::with(['channel', 'countries', 'conversionGoal'])
+            ->where('user_id', $userId);
 
         if ($search !== '') {
             $campaignsQuery->where(function ($query) use ($search) {
@@ -75,6 +77,7 @@ class CampaignController extends Controller
                     'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
                 ]),
             'conversionGoals' => ConversionGoal::query()
+                ->where('user_id', (int) auth()->id())
                 ->where('active', true)
                 ->orderBy('goal_code')
                 ->get(['id', 'goal_code', 'active'])
@@ -119,6 +122,10 @@ class CampaignController extends Controller
      */
     public function edit(Campaign $campaign)
     {
+        if ((int) $campaign->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         return Inertia::render('Panel/Campaigns/Edit', [
             'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
                 ->where('active', true)
@@ -133,6 +140,7 @@ class CampaignController extends Controller
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
             'conversionGoals' => ConversionGoal::query()
+                ->where('user_id', (int) auth()->id())
                 ->where(function ($query) use ($campaign) {
                     $query->where('active', true);
 
@@ -155,6 +163,10 @@ class CampaignController extends Controller
      */
     public function update(UpdateCampaignRequest $request, Campaign $campaign)
     {
+        if ((int) $campaign->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $data = $request->validated();
 
         $campaign->update([
@@ -179,6 +191,10 @@ class CampaignController extends Controller
      */
     public function destroy(Campaign $campaign)
     {
+        if ((int) $campaign->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $campaign->delete();
 
         return redirect()
@@ -188,6 +204,10 @@ class CampaignController extends Controller
 
     public function tracking_code(Campaign $campaign)
     {
+        if ((int) $campaign->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $platform = AffiliatePlatform::find($campaign->affiliate_platform_id);
         return response()->json([
             'script' => view('tracking.snippet', [
@@ -230,6 +250,7 @@ class CampaignController extends Controller
     protected function campaignDefaults(): array
     {
         $lastCampaign = Campaign::query()
+            ->where('user_id', (int) auth()->id())
             ->latest('created_at')
             ->select(['channel_id', 'affiliate_platform_id'])
             ->first();

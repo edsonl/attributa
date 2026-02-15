@@ -87,7 +87,7 @@ class GoogleAdsConversionsController extends Controller
             ->where('conversion_goals.id', $goal->id)
             ->where('conversion_goals.user_slug_id', $userSlugId)
             ->where('conversion_goals.goal_code', $goal->goal_code)
-            ->where('google_upload_status', 'pending')
+            //->where('google_upload_status', 'pending')
             ->whereNotNull('ads_conversions.gclid')
             ->whereNotNull('ads_conversions.conversion_name')
             ->whereNotNull('ads_conversions.conversion_event_time')
@@ -150,16 +150,16 @@ class GoogleAdsConversionsController extends Controller
 
         if (!empty($ids)) {
             // Após exportar o lote, marca os registros para evitar reexportação imediata.
-            AdsConversion::whereIn('id', $ids)->update([
-                'google_upload_status' => 'prossecing',
-                'google_uploaded_at'   => now(),
-            ]);
+            //AdsConversion::whereIn('id', $ids)->update([
+            //    'google_upload_status' => 'prossecing',
+            //    'google_uploaded_at'   => now(),
+            //]);
 
             if ($goal) {
-                $this->writeGoalLog(
+                /*$this->writeGoalLog(
                     $goal,
                     'Conversões marcadas como prossecing: ' . count($ids) . ' item(ns).'
-                );
+                );*/
             }
         } elseif ($goal) {
             $this->writeGoalLog($goal, 'Nenhuma conversão para marcar como prossecing.');

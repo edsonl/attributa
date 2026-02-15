@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Panel;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateCampaignRequest extends FormRequest
 {
@@ -33,7 +34,8 @@ class UpdateCampaignRequest extends FormRequest
             'conversion_goal_id' => [
                 'nullable',
                 'integer',
-                'exists:conversion_goals,id',
+                Rule::exists('conversion_goals', 'id')
+                    ->where(fn ($query) => $query->where('user_id', (int) $this->user()?->id)),
             ],
 
             'status' => [
@@ -71,7 +73,8 @@ class UpdateCampaignRequest extends FormRequest
 
             'google_ads_account_id' => [
                 'nullable',
-                'exists:google_ads_accounts,id',
+                Rule::exists('google_ads_accounts', 'id')
+                    ->where(fn ($query) => $query->where('user_id', (int) $this->user()?->id)),
             ],
 
         ];

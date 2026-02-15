@@ -10,6 +10,7 @@ use App\Models\IpLookupCache;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ActivityController extends Controller
 {
@@ -29,6 +30,7 @@ class ActivityController extends Controller
      */
     public function data(Request $request)
     {
+        $userId = (int) auth()->id();
         $perPage    = $request->get('per_page', 20);
         $sortBy     = $request->get('sortBy', 'created_at');
         $descending = filter_var($request->get('descending', true), FILTER_VALIDATE_BOOLEAN);
@@ -51,6 +53,7 @@ class ActivityController extends Controller
         $orderDir    = $descending ? 'desc' : 'asc';
 
         $query = Pageview::query()
+            ->where('pageviews.user_id', $userId)
             ->leftJoin('campaigns', 'campaigns.id', '=', 'pageviews.campaign_id')
             ->leftJoin('ip_categories', 'ip_categories.id', '=', 'pageviews.ip_category_id')
             ->select([
@@ -96,6 +99,7 @@ class ActivityController extends Controller
     public function campaigns()
     {
         return Campaign::query()
+            ->where('user_id', (int) auth()->id())
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
@@ -106,6 +110,10 @@ class ActivityController extends Controller
      */
     public function destroy(Pageview $pageview)
     {
+        if ((int) $pageview->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         if ((int) $pageview->conversion === 1) {
             return response()->json([
                 'message' => 'Pageview convertido não pode ser excluído.',
@@ -126,12 +134,19 @@ class ActivityController extends Controller
      */
     public function bulkDestroy(Request $request)
     {
+        $userId = (int) auth()->id();
         $data = $request->validate([
             'ids'   => ['required', 'array'],
-            'ids.*' => ['integer', 'exists:pageviews,id'],
+            'ids.*' => [
+                'integer',
+                Rule::exists('pageviews', 'id')->where(
+                    fn ($query) => $query->where('user_id', $userId)
+                ),
+            ],
         ]);
 
-        $query = Pageview::whereIn('id', $data['ids']);
+        $query = Pageview::where('user_id', $userId)
+            ->whereIn('id', $data['ids']);
         $totalSelected = count($data['ids']);
         $convertedCount = (clone $query)->where('conversion', 1)->count();
         $deleted = (clone $query)->where('conversion', 0)->delete();
@@ -151,6 +166,10 @@ class ActivityController extends Controller
      */
     public function show(Pageview $pageview)
     {
+        if ((int) $pageview->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
         $pageview->loadMissing([
             'ipCategory:id,name,color_hex,description',
             'campaign:id,name,code',
