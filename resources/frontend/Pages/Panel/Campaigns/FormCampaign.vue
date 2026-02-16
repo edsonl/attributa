@@ -46,21 +46,28 @@ const countrySelectRef = ref(null)
 const channelOptions = computed(() =>
     (props.channels ?? []).map(option => ({
         ...option,
-        value: option.id,
+        value: String(option.id),
         label: option.label ?? option.name,
     })),
 )
 const affiliateOptions = computed(() =>
     (props.affiliate_platforms ?? []).map(option => ({
         ...option,
-        value: option.id,
+        value: String(option.id),
         label: option.label ?? option.name,
+    })),
+)
+const googleAdsAccountOptions = computed(() =>
+    (props.googleAdsAccounts ?? []).map(option => ({
+        ...option,
+        value: String(option.id),
+        label: option.label,
     })),
 )
 const conversionGoalOptions = computed(() =>
     (props.conversionGoals ?? []).map(option => ({
         ...option,
-        value: option.id,
+        value: String(option.id),
         label: option.active === false
             ? `${option.label ?? option.goal_code} (inativa)`
             : (option.label ?? option.goal_code),
@@ -72,19 +79,52 @@ watch(() => props.countries, (val = []) => {
     filteredCountries.value = [...val]
 })
 
+function normalizeSelectValue(currentValue, options = []) {
+    if (currentValue === null || currentValue === undefined || currentValue === '') {
+        return currentValue
+    }
+
+    const match = options.find(option => String(option?.value) === String(currentValue))
+    return match ? match.value : currentValue
+}
+
+function toStringOrNull(value) {
+    if (value === null || value === undefined || value === '') {
+        return null
+    }
+
+    return String(value)
+}
+
 const form = useForm({
     name: props.campaign?.name ?? '',
     product_url: props.campaign?.product_url ?? '',
-    conversion_goal_id: props.campaign?.conversion_goal_id ?? null,
+    conversion_goal_id: toStringOrNull(props.campaign?.conversion_goal_id),
     status: props.campaign?.status ?? true,
-    channel_id: props.campaign?.channel_id ?? props.defaults?.channel_id ?? null,
-    affiliate_platform_id: props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null,
-    google_ads_account_id: props.campaign?.google_ads_account_id ?? null,
+    channel_id: toStringOrNull(props.campaign?.channel_id ?? props.defaults?.channel_id ?? null),
+    affiliate_platform_id: toStringOrNull(props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null),
+    google_ads_account_id: toStringOrNull(props.campaign?.google_ads_account_id),
     countries: props.campaign?.countries
         ? props.campaign.countries.map(c => c.id)
         : [],
     commission_value: props.campaign?.commission_value ?? null,
 })
+
+watch(channelOptions, (options) => {
+    form.channel_id = normalizeSelectValue(form.channel_id, options)
+}, { immediate: true })
+
+watch(affiliateOptions, (options) => {
+    form.affiliate_platform_id = normalizeSelectValue(form.affiliate_platform_id, options)
+}, { immediate: true })
+
+watch(conversionGoalOptions, (options) => {
+    form.conversion_goal_id = normalizeSelectValue(form.conversion_goal_id, options)
+}, { immediate: true })
+
+watch(googleAdsAccountOptions, (options) => {
+    form.google_ads_account_id = normalizeSelectValue(form.google_ads_account_id, options)
+}, { immediate: true })
 
 const countryError = computed(() => {
     if (form.errors.countries) return form.errors.countries
@@ -272,8 +312,8 @@ function copyTrackingScript() {
 
         <q-select
             v-model="form.google_ads_account_id"
-            :options="googleAdsAccounts"
-            option-value="id"
+            :options="googleAdsAccountOptions"
+            option-value="value"
             option-label="label"
             emit-value
             map-options
