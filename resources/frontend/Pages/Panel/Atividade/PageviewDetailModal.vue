@@ -323,7 +323,7 @@ async function copyValue(value) {
                                             <q-tooltip>Copiar GCLID</q-tooltip>
                                         </q-btn>
                                     </div>
-                                    <div class="detail-label tw-mt-2">Código composto</div>
+                                    <div class="detail-label tw-mt-2">Id de acompanhamento</div>
                                     <div class="value-with-copy value-with-copy--inline">
                                         <div class="truncated-preview">{{ previewValue(detailComposedCode) }}</div>
                                         <q-btn
