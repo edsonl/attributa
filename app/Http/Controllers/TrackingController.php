@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\Browser;
 use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
+use App\Services\HashidService;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -162,9 +163,11 @@ class TrackingController extends Controller
             'ip' => $request->ip(),
         ]);
 
-       // 🔹 Retorna o ID da visita (pageview)
+       // 🔹 Retorna o código hash da visita (pageview)
+        $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
+
         return response()->json([
-            'pageview_id' => $pageview->id,
+            'pageview_code' => $pageviewCode,
         ]);
 
     }

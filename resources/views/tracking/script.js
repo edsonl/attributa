@@ -140,8 +140,9 @@
                         return response.json();
                     })
                     .then(function (json) {
-                        if (json && json.pageview_id) {
-                            setCookie('at_pageview_id', json.pageview_id, 90);
+                        var pageviewCode = json && json.pageview_code;
+                        if (pageviewCode) {
+                            setCookie('at_pageview_code', pageviewCode, 90);
                             initSubInjection();
                         }
                     })
@@ -161,8 +162,9 @@
                     if (xhr.status >= 200 && xhr.status < 300) {
                         try {
                             var json = JSON.parse(xhr.responseText);
-                            if (json && json.pageview_id) {
-                                setCookie('at_pageview_id', json.pageview_id, 90);
+                            var pageviewCode = json && json.pageview_code;
+                            if (pageviewCode) {
+                                setCookie('at_pageview_code', pageviewCode, 90);
                                 initSubInjection();
                             }
                         } catch (e) {}
@@ -179,10 +181,10 @@
     // SUBs injection (Dr.Cash)
     // ===============================
     function initSubInjection() {
-        var pageviewId = getCookie('at_pageview_id');
-        if (!pageviewId) return;
+        var pageviewCode = getCookie('at_pageview_code');
+        if (!pageviewCode) return;
 
-        var COMPOSED_CODE = CAMPAIGN_CODE + '-' + pageviewId;
+        var COMPOSED_CODE = CAMPAIGN_CODE + '-' + pageviewCode;
         var SUB_KEYS = ['sub1', 'sub2', 'sub3', 'sub4', 'sub5'];
 
         // ----- Forms -----

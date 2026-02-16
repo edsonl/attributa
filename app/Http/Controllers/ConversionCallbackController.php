@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AdsConversion;
 use App\Models\Campaign;
 use App\Models\Pageview;
+use App\Services\HashidService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -17,12 +18,18 @@ class ConversionCallbackController extends Controller
         $log->info('CALLBACK RAW', $request->query());
 
         $campaignCode = null;
-        $pageviewId   = null;
+        $pageviewId = null;
+        $pageviewToken = null;
 
-        // 🔎 Testa sub1 → sub5
+        // 🔎 Testa subid1 → subid5 (com fallback sub1 → sub5)
         for ($i = 1; $i <= 5; $i++) {
+            $subField = "subid{$i}";
+            $sub = $request->query($subField);
 
-            $sub = $request->query("subid{$i}");
+            if (!$sub) {
+                $subField = "sub{$i}";
+                $sub = $request->query($subField);
+            }
 
             if (!$sub) {
                 continue;
@@ -30,18 +37,21 @@ class ConversionCallbackController extends Controller
 
             /**
              * Formato esperado:
-             * CMP-GO-01KH6EF278-30
+             * CMP-GO-01KH6EF278-0xAbCd12 (novo hash)
              *
              * Banco salva:
              * CMP-GO-01KH6EF278
              */
-            if (preg_match('/^(CMP-[A-Z]{2}-[A-Z0-9]+)-(\d+)$/i', trim($sub), $matches)) {
+            if (preg_match('/^(CMP-[A-Z]{2}-[A-Z0-9]+)-([A-Za-z0-9]+)$/i', trim((string) $sub), $matches)) {
                 $campaignCode = strtoupper($matches[1]);
-                $pageviewId   = (int) $matches[2];
+                $pageviewToken = (string) $matches[2];
+                $pageviewId = $this->resolvePageviewIdFromToken($pageviewToken);
 
                 $log->info('SUB MATCH', [
+                    'source_field'   => $subField,
                     'sub'           => $sub,
                     'campaign_code' => $campaignCode,
+                    'pageview_token'=> $pageviewToken,
                     'pageview_id'   => $pageviewId,
                 ]);
 
@@ -56,23 +66,6 @@ class ConversionCallbackController extends Controller
             return 'ignored';
         }
 
-        // 🔎 Buscar pageview
-        $pageview = Pageview::find($pageviewId);
-
-        if (!$pageview) {
-            $log->warning('Pageview não encontrada', [
-                'pageview_id' => $pageviewId
-            ]);
-            return 'ignored';
-        }
-
-        $gclid = $pageview->gclid;
-
-        // ✅ Marca conversão (idempotente)
-        if (!$pageview->conversion) {
-            $pageview->update(['conversion' => 1]);
-        }
-
         // 🔎 Buscar campanha
         $campaign = Campaign::with('conversionGoal')
             ->where('code', $campaignCode)
@@ -83,6 +76,36 @@ class ConversionCallbackController extends Controller
                 'campaign_code' => $campaignCode
             ]);
             return 'ignored';
+        }
+
+        // 🔎 Buscar pageview
+        $pageview = Pageview::query()->find($pageviewId);
+
+        if (!$pageview) {
+            $log->warning('Pageview não encontrada', [
+                'pageview_id' => $pageviewId,
+                'pageview_token' => $pageviewToken,
+            ]);
+            return 'ignored';
+        }
+
+        // Validação forte: o código composto precisa bater com a campanha da própria pageview.
+        if ((int) $pageview->campaign_id !== (int) $campaign->id) {
+            $log->warning('Pageview não pertence à campanha do callback', [
+                'pageview_id' => $pageview->id,
+                'pageview_campaign_id' => $pageview->campaign_id,
+                'callback_campaign_id' => $campaign->id,
+                'callback_campaign_code' => $campaignCode,
+                'pageview_campaign_code' => $pageview->campaign_code,
+            ]);
+            return 'ignored';
+        }
+
+        $gclid = $pageview->gclid;
+
+        // ✅ Marca conversão (idempotente)
+        if (!$pageview->conversion) {
+            $pageview->update(['conversion' => 1]);
         }
 
         if (!$gclid) {
@@ -123,5 +146,15 @@ class ConversionCallbackController extends Controller
         ]);
 
         return 'ok';
+    }
+
+    protected function resolvePageviewIdFromToken(string $token): ?int
+    {
+        $value = trim($token);
+        if ($value === '') {
+            return null;
+        }
+
+        return app(HashidService::class)->decode($value);
     }
 }
