@@ -7,6 +7,24 @@ const FALLBACK_IP_CATEGORY_DETAIL = {
     color_hex: '#FCE7F3',
     description: 'Categoria ainda não determinada.',
 }
+const PREVIEW_CHAR_LIMIT = 20
+
+const GEO_FIELDS = [
+    { label: 'Código', key: 'country_code' },
+    { label: 'Região', key: 'region_name' },
+    { label: 'Cidade', key: 'city' },
+    { label: 'Latitude', key: 'latitude' },
+    { label: 'Longitude', key: 'longitude' },
+    { label: 'Timezone', key: 'timezone' },
+]
+
+const NETWORK_FLAGS = [
+    { key: 'is_proxy', label: 'Proxy' },
+    { key: 'is_vpn', label: 'VPN' },
+    { key: 'is_tor', label: 'Tor' },
+    { key: 'is_datacenter', label: 'Datacenter' },
+    { key: 'is_bot', label: 'Bot' },
+]
 
 const props = defineProps({
     modelValue: {
@@ -39,24 +57,61 @@ const detailPageview = computed(() => props.payload?.pageview ?? {})
 const detailUrl = computed(() => props.payload?.url ?? { full: null, origin: null, path: null, query_params: {} })
 const detailGeo = computed(() => props.payload?.geo ?? {})
 const detailNetwork = computed(() => props.payload?.network ?? {})
+const detailCampaignName = computed(() => detailPageview.value?.campaign?.name ?? '-')
+
+const detailNetworkFlags = computed(() => detailNetwork.value?.flags ?? {})
+const detailNetworkCategory = computed(() => detailNetwork.value?.ip_category ?? null)
+const detailNetworkCategoryColor = computed(() => detailNetworkCategory.value?.color_hex ?? '#475569')
+const detailNetworkCategoryName = computed(() => detailNetworkCategory.value?.name ?? '-')
+const detailNetworkCategoryDescription = computed(() => detailNetworkCategory.value?.description ?? 'Sem descrição.')
+
+const detailTrafficCategory = computed(() => detailPageview.value?.traffic_source_category ?? null)
+const detailTrafficCategoryName = computed(() => detailTrafficCategory.value?.name ?? 'Não classificado')
+const detailTrafficReasonLabel = computed(() => formatTrafficReason(detailPageview.value?.traffic_source_reason))
+
+const detailCountryFlag = computed(() => {
+    const code = detailGeo.value?.country_code
+    if (!code) return null
+    return `${props.assetBaseUrl}/assets/country-flags/${String(code).toLowerCase()}.svg`
+})
+
+const detailCleanUrl = computed(() => stripQueryString(detailUrl.value?.full || ''))
+const detailLandingUrl = computed(() => detailPageview.value?.landing_url ?? null)
+const detailLandingCleanUrl = computed(() => stripQueryString(detailLandingUrl.value || ''))
+const detailReferrer = computed(() => detailPageview.value?.referrer ?? null)
+const detailReferrerHost = computed(() => extractHost(detailReferrer.value))
+const detailResolvedGclid = computed(() => resolveGclid())
+
 const detailUrlParams = computed(() => {
     const params = detailUrl.value?.query_params ?? {}
     return Object.entries(params)
 })
 const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
-const detailCampaignName = computed(() => detailPageview.value?.campaign?.name ?? '-')
-const detailNetworkFlags = computed(() => detailNetwork.value?.flags ?? {})
-const detailPageviewCategory = computed(() => detailPageview.value?.ip_category ?? FALLBACK_IP_CATEGORY_DETAIL)
-const detailNetworkCategory = computed(() => detailNetwork.value?.ip_category ?? null)
-const detailNetworkCategoryColor = computed(() => detailNetworkCategory.value?.color_hex ?? '#475569')
-const detailNetworkCategoryName = computed(() => detailNetworkCategory.value?.name ?? '-')
-const detailNetworkCategoryDescription = computed(() => detailNetworkCategory.value?.description ?? 'Sem descrição.')
-const detailCleanUrl = computed(() => stripQueryString(detailUrl.value?.full || ''))
-const detailResolvedGclid = computed(() => resolveGclid())
-const detailCountryFlag = computed(() => {
-    const code = detailGeo.value?.country_code
-    if (!code) return null
-    return `${props.assetBaseUrl}/assets/country-flags/${String(code).toLowerCase()}.svg`
+
+const detailDeviceSummary = computed(() => {
+    const relationName = detailPageview.value?.device_category?.name
+    const type = detailPageview.value?.device_type
+    return relationName || type || '-'
+})
+
+const detailBrowserSummary = computed(() => {
+    const relationName = detailPageview.value?.browser?.name
+    const name = detailPageview.value?.browser_name
+    const version = detailPageview.value?.browser_version
+
+    if (hasText(name) && hasText(version)) return `${name} ${version}`
+    if (hasText(name)) return name
+    if (hasText(relationName)) return relationName
+    return '-'
+})
+
+const detailOsSummary = computed(() => {
+    const name = detailPageview.value?.os_name
+    const version = detailPageview.value?.os_version
+
+    if (hasText(name) && hasText(version)) return `${name} ${version}`
+    if (hasText(name)) return name
+    return '-'
 })
 
 function stripQueryString(value) {
@@ -71,13 +126,30 @@ function stripQueryString(value) {
     }
 }
 
+function extractHost(value) {
+    if (!value) return null
+
+    try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://placeholder.local'
+        const parsedUrl = new URL(value, origin)
+        return parsedUrl.host || null
+    } catch (error) {
+        return null
+    }
+}
+
+function hasText(value) {
+    return value !== null && value !== undefined && String(value).trim() !== ''
+}
+
 function formatFlag(value) {
     if (value === null || value === undefined) return '-'
     return value ? 'Sim' : 'Não'
 }
 
-function formatParamValue(value) {
+function formatValue(value) {
     if (value === null || value === undefined) return '-'
+
     if (Array.isArray(value) || typeof value === 'object') {
         try {
             return JSON.stringify(value)
@@ -85,34 +157,79 @@ function formatParamValue(value) {
             return String(value)
         }
     }
+
     return String(value)
 }
 
-function hasText(value) {
-    return value !== null && value !== undefined && String(value).trim() !== ''
-}
-
-function isGclidParam(key) {
-    return String(key || '').toLowerCase() === 'gclid'
+function previewValue(value) {
+    const text = formatValue(value)
+    if (!hasText(text) || text === '-') return '-'
+    if (text.length <= PREVIEW_CHAR_LIMIT) return text
+    return text.slice(0, PREVIEW_CHAR_LIMIT)
 }
 
 function resolveGclid() {
-    const pageviewGclid = detailPageview.value?.gclid
-    if (hasText(pageviewGclid)) return String(pageviewGclid)
+    const fromPageview = detailPageview.value?.gclid
+    if (hasText(fromPageview)) return String(fromPageview)
 
     const queryParams = detailUrl.value?.query_params ?? {}
-    const match = Object.entries(queryParams).find(([key]) => isGclidParam(key))
+    const match = Object.entries(queryParams).find(([key]) => String(key).toLowerCase() === 'gclid')
     if (!match) return ''
 
-    return formatParamValue(match[1])
+    return formatValue(match[1])
 }
 
-async function copyParamValue(value) {
-    const text = formatParamValue(value)
+function formatTrafficReason(value) {
+    const raw = String(value || '').trim()
+    if (!raw) return '-'
+
+    if (raw.startsWith('click_id:')) {
+        const key = raw.slice('click_id:'.length)
+        return `Clique identificado por ${key}`
+    }
+
+    if (raw.startsWith('utm_medium:')) {
+        const medium = raw.slice('utm_medium:'.length)
+        return `Classificado por utm_medium=${medium}`
+    }
+
+    if (raw.startsWith('referrer_search:')) {
+        const host = raw.slice('referrer_search:'.length)
+        return `Referência de buscador (${host})`
+    }
+
+    if (raw.startsWith('referrer_social:')) {
+        const host = raw.slice('referrer_social:'.length)
+        return `Referência de rede social (${host})`
+    }
+
+    if (raw.startsWith('referrer:')) {
+        const host = raw.slice('referrer:'.length)
+        return `Referência externa (${host})`
+    }
+
+    if (raw === 'internal_referrer') {
+        return 'Navegação interna no mesmo domínio'
+    }
+
+    if (raw.startsWith('utm_source_only:')) {
+        const source = raw.slice('utm_source_only:'.length)
+        return `Somente utm_source informado (${source})`
+    }
+
+    if (raw === 'no_referrer_no_utm_no_click_id') {
+        return 'Sem referrer, UTM ou click-id (direto)'
+    }
+
+    return raw
+}
+
+async function copyValue(value) {
+    const text = formatValue(value)
 
     try {
         await navigator.clipboard.writeText(text)
-        $q.notify({ type: 'positive', message: 'GCLID copiado.' })
+        $q.notify({ type: 'positive', message: 'Valor copiado.' })
     } catch (error) {
         $q.notify({ type: 'negative', message: 'Nao foi possivel copiar.' })
     }
@@ -151,22 +268,36 @@ async function copyParamValue(value) {
                                 </div>
                                 <div>
                                     <div class="detail-label">IP</div>
-                                    <div class="detail-value">
-                                        {{ detailPageview.ip || '-' }}
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="detail-value">{{ detailPageview.ip || '-' }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailPageview.ip)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailPageview.ip)"
+                                        >
+                                            <q-tooltip>Copiar IP</q-tooltip>
+                                        </q-btn>
                                     </div>
                                 </div>
                                 <div>
-                                    <div class="detail-label">Categoria de IP</div>
-                                    <div class="tw-mt-1">
-                                        <div
-                                            class="ip-category-label"
-                                            :style="{ color: detailPageviewCategory.color_hex }"
+                                    <div class="detail-label">GCLID</div>
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="truncated-preview">{{ previewValue(detailResolvedGclid) }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailResolvedGclid)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailResolvedGclid)"
                                         >
-                                            {{ detailPageviewCategory.name }}
-                                        </div>
-                                        <div class="ip-category-description">
-                                            {{ detailPageviewCategory.description || 'Sem descrição.' }}
-                                        </div>
+                                            <q-tooltip>Copiar GCLID</q-tooltip>
+                                        </q-btn>
                                     </div>
                                 </div>
                                 <div>
@@ -185,31 +316,16 @@ async function copyParamValue(value) {
                                         />
                                     </div>
                                 </div>
-                                <div v-if="hasText(detailResolvedGclid)">
-                                    <div class="detail-label">GCLID</div>
-                                    <div class="gclid-param-row">
-                                        <div class="gclid-preview">{{ detailResolvedGclid }}</div>
-                                        <q-btn
-                                            dense
-                                            flat
-                                            round
-                                            size="sm"
-                                            icon="content_copy"
-                                            @click="copyParamValue(detailResolvedGclid)"
-                                        >
-                                            <q-tooltip>Copiar GCLID</q-tooltip>
-                                        </q-btn>
+                                <div>
+                                    <div class="detail-label">Canal</div>
+                                    <div class="detail-value">
+                                        {{ detailTrafficCategoryName }}
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </section>
 
-                <section class="detail-section first-row-section">
-                    <div class="section-card">
-                        <div class="section-card__header">GEOLOCALIZAÇÃO</div>
-                        <div class="section-card__body">
+                            <div class="subsection-separator" />
+                            <div class="subsection-title">GEOLOCALIZAÇÃO</div>
                             <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
                                 <div>
                                     <div class="detail-label">País</div>
@@ -223,7 +339,7 @@ async function copyParamValue(value) {
                                         <span>{{ detailGeo.country_name ?? '-' }}</span>
                                     </div>
                                 </div>
-                                <div v-for="field in [{ label: 'Código', key: 'country_code' }, { label: 'Região', key: 'region_name' }, { label: 'Cidade', key: 'city' }, { label: 'Latitude', key: 'latitude' }, { label: 'Longitude', key: 'longitude' }, { label: 'Timezone', key: 'timezone' }]" :key="field.key">
+                                <div v-for="field in GEO_FIELDS" :key="field.key">
                                     <div class="detail-label">{{ field.label }}</div>
                                     <div class="detail-value">
                                         {{ detailGeo[field.key] ?? '-' }}
@@ -234,53 +350,59 @@ async function copyParamValue(value) {
                     </div>
                 </section>
 
-                <section class="detail-section xl:tw-col-span-2">
+                <section class="detail-section first-row-section">
                     <div class="section-card">
-                        <div class="section-card__header">ORIGEM DA URL</div>
-                        <div class="section-card__body section-body--stack">
-                            <div>
-                                <div class="detail-label">Página (sem parâmetros)</div>
-                                <div class="detail-value tw-break-all">
-                                    {{ detailCleanUrl }}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="detail-label">Parâmetros</div>
-                                <div class="tw-mt-2">
-                                    <div v-if="hasUrlParams" class="url-params-inline">
-                                        <div
-                                            v-for="([key, value]) in detailUrlParams"
-                                            :key="`${key}-${value}`"
-                                            class="url-param-chip"
-                                        >
-                                            <div class="url-param-key">{{ key }}</div>
-                                            <div v-if="isGclidParam(key)" class="gclid-param-row">
-                                                <div class="gclid-preview">{{ formatParamValue(value) }}</div>
-                                                <q-btn
-                                                    dense
-                                                    flat
-                                                    round
-                                                    size="sm"
-                                                    icon="content_copy"
-                                                    @click="copyParamValue(value)"
-                                                >
-                                                    <q-tooltip>Copiar GCLID</q-tooltip>
-                                                </q-btn>
-                                            </div>
-                                            <div v-else class="url-param-value">{{ formatParamValue(value) }}</div>
-                                        </div>
-                                    </div>
-                                    <div v-else class="tw-text-sm tw-text-slate-500">Sem parâmetros na URL.</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="detail-section xl:tw-col-span-2">
-                    <div class="section-card">
-                        <div class="section-card__header">REDE &amp; SEGURANÇA</div>
+                        <div class="section-card__header">DISPOSITIVO, NAVEGADOR &amp; REDE</div>
                         <div class="section-card__body">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                                <div>
+                                    <div class="detail-label">Categoria</div>
+                                    <div class="detail-value">{{ detailDeviceSummary }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Marca</div>
+                                    <div class="detail-value">{{ formatValue(detailPageview.device_brand) }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Modelo</div>
+                                    <div class="detail-value">{{ formatValue(detailPageview.device_model) }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Sistema Operacional</div>
+                                    <div class="detail-value">{{ detailOsSummary }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Navegador</div>
+                                    <div class="detail-value">{{ detailBrowserSummary }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Idioma</div>
+                                    <div class="detail-value">{{ formatValue(detailPageview.language) }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Plataforma</div>
+                                    <div class="detail-value">{{ formatValue(detailPageview.platform) }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Tela</div>
+                                    <div class="detail-value">
+                                        {{ formatValue(detailPageview.screen_width) }} x {{ formatValue(detailPageview.screen_height) }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Viewport</div>
+                                    <div class="detail-value">
+                                        {{ formatValue(detailPageview.viewport_width) }} x {{ formatValue(detailPageview.viewport_height) }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">DPR</div>
+                                    <div class="detail-value">{{ formatValue(detailPageview.device_pixel_ratio) }}</div>
+                                </div>
+                            </div>
+
+                            <div class="subsection-separator" />
+                            <div class="subsection-title">INFORMAÇÕES DA REDE</div>
                             <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4">
                                 <div>
                                     <div class="detail-label">ISP</div>
@@ -314,15 +436,9 @@ async function copyParamValue(value) {
                                         {{ detailNetwork.fraud_score ?? '-' }}
                                     </div>
                                 </div>
-                                <div>
-                                    <div class="detail-label">Última verificação</div>
-                                    <div class="detail-value">
-                                        {{ detailNetwork.last_checked_formatted ?? detailNetwork.last_checked ?? '-' }}
-                                    </div>
-                                </div>
                             </div>
                             <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-3 tw-mt-4">
-                                <div v-for="flag in [{ key: 'is_proxy', label: 'Proxy' }, { key: 'is_vpn', label: 'VPN' }, { key: 'is_tor', label: 'Tor' }, { key: 'is_datacenter', label: 'Datacenter' }, { key: 'is_bot', label: 'Bot' }]" :key="flag.key">
+                                <div v-for="flag in NETWORK_FLAGS" :key="flag.key">
                                     <div class="detail-label">{{ flag.label }}</div>
                                     <div class="detail-value">
                                         {{ formatFlag(detailNetworkFlags[flag.key]) }}
@@ -332,6 +448,93 @@ async function copyParamValue(value) {
                         </div>
                     </div>
                 </section>
+
+                <section class="detail-section xl:tw-col-span-2">
+                    <div class="section-card">
+                        <div class="section-card__header">ORIGEM DO TRÁFEGO</div>
+                        <div class="section-card__body section-body--compact">
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-3">
+                                <div>
+                                    <div class="detail-label">Canal</div>
+                                    <div class="detail-value">{{ detailTrafficCategoryName }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Motivo da classificação</div>
+                                    <div class="detail-value">{{ detailTrafficReasonLabel }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Domínio de referrer</div>
+                                    <div class="detail-value">{{ detailReferrerHost || '-' }}</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Referrer completo</div>
+                                    <div class="value-with-copy">
+                                        <div class="detail-value tw-break-all">{{ detailReferrer || '-' }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailReferrer)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailReferrer)"
+                                        >
+                                            <q-tooltip>Copiar referrer</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
+                                <div class="lg:tw-col-span-2">
+                                    <div class="detail-label">Landing page (sem parâmetros)</div>
+                                    <div class="value-with-copy">
+                                        <div class="detail-value tw-break-all">{{ detailLandingCleanUrl }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailLandingUrl)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailLandingUrl)"
+                                        >
+                                            <q-tooltip>Copiar landing URL</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
+                                <div class="lg:tw-col-span-2">
+                                    <div class="detail-label">Página atual (sem parâmetros)</div>
+                                    <div class="detail-value tw-break-all">{{ detailCleanUrl }}</div>
+                                </div>
+                                <div class="lg:tw-col-span-4">
+                                    <div class="detail-label">Parâmetros da URL</div>
+                                    <div v-if="hasUrlParams" class="url-params-inline">
+                                        <div
+                                            v-for="([key, value]) in detailUrlParams"
+                                            :key="`query-${key}-${value}`"
+                                            class="url-param-chip"
+                                        >
+                                            <div class="url-param-key">{{ key }}</div>
+                                            <div class="value-with-copy value-with-copy--inline">
+                                                <div class="truncated-preview">{{ previewValue(value) }}</div>
+                                                <q-btn
+                                                    dense
+                                                    flat
+                                                    round
+                                                    size="sm"
+                                                    icon="content_copy"
+                                                    @click="copyValue(value)"
+                                                >
+                                                    <q-tooltip>Copiar {{ key }}</q-tooltip>
+                                                </q-btn>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-else class="traffic-empty">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </q-card-section>
         </q-card>
     </q-dialog>
@@ -381,6 +584,24 @@ async function copyParamValue(value) {
     margin-top: 1rem;
 }
 
+.section-body--compact > * + * {
+    margin-top: 0.75rem;
+}
+
+.subsection-separator {
+    margin: 1rem 0;
+    border-top: 1px solid #e2e8f0;
+}
+
+.subsection-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #475569;
+}
+
 .rounded-borders {
     border: none;
 }
@@ -389,6 +610,12 @@ async function copyParamValue(value) {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+}
+
+.traffic-empty {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    color: #64748b;
 }
 
 .url-param-chip {
@@ -431,6 +658,16 @@ async function copyParamValue(value) {
     color: #0f172a;
 }
 
+.value-with-copy {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.value-with-copy--inline {
+    align-items: center;
+}
+
 .ip-category-label {
     font-size: 0.95rem;
     font-weight: 600;
@@ -448,18 +685,18 @@ async function copyParamValue(value) {
     gap: 0.4rem;
 }
 
-.gclid-preview {
+.truncated-preview {
     position: relative;
-    max-width: 150px;
+    max-width: 180px;
     white-space: nowrap;
     overflow: hidden;
     padding-right: 18px;
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #0f172a;
 }
 
-.gclid-preview::after {
+.truncated-preview::after {
     content: '';
     position: absolute;
     top: 0;

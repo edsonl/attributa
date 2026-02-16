@@ -67,7 +67,7 @@ async function submit() {
     }
 
     if (isEdit.value) {
-        form.put(route('panel.conversion-goals.update', props.conversionGoal.id))
+        form.put(route('panel.conversion-goals.update', props.conversionGoal.hashid ?? props.conversionGoal.id))
         return
     }
 

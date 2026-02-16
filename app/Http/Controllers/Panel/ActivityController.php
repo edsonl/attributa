@@ -40,6 +40,8 @@ class ActivityController extends Controller
             'created_at'    => 'pageviews.created_at',
             'campaign_name' => 'campaigns.name',
             'ip_category'   => 'ip_categories.name',
+            'traffic_source' => 'traffic_source_categories.name',
+            'device_browser' => 'pageviews.device_type',
             'country_code'  => 'pageviews.country_code',
             'region_name'   => 'pageviews.region_name',
             'city'          => 'pageviews.city',
@@ -56,6 +58,9 @@ class ActivityController extends Controller
             ->where('pageviews.user_id', $userId)
             ->leftJoin('campaigns', 'campaigns.id', '=', 'pageviews.campaign_id')
             ->leftJoin('ip_categories', 'ip_categories.id', '=', 'pageviews.ip_category_id')
+            ->leftJoin('traffic_source_categories', 'traffic_source_categories.id', '=', 'pageviews.traffic_source_category_id')
+            ->leftJoin('device_categories', 'device_categories.id', '=', 'pageviews.device_category_id')
+            ->leftJoin('browsers', 'browsers.id', '=', 'pageviews.browser_id')
             ->select([
                 'pageviews.id',
                 'pageviews.created_at',
@@ -70,8 +75,23 @@ class ActivityController extends Controller
                 'ip_categories.name as ip_category_name',
                 'ip_categories.color_hex as ip_category_color',
                 'ip_categories.description as ip_category_description',
-            ])
-            ->orderBy($orderColumn, $orderDir);
+                'traffic_source_categories.name as traffic_source_name',
+                'traffic_source_categories.icon_name as traffic_source_icon',
+                'traffic_source_categories.color_hex as traffic_source_color',
+                'pageviews.device_type',
+                'device_categories.icon_name as device_icon',
+                'device_categories.color_hex as device_color',
+                'pageviews.browser_name',
+                'browsers.icon_name as browser_icon',
+                'browsers.color_hex as browser_color',
+            ]);
+
+        if ($sortBy === 'device_browser') {
+            $query->orderBy('pageviews.device_type', $orderDir)
+                ->orderBy('pageviews.browser_name', $orderDir);
+        } else {
+            $query->orderBy($orderColumn, $orderDir);
+        }
 
         if ($request->filled('campaign_id')) {
             $query->where('pageviews.campaign_id', $request->campaign_id);
@@ -173,6 +193,9 @@ class ActivityController extends Controller
         $pageview->loadMissing([
             'ipCategory:id,name,color_hex,description',
             'campaign:id,name,code',
+            'trafficSourceCategory:id,name,slug,description',
+            'deviceCategory:id,name,slug,description',
+            'browser:id,name,slug,description',
         ]);
 
         $tz = 'America/Sao_Paulo';

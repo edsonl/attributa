@@ -133,8 +133,12 @@ function onClearSearch() {
     fetchTable()
 }
 
-function editCampaign(id) {
-    router.visit(route('panel.campaigns.edit', id))
+function campaignRouteKey(campaign) {
+    return campaign?.hashid ?? campaign?.id
+}
+
+function editCampaign(campaign) {
+    router.visit(route('panel.campaigns.edit', campaignRouteKey(campaign)))
 }
 
 function destroyCampaign(campaign) {
@@ -142,7 +146,7 @@ function destroyCampaign(campaign) {
         return
     }
 
-    router.delete(route('panel.campaigns.destroy', campaign.id))
+    router.delete(route('panel.campaigns.destroy', campaignRouteKey(campaign)))
 }
 </script>
 
@@ -244,7 +248,7 @@ function destroyCampaign(campaign) {
                                 size="sm"
                                 icon="edit"
                                 color="primary"
-                                @click="editCampaign(props.row.id)"
+                                @click="editCampaign(props.row)"
                             />
 
                             <q-btn

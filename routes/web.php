@@ -10,6 +10,9 @@ use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\ConversionsController;
 use App\Http\Controllers\Panel\ConversionGoalController;
 use App\Http\Controllers\Panel\CountryController;
+use App\Http\Controllers\Panel\BrowserController;
+use App\Http\Controllers\Panel\DeviceCategoryController;
+use App\Http\Controllers\Panel\TrafficSourceCategoryController;
 use App\Http\Controllers\Panel\GoogleAdsAccountController;
 use App\Http\Controllers\Panel\GoogleAuthController;
 use App\Http\Controllers\Panel\TaskController;
@@ -183,6 +186,36 @@ Route::middleware(['auth', 'verified'])
                     Route::delete('/{country}', [CountryController::class, 'destroy'])->name('destroy');
                 });
 
+            Route::prefix('browsers')
+                ->name('browsers.')
+                ->group(function () {
+                    Route::get('/', [BrowserController::class, 'index'])->name('index');
+                    Route::get('/data', [BrowserController::class, 'data'])->name('data');
+                    Route::post('/', [BrowserController::class, 'store'])->name('store');
+                    Route::put('/{browser}', [BrowserController::class, 'update'])->name('update');
+                    Route::delete('/{browser}', [BrowserController::class, 'destroy'])->name('destroy');
+                });
+
+            Route::prefix('device-categories')
+                ->name('device-categories.')
+                ->group(function () {
+                    Route::get('/', [DeviceCategoryController::class, 'index'])->name('index');
+                    Route::get('/data', [DeviceCategoryController::class, 'data'])->name('data');
+                    Route::post('/', [DeviceCategoryController::class, 'store'])->name('store');
+                    Route::put('/{device_category}', [DeviceCategoryController::class, 'update'])->name('update');
+                    Route::delete('/{device_category}', [DeviceCategoryController::class, 'destroy'])->name('destroy');
+                });
+
+            Route::prefix('traffic-source-categories')
+                ->name('traffic-source-categories.')
+                ->group(function () {
+                    Route::get('/', [TrafficSourceCategoryController::class, 'index'])->name('index');
+                    Route::get('/data', [TrafficSourceCategoryController::class, 'data'])->name('data');
+                    Route::post('/', [TrafficSourceCategoryController::class, 'store'])->name('store');
+                    Route::put('/{traffic_source_category}', [TrafficSourceCategoryController::class, 'update'])->name('update');
+                    Route::delete('/{traffic_source_category}', [TrafficSourceCategoryController::class, 'destroy'])->name('destroy');
+                });
+
 
         });
 
@@ -204,5 +237,4 @@ Route::middleware(['auth', 'verified'])
 
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
-
 

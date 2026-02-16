@@ -22,6 +22,9 @@ return new class extends Migration {
             // Nome da campanha / produto (exibição interna)
             $table->string('name');
 
+            // URL do produto autorizada para envio do tracking (origem canônica)
+            $table->string('product_url', 255)->nullable();
+
             // Meta de conversão vinculada à campanha
             $table->unsignedBigInteger('conversion_goal_id')->nullable();
 

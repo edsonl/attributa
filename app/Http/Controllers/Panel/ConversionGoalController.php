@@ -92,10 +92,6 @@ class ConversionGoalController extends Controller
 
     public function edit(ConversionGoal $conversionGoal)
     {
-        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $conversionGoal->load([
             'campaigns' => function ($query) {
                 $query->select(['campaigns.id', 'campaigns.name', 'campaigns.conversion_goal_id'])
@@ -112,10 +108,6 @@ class ConversionGoalController extends Controller
 
     public function update(UpdateConversionGoalRequest $request, ConversionGoal $conversionGoal)
     {
-        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $data = $request->validated();
 
         $conversionGoal->update([
@@ -131,10 +123,6 @@ class ConversionGoalController extends Controller
 
     public function destroy(ConversionGoal $conversionGoal)
     {
-        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $conversionGoal->delete();
 
         return redirect()
@@ -144,10 +132,6 @@ class ConversionGoalController extends Controller
 
     public function logs(Request $request, ConversionGoal $conversionGoal)
     {
-        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $sort = $request->input('sort', 'created_at');
         $direction = strtolower($request->input('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
         $perPage = min(max((int) $request->input('per_page', 15), 5), 100);
@@ -174,10 +158,6 @@ class ConversionGoalController extends Controller
 
     public function destroyLogs(ConversionGoal $conversionGoal)
     {
-        if ((int) $conversionGoal->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $deleted = $conversionGoal->logs()->delete();
 
         return response()->json([

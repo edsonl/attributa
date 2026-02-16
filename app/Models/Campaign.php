@@ -5,14 +5,18 @@ namespace App\Models;
 use App\Services\GenerateCampaignCode;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Traits\HasHashid;
+use Illuminate\Database\Eloquent\Builder;
 
 class Campaign extends Model
 {
     use HasFactory;
+    use HasHashid;
 
     protected $fillable = [
         'user_id',
         'name',
+        'product_url',
         'status',
         'conversion_goal_id',
         'commission_value',
@@ -20,6 +24,10 @@ class Campaign extends Model
         'affiliate_platform_id',
         'external_campaign_id',
         'google_ads_account_id'
+    ];
+
+    protected $appends = [
+        'hashid',
     ];
 
     protected $casts = [
@@ -99,6 +107,42 @@ class Campaign extends Model
         }
 
         return substr($code, 0, 2);
+    }
+
+    public static function normalizeProductUrl(?string $value): ?string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        $parts = parse_url($raw);
+        if ($parts === false) {
+            return null;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return null;
+        }
+
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+
+        return sprintf('%s://%s%s', $scheme, $host, $port);
+    }
+
+    public function setProductUrlAttribute($value): void
+    {
+        $raw = trim((string) $value);
+        $this->attributes['product_url'] = $raw === '' ? null : $raw;
+    }
+
+    protected function resolveHashidRouteBindingQuery(Builder $query, int $id): Builder
+    {
+        return $query
+            ->whereKey($id)
+            ->where('user_id', (int) auth()->id());
     }
 
 }

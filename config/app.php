@@ -125,8 +125,8 @@ return [
     ],
 
     'hashids' => [
-        'salt' => env('HASHIDS_SALT', 'attributa-2026'),
-        'min_length' => (int) env('HASHIDS_MIN_LENGTH', 6),
+        'salt' => env('HASHIDS_SALT', 'attributa|2026'),
+        'min_length' => (int) env('HASHIDS_MIN_LENGTH',12),
     ],
 
     'conversions_processing_to_exported_hours' => (int) env('CONVERSIONS_PROCESSING_TO_EXPORTED_HOURS', 1),

@@ -139,6 +139,12 @@ return [
             'level' => 'info',
         ],
 
+        'tracking_collect' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/tracking-collect.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];

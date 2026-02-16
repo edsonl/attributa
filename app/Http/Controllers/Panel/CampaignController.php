@@ -100,6 +100,7 @@ class CampaignController extends Controller
         $campaign = Campaign::create([
             'user_id'    => auth()->id(),
             'name'       => $data['name'],
+            'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
@@ -122,10 +123,6 @@ class CampaignController extends Controller
      */
     public function edit(Campaign $campaign)
     {
-        if ((int) $campaign->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         return Inertia::render('Panel/Campaigns/Edit', [
             'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
                 ->where('active', true)
@@ -163,14 +160,11 @@ class CampaignController extends Controller
      */
     public function update(UpdateCampaignRequest $request, Campaign $campaign)
     {
-        if ((int) $campaign->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $data = $request->validated();
 
         $campaign->update([
             'name'       => $data['name'],
+            'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'status'     => $data['status'],
             'channel_id' => $data['channel_id'],
@@ -191,10 +185,6 @@ class CampaignController extends Controller
      */
     public function destroy(Campaign $campaign)
     {
-        if ((int) $campaign->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $campaign->delete();
 
         return redirect()
@@ -204,10 +194,6 @@ class CampaignController extends Controller
 
     public function tracking_code(Campaign $campaign)
     {
-        if ((int) $campaign->user_id !== (int) auth()->id()) {
-            abort(403);
-        }
-
         $platform = AffiliatePlatform::find($campaign->affiliate_platform_id);
         return response()->json([
             'script' => view('tracking.snippet', [

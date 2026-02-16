@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             IpCategoriesSeeder::class,
+            TrafficSourceCategoriesSeeder::class,
+            DeviceCategoriesSeeder::class,
+            BrowsersSeeder::class,
             AffiliatePlatformsSeeder::class,
             ChannelsSeeder::class,
             CountriesSeeder::class,

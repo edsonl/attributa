@@ -36,7 +36,7 @@ const logsPagination = ref({
     sortBy: 'created_at',
     descending: true,
 })
-const logsGoalId = ref(null)
+const logsGoalKey = ref(null)
 const logsColumns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', align: 'left', sortable: true },
     { name: 'message', label: 'Mensagem', field: 'message', align: 'left', sortable: false },
@@ -169,8 +169,12 @@ function onClearSearch() {
     fetchTable()
 }
 
-function editItem(id) {
-    router.visit(route('panel.conversion-goals.edit', id))
+function goalRouteKey(goal) {
+    return goal?.hashid ?? goal?.id
+}
+
+function editItem(goal) {
+    router.visit(route('panel.conversion-goals.edit', goalRouteKey(goal)))
 }
 
 function campaignsLabel(row) {
@@ -205,7 +209,7 @@ function destroyItem(item) {
         },
         persistent: true,
     }).onOk(() => {
-        router.delete(route('panel.conversion-goals.destroy', item.id))
+        router.delete(route('panel.conversion-goals.destroy', goalRouteKey(item)))
     })
 }
 
@@ -289,7 +293,7 @@ async function fetchLogs(goalId, forcedPagination = null) {
 }
 
 async function openLogs(goal) {
-    logsGoalId.value = goal.id
+    logsGoalKey.value = goalRouteKey(goal)
     logsGoalCode.value = goal.goal_code
     logsRows.value = []
     logsPagination.value = {
@@ -300,7 +304,7 @@ async function openLogs(goal) {
     }
 
     logsDialog.value = true
-    await fetchLogs(goal.id, logsPagination.value)
+    await fetchLogs(logsGoalKey.value, logsPagination.value)
 }
 
 async function onLogsRequest({ pagination: newPagination }) {
@@ -309,11 +313,11 @@ async function onLogsRequest({ pagination: newPagination }) {
         ...newPagination,
     }
 
-    await fetchLogs(logsGoalId.value, logsPagination.value)
+    await fetchLogs(logsGoalKey.value, logsPagination.value)
 }
 
 async function deleteCurrentGoalLogs() {
-    if (!logsGoalId.value) {
+    if (!logsGoalKey.value) {
         return
     }
 
@@ -333,7 +337,7 @@ async function deleteCurrentGoalLogs() {
     }).onOk(async () => {
         logsLoading.value = true
         try {
-            await axios.delete(route('panel.conversion-goals.logs.destroy', logsGoalId.value))
+            await axios.delete(route('panel.conversion-goals.logs.destroy', logsGoalKey.value))
             logsRows.value = []
             logsPagination.value = {
                 ...logsPagination.value,
@@ -463,7 +467,7 @@ async function deleteCurrentGoalLogs() {
                                 size="sm"
                                 icon="edit"
                                 color="primary"
-                                @click="editItem(props.row.id)"
+                                @click="editItem(props.row)"
                             />
 
                             <q-btn
@@ -584,7 +588,7 @@ async function deleteCurrentGoalLogs() {
                             color="negative"
                             icon="delete_sweep"
                             label="Excluir logs"
-                            :disable="logsLoading || !logsGoalId"
+                            :disable="logsLoading || !logsGoalKey"
                             @click="deleteCurrentGoalLogs"
                         />
                         <q-btn flat round dense icon="close" v-close-popup />

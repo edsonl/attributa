@@ -39,9 +39,10 @@ const assetBaseUrl = (
 
 const columns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', sortable: true, align: 'left' },
-    { name: 'ip_category', label: 'Classificação IP', field: row => row?.ip_category_name, sortable: true, align: 'left' },
-    { name: 'ip', label: 'IP', field: 'ip', sortable: true, align: 'left' },
+    { name: 'ip', label: 'Classificação / IP', field: 'ip', sortable: true, align: 'left' },
     { name: 'campaign_name', label: 'Campanha', field: 'campaign_name', sortable: true, align: 'left' },
+    { name: 'traffic_source', label: 'Origem do Tráfego', field: 'traffic_source_name', sortable: true, align: 'left' },
+    { name: 'device_browser', label: 'Dispositivo/Navegador', field: row => resolveDeviceBrowser(row), sortable: true, align: 'left' },
     { name: 'country_code', label: 'País', field: 'country_code', sortable: true, align: 'left' },
     { name: 'region_name', label: 'Região', field: 'region_name', sortable: true, align: 'left' },
     { name: 'city', label: 'Cidade', field: 'city', sortable: true, align: 'left' },
@@ -71,6 +72,14 @@ function resolveIpCategoryMeta(row) {
     }
 }
 
+function resolveTrafficMeta(row) {
+    return {
+        label: row?.traffic_source_name ?? '-',
+        icon: row?.traffic_source_icon || 'help_outline',
+        color: row?.traffic_source_color || '#64748B',
+    }
+}
+
 function resolveCountryFlag(row) {
     const code = row?.country_code
     if (!code) return null
@@ -87,6 +96,47 @@ function hasGclid(value) {
     if (value === true || value === 1 || value === '1') return true
     if (typeof value === 'string') return value.trim().length > 0 && value !== '0'
     return false
+}
+
+function formatDeviceType(value) {
+    const raw = String(value || '').trim()
+    if (!raw) return '-'
+
+    return raw
+        .split(/[_\s-]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+}
+
+function resolveDeviceBrowser(row) {
+    const device = formatDeviceType(row?.device_type)
+    const browser = String(row?.browser_name || '').trim() || '-'
+
+    if (device === '-' && browser === '-') return '-'
+    if (device === '-') return browser
+    if (browser === '-') return device
+    return `${device} • ${browser}`
+}
+
+function resolveDeviceBrowserMeta(row) {
+    return {
+        deviceLabel: formatDeviceType(row?.device_type),
+        deviceIcon: row?.device_icon || 'devices_other',
+        deviceColor: row?.device_color || '#64748B',
+        browserLabel: String(row?.browser_name || '').trim() || '-',
+    }
+}
+
+async function copyText(value, label = 'Valor') {
+    if (!value) return
+
+    try {
+        await navigator.clipboard.writeText(String(value))
+        $q.notify({ type: 'positive', message: `${label} copiado.` })
+    } catch {
+        $q.notify({ type: 'negative', message: `Não foi possível copiar ${label.toLowerCase()}.` })
+    }
 }
 
 function fetchCampaigns() {
@@ -304,16 +354,26 @@ onMounted(() => {
                 </q-td>
             </template>
 
-            <template #body-cell-ip_category="props">
+            <template #body-cell-ip="props">
                 <q-td :props="props">
-                    <div class="tw-flex tw-items-center tw-gap-2">
+                    <div class="tw-flex tw-items-center tw-gap-1">
                         <span
                             class="tw-inline-flex tw-h-3 tw-w-3 tw-rounded-full tw-border tw-border-white/20 tw-shadow-sm"
                             :style="{ backgroundColor: resolveIpCategoryMeta(props.row).color }"
                         />
-                        <span class="tw-text-sm tw-font-medium">
-                            {{ resolveIpCategoryMeta(props.row).label }}
-                        </span>
+                        <span>{{ props.value || '-' }}</span>
+                        <q-btn
+                            v-if="props.value"
+                            dense
+                            flat
+                            round
+                            size="sm"
+                            icon="content_copy"
+                            color="primary"
+                            @click="copyText(props.value, 'IP')"
+                        >
+                            <q-tooltip>Copiar IP</q-tooltip>
+                        </q-btn>
                         <q-tooltip class="tw-text-xs tw-max-w-xs tw-leading-snug">
                             {{ resolveIpCategoryMeta(props.row).description }}
                         </q-tooltip>
@@ -321,15 +381,50 @@ onMounted(() => {
                 </q-td>
             </template>
 
-            <template #body-cell-ip="props">
+            <template #body-cell-campaign_name="props">
                 <q-td :props="props">
                     {{ props.value || '-' }}
                 </q-td>
             </template>
 
-            <template #body-cell-campaign_name="props">
+            <template #body-cell-traffic_source="props">
                 <q-td :props="props">
-                    {{ props.value || '-' }}
+                    <div class="tw-flex tw-items-center tw-gap-2">
+                        <q-icon
+                            :name="resolveTrafficMeta(props.row).icon"
+                            size="18px"
+                            :color="'primary'"
+                            :style="{ color: resolveTrafficMeta(props.row).color }"
+                        />
+                        <span>{{ resolveTrafficMeta(props.row).label }}</span>
+                    </div>
+                </q-td>
+            </template>
+
+            <template #body-cell-device_browser="props">
+                <q-td :props="props">
+                    <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
+                        <div class="tw-inline-flex tw-items-center tw-gap-1">
+                            <q-icon
+                                :name="resolveDeviceBrowserMeta(props.row).deviceIcon"
+                                size="18px"
+                                :style="{ color: resolveDeviceBrowserMeta(props.row).deviceColor }"
+                            />
+                            <span>{{ resolveDeviceBrowserMeta(props.row).deviceLabel }}</span>
+                        </div>
+                        <span
+                            v-if="resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
+                            class="tw-text-slate-400"
+                        >
+                            •
+                        </span>
+                        <div
+                            v-if="resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
+                            class="tw-inline-flex tw-items-center tw-gap-1"
+                        >
+                            <span>{{ resolveDeviceBrowserMeta(props.row).browserLabel }}</span>
+                        </div>
+                    </div>
                 </q-td>
             </template>
 

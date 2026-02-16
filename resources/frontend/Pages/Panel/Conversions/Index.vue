@@ -4,7 +4,6 @@ import axios from 'axios'
 import { Head } from '@inertiajs/vue3'
 import { useQuasar } from 'quasar'
 import ConversionPageviewDetailModal from './ConversionPageviewDetailModal.vue'
-import ConversionPageviewDetailDrawer from './ConversionPageviewDetailDrawer.vue'
 
 const rows = ref([])
 const loading = ref(false)
@@ -21,10 +20,8 @@ const pagination = ref({
 const campaignId = ref(null)
 const campaigns = ref([])
 const detailDialog = ref(false)
-const detailDrawer = ref(false)
 const detailLoading = ref(false)
 const detailPayload = ref(null)
-const usePopup = ref(true)
 const assetBaseUrl = (
     import.meta.env.VITE_ASSET_URL
         ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
@@ -91,8 +88,7 @@ async function openPageviewDetails(pageviewId) {
         return
     }
 
-    detailDialog.value = usePopup.value
-    detailDrawer.value = !usePopup.value
+    detailDialog.value = true
     detailLoading.value = true
     detailPayload.value = null
 
@@ -101,7 +97,6 @@ async function openPageviewDetails(pageviewId) {
         detailPayload.value = response.data
     } catch {
         detailDialog.value = false
-        detailDrawer.value = false
         $q.notify({
             type: 'negative',
             message: 'Não foi possível carregar os detalhes da pageview.',
@@ -248,12 +243,6 @@ onMounted(() => {
 
     <ConversionPageviewDetailModal
         v-model="detailDialog"
-        :loading="detailLoading"
-        :payload="detailPayload"
-        :asset-base-url="assetBaseUrl"
-    />
-    <ConversionPageviewDetailDrawer
-        v-model="detailDrawer"
         :loading="detailLoading"
         :payload="detailPayload"
         :asset-base-url="assetBaseUrl"

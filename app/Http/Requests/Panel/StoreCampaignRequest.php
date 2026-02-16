@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Panel;
 
+use App\Models\Campaign;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,6 +33,17 @@ class StoreCampaignRequest extends FormRequest
                 'required',
                 'string',
                 'max:255',
+            ],
+
+            'product_url' => [
+                'required',
+                'string',
+                'max:500',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if (Campaign::normalizeProductUrl((string) $value) === null) {
+                        $fail('Informe uma URL válida com http:// ou https://.');
+                    }
+                },
             ],
 
             'conversion_goal_id' => [
@@ -91,6 +103,8 @@ class StoreCampaignRequest extends FormRequest
         return [
             'name.required' => 'O nome da campanha é obrigatório.',
             'name.max' => 'O nome da campanha não pode ter mais de 255 caracteres.',
+            'product_url.required' => 'A URL do produto é obrigatória.',
+            'product_url.max' => 'A URL do produto não pode ter mais de 500 caracteres.',
 
             'conversion_goal_id.exists' => 'A meta de conversão selecionada é inválida.',
 
@@ -118,6 +132,12 @@ class StoreCampaignRequest extends FormRequest
         if ($this->has('status')) {
             $this->merge([
                 'status' => filter_var($this->status, FILTER_VALIDATE_BOOLEAN),
+            ]);
+        }
+
+        if ($this->has('product_url')) {
+            $this->merge([
+                'product_url' => trim((string) $this->input('product_url')),
             ]);
         }
     }

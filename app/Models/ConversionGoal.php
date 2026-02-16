@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\HasHashid;
 use Hashids\Hashids;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ConversionGoal extends Model
 {
     use HasFactory;
+    use HasHashid;
     use SoftDeletes;
 
     protected $fillable = [
@@ -24,6 +27,10 @@ class ConversionGoal extends Model
 
     protected $casts = [
         'active' => 'boolean',
+    ];
+
+    protected $appends = [
+        'hashid',
     ];
 
     public function campaigns()
@@ -76,5 +83,12 @@ class ConversionGoal extends Model
     public function setGoalCodeAttribute($value): void
     {
         $this->attributes['goal_code'] = strtoupper(trim((string) $value));
+    }
+
+    protected function resolveHashidRouteBindingQuery(Builder $query, int $id): Builder
+    {
+        return $query
+            ->whereKey($id)
+            ->where('user_id', (int) auth()->id());
     }
 }

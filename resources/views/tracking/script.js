@@ -40,30 +40,50 @@
     }
 
     // ===============================
-    // Google Ads params
+    // Acquisition params (UTM + Click IDs)
     // ===============================
-    var gclid = null;
-    var gadCampaignId = null;
+    var trackedParams = [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'gclid',
+        'gad_campaignid',
+        'fbclid',
+        'ttclid',
+        'msclkid',
+        'wbraid',
+        'gbraid'
+    ];
+    var trackedData = {};
 
-    if (window.URLSearchParams) {
-        var urlParams = new URLSearchParams(window.location.search);
-        gclid = urlParams.get('gclid');
-        gadCampaignId = urlParams.get('gad_campaignid');
-    } else {
-        // fallback manual (IE / legacy)
+    function readQueryParam(name) {
+        if (window.URLSearchParams) {
+            return new URLSearchParams(window.location.search).get(name);
+        }
+
         var query = window.location.search.substring(1).split('&');
         for (var i = 0; i < query.length; i++) {
             var pair = query[i].split('=');
-            if (pair[0] === 'gclid') gclid = decodeURIComponent(pair[1] || '');
-            if (pair[0] === 'gad_campaignid') gadCampaignId = decodeURIComponent(pair[1] || '');
+            if (decodeURIComponent(pair[0] || '') === name) {
+                return decodeURIComponent(pair[1] || '');
+            }
         }
+        return null;
     }
 
-    if (gclid) setCookie('at_gclid', gclid, 30);
-    if (gadCampaignId) setCookie('at_gad_campaignid', gadCampaignId, 30);
+    trackedParams.forEach(function (key) {
+        var value = readQueryParam(key);
 
-    if (!gclid) gclid = getCookie('at_gclid');
-    if (!gadCampaignId) gadCampaignId = getCookie('at_gad_campaignid');
+        if (value) {
+            setCookie('at_' + key, value, 30);
+        } else {
+            value = getCookie('at_' + key);
+        }
+
+        trackedData[key] = value || null;
+    });
 
 
     // ===============================
@@ -72,11 +92,29 @@
     var payload = {
         campaign_code: CAMPAIGN_CODE,
         url: window.location.href,
+        landing_url: window.location.href,
         referrer: document.referrer || null,
         user_agent: navigator.userAgent,
+        screen_width: window.screen && window.screen.width ? window.screen.width : null,
+        screen_height: window.screen && window.screen.height ? window.screen.height : null,
+        viewport_width: window.innerWidth || null,
+        viewport_height: window.innerHeight || null,
+        device_pixel_ratio: window.devicePixelRatio || null,
+        platform: navigator.platform || null,
+        language: navigator.language || null,
+        utm_source: trackedData.utm_source,
+        utm_medium: trackedData.utm_medium,
+        utm_campaign: trackedData.utm_campaign,
+        utm_term: trackedData.utm_term,
+        utm_content: trackedData.utm_content,
         timestamp: Date.now(),
-        gclid: gclid || null,
-        gad_campaignid: gadCampaignId || null
+        gclid: trackedData.gclid,
+        gad_campaignid: trackedData.gad_campaignid,
+        fbclid: trackedData.fbclid,
+        ttclid: trackedData.ttclid,
+        msclkid: trackedData.msclkid,
+        wbraid: trackedData.wbraid,
+        gbraid: trackedData.gbraid
     };
 
     // ===============================

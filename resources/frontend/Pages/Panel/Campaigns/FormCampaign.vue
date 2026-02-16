@@ -74,6 +74,7 @@ watch(() => props.countries, (val = []) => {
 
 const form = useForm({
     name: props.campaign?.name ?? '',
+    product_url: props.campaign?.product_url ?? '',
     conversion_goal_id: props.campaign?.conversion_goal_id ?? null,
     status: props.campaign?.status ?? true,
     channel_id: props.campaign?.channel_id ?? props.defaults?.channel_id ?? null,
@@ -92,8 +93,10 @@ const countryError = computed(() => {
 })
 
 function submit() {
+    const campaignRouteKey = props.campaign?.hashid ?? props.campaign?.id
+
     if (isEdit.value) {
-        form.put(route('panel.campaigns.update', props.campaign.id))
+        form.put(route('panel.campaigns.update', campaignRouteKey))
     } else {
         form.post(route('panel.campaigns.store'))
     }
@@ -141,7 +144,8 @@ const trackingScript = ref('')
 const trackingTextarea = ref(null)
 
 async function openTrackingDialog() {
-    if (!props.campaign?.id) return
+    const campaignRouteKey = props.campaign?.hashid ?? props.campaign?.id
+    if (!campaignRouteKey) return
 
     showTrackingDialog.value = true
     trackingLoading.value = true
@@ -149,7 +153,7 @@ async function openTrackingDialog() {
 
     try {
         const response = await axios.get(
-            route('panel.campaigns.tracking_code', props.campaign.id)
+            route('panel.campaigns.tracking_code', campaignRouteKey)
         )
         trackingScript.value = String(response.data.script || '').trim()
     } catch {
@@ -204,6 +208,16 @@ function copyTrackingScript() {
             dense
             :error="Boolean(form.errors.name)"
             :error-message="form.errors.name"
+        />
+
+        <q-input
+            v-model="form.product_url"
+            label="URL do produto autorizada"
+            hint="Exemplo: https://biovitania.online"
+            outlined
+            dense
+            :error="Boolean(form.errors.product_url)"
+            :error-message="form.errors.product_url"
         />
 
         <!-- Canal -->
