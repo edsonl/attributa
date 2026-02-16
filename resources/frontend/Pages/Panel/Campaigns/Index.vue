@@ -68,6 +68,12 @@ const columns = [
         sortable: true,
     },
     {
+        name: 'countries',
+        label: 'Países',
+        field: 'countries',
+        align: 'left',
+    },
+    {
         name: 'channel',
         label: 'Canal',
         field: row => row.channel?.name ?? '-',
@@ -80,23 +86,17 @@ const columns = [
         align: 'left',
     },
     {
-        name: 'tracking_snippet',
-        label: 'Acompanhamento',
-        field: 'code',
-        align: 'left',
-    },
-    {
-        name: 'countries',
-        label: 'Países',
-        field: 'countries',
-        align: 'left',
-    },
-    {
         name: 'status',
         label: 'Status',
         field: 'status',
         align: 'center',
         sortable: true,
+    },
+    {
+        name: 'tracking_snippet',
+        label: 'Acompanhamento',
+        field: 'code',
+        align: 'left',
     },
     {
         name: 'actions',
@@ -110,6 +110,11 @@ const showTrackingDialog = ref(false)
 const trackingLoading = ref(false)
 const trackingScript = ref('')
 const trackingTextarea = ref(null)
+const showCountriesDialog = ref(false)
+const countriesLoading = ref(false)
+const countriesDialogTitle = ref('')
+const countriesDialogCount = ref(0)
+const countriesDialogItems = ref([])
 
 function fetchTable() {
     const params = {
@@ -184,6 +189,32 @@ async function openTrackingDialog(campaign) {
     }
 }
 
+async function openCountriesDialog(campaign) {
+    const routeKey = campaignRouteKey(campaign)
+    if (!routeKey) return
+
+    showCountriesDialog.value = true
+    countriesLoading.value = true
+    countriesDialogTitle.value = campaign?.name ?? 'Campanha'
+    countriesDialogCount.value = Number(campaign?.countries_count ?? 0)
+    countriesDialogItems.value = []
+
+    try {
+        const response = await axios.get(route('panel.campaigns.countries', routeKey))
+        countriesDialogTitle.value = String(response.data?.campaign?.name ?? countriesDialogTitle.value)
+        countriesDialogCount.value = Number(response.data?.campaign?.countries_count ?? 0)
+        countriesDialogItems.value = Array.isArray(response.data?.countries) ? response.data.countries : []
+    } catch {
+        Notify.create({
+            type: 'negative',
+            message: 'Não foi possível carregar a lista de países',
+            position: 'top-right',
+        })
+    } finally {
+        countriesLoading.value = false
+    }
+}
+
 function copyTrackingScript() {
     if (!trackingTextarea.value) return
 
@@ -209,6 +240,7 @@ function copyTrackingScript() {
         })
     }
 }
+
 </script>
 
 <template>
@@ -280,15 +312,20 @@ function copyTrackingScript() {
                     <!-- Países -->
                     <template #body-cell-countries="props">
                         <q-td :props="props">
-                            <div class="tw-flex tw-flex-wrap tw-gap-1">
-                                <q-chip
-                                    v-for="country in props.row.countries"
-                                    :key="country.id"
+                            <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
+                                <span v-if="Number(props.row.countries_count ?? 0) === 0" class="tw-text-sm tw-text-gray-600">
+                                    0 país(es)
+                                </span>
+                                <span v-else>{{ (props.row.countries_preview ?? []).join(', ') }}</span>
+                                <q-btn
+                                    v-if="Number(props.row.countries_hidden_count ?? 0) > 0"
+                                    flat
                                     dense
-                                    size="sm"
-                                >
-                                    {{ country.iso2 }}
-                                </q-chip>
+                                    no-caps
+                                    color="primary"
+                                    :label="`(+${props.row.countries_hidden_count ?? 0})`"
+                                    @click="openCountriesDialog(props.row)"
+                                />
                             </div>
                         </q-td>
                     </template>
@@ -374,6 +411,51 @@ function copyTrackingScript() {
                     :disable="!trackingScript"
                     @click="copyTrackingScript"
                 />
+                <q-btn color="primary" label="Fechar" v-close-popup />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="showCountriesDialog">
+        <q-card style="min-width: 620px; max-width: 95vw; max-height: 85vh;">
+            <q-card-section class="tw-flex tw-items-center tw-justify-between">
+                <div>
+                    <div class="tw-text-lg tw-font-semibold">
+                        Países da campanha
+                    </div>
+                    <div class="tw-text-sm tw-text-gray-600">
+                        {{ countriesDialogTitle }} · {{ countriesDialogCount }} país(es)
+                    </div>
+                </div>
+                <q-btn flat dense icon="close" v-close-popup />
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-section>
+                <div v-if="countriesLoading" class="tw-text-center tw-py-6">
+                    Carregando...
+                </div>
+
+                <div v-else-if="!countriesDialogItems.length" class="tw-text-sm tw-text-gray-600">
+                    Nenhum país encontrado para esta campanha.
+                </div>
+
+                <div v-else class="tw-flex tw-flex-wrap tw-gap-2 tw-max-h-96 tw-overflow-y-auto">
+                    <q-chip
+                        v-for="country in countriesDialogItems"
+                        :key="country.id"
+                        dense
+                        square
+                    >
+                        {{ country.name }} ({{ country.iso2 }})
+                    </q-chip>
+                </div>
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-actions align="right">
                 <q-btn color="primary" label="Fechar" v-close-popup />
             </q-card-actions>
         </q-card>

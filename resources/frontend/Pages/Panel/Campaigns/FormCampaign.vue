@@ -41,8 +41,9 @@ const isEdit = computed(() => !!props.campaign)
  * ===== FORM =====
  */
 const countryOptions = ref(props.countries ?? [])
-const filteredCountries = ref([...(props.countries ?? [])])
-const countrySelectRef = ref(null)
+const showCountriesDialog = ref(false)
+const countrySearch = ref('')
+const countriesDraft = ref([])
 const channelOptions = computed(() =>
     (props.channels ?? []).map(option => ({
         ...option,
@@ -76,7 +77,10 @@ const conversionGoalOptions = computed(() =>
 
 watch(() => props.countries, (val = []) => {
     countryOptions.value = val
-    filteredCountries.value = [...val]
+
+    const validIds = new Set(val.map(country => String(country.id)))
+    form.countries = (form.countries ?? []).filter(id => validIds.has(String(id)))
+    countriesDraft.value = (countriesDraft.value ?? []).filter(id => validIds.has(String(id)))
 })
 
 function normalizeSelectValue(currentValue, options = []) {
@@ -132,6 +136,62 @@ const countryError = computed(() => {
     return entry ? entry[1] : null
 })
 
+const countryById = computed(() => {
+    const map = new Map()
+
+    for (const country of countryOptions.value) {
+        map.set(String(country.id), country)
+    }
+
+    return map
+})
+
+const selectedCountries = computed(() => {
+    return (form.countries ?? [])
+        .map(id => countryById.value.get(String(id)))
+        .filter(Boolean)
+})
+
+const filteredCountries = computed(() => {
+    const needle = countrySearch.value.trim().toLowerCase()
+    if (!needle) {
+        return countryOptions.value
+    }
+
+    return countryOptions.value.filter(country => {
+        const name = (country.name ?? '').toLowerCase()
+        const iso2 = (country.iso2 ?? '').toLowerCase()
+        const iso3 = (country.iso3 ?? '').toLowerCase()
+
+        return name.includes(needle) || iso2.includes(needle) || iso3.includes(needle)
+    })
+})
+
+const draftSelectedCountries = computed(() => {
+    return (countriesDraft.value ?? [])
+        .map(id => countryById.value.get(String(id)))
+        .filter(Boolean)
+})
+
+const draftSelectionSummary = computed(() => {
+    const selected = draftSelectedCountries.value
+    if (!selected.length) {
+        return 'Nenhum país selecionado'
+    }
+
+    const maxVisibleNames = 5
+    const maxLabelLength = 70
+    const visibleNames = selected.slice(0, maxVisibleNames).map(country => country.name).join(', ')
+    const hiddenCount = selected.length - maxVisibleNames
+    const croppedVisibleNames = visibleNames.length > maxLabelLength
+        ? `${visibleNames.slice(0, maxLabelLength).trim()} (...)`
+        : visibleNames
+
+    return hiddenCount > 0
+        ? `${croppedVisibleNames} (+${hiddenCount})`
+        : croppedVisibleNames
+})
+
 function submit() {
     const campaignRouteKey = props.campaign?.hashid ?? props.campaign?.id
 
@@ -142,37 +202,54 @@ function submit() {
     }
 }
 
-function filterCountries(val, update, abort) {
-    if (!countryOptions.value.length) {
-        return abort()
-    }
-
-    const needle = (val || '').trim().toLowerCase()
-
-    update(() => {
-        if (!needle) {
-            filteredCountries.value = [...countryOptions.value]
-            return
-        }
-
-        filteredCountries.value = countryOptions.value.filter(country => {
-            const name = (country.name || '').toLowerCase()
-            const iso2 = (country.iso2 || '').toLowerCase()
-            const iso3 = (country.iso3 || '').toLowerCase()
-
-            return (
-                name.includes(needle) ||
-                iso2.includes(needle) ||
-                iso3.includes(needle)
-            )
-        })
-    })
+function removeCountry(countryId) {
+    form.countries = (form.countries ?? []).filter(id => String(id) !== String(countryId))
 }
 
-function closeCountriesPopup() {
-    if (countrySelectRef.value?.hidePopup) {
-        countrySelectRef.value.hidePopup()
+function openCountriesDialog() {
+    countriesDraft.value = [...(form.countries ?? [])]
+    countrySearch.value = ''
+    showCountriesDialog.value = true
+}
+
+function closeCountriesDialog() {
+    showCountriesDialog.value = false
+}
+
+function applyCountriesSelection() {
+    form.countries = [...(countriesDraft.value ?? [])]
+    closeCountriesDialog()
+}
+
+function selectAllFilteredCountries() {
+    const selected = new Set((countriesDraft.value ?? []).map(id => String(id)))
+
+    for (const country of filteredCountries.value) {
+        selected.add(String(country.id))
     }
+
+    countriesDraft.value = countryOptions.value
+        .filter(country => selected.has(String(country.id)))
+        .map(country => country.id)
+}
+
+function clearDraftCountries() {
+    countriesDraft.value = []
+}
+
+function toggleDraftCountry(countryId) {
+    const current = new Set((countriesDraft.value ?? []).map(id => String(id)))
+    const targetId = String(countryId)
+
+    if (current.has(targetId)) {
+        current.delete(targetId)
+    } else {
+        current.add(targetId)
+    }
+
+    countriesDraft.value = countryOptions.value
+        .filter(country => current.has(String(country.id)))
+        .map(country => country.id)
 }
 
 /**
@@ -290,25 +367,41 @@ function copyTrackingScript() {
         />
 
         <!-- Países -->
-        <q-select
-            ref="countrySelectRef"
+        <q-field
             label="Regiões de segmentação (países)"
-            v-model="form.countries"
-            :options="filteredCountries"
-            option-label="name"
-            option-value="id"
-            emit-value
-            map-options
-            multiple
-            use-chips
-            use-input
-            @filter="filterCountries"
-            @update:model-value="closeCountriesPopup"
             outlined
             dense
+            stack-label
             :error="Boolean(countryError)"
             :error-message="countryError"
-        />
+        >
+            <template #control>
+                <div class="tw-flex tw-items-start tw-gap-2 tw-py-1 tw-w-full">
+                    <q-btn
+                        flat
+                        dense
+                        icon="travel_explore"
+                        label="Selecionar"
+                        @click="openCountriesDialog"
+                    />
+                    <div class="tw-flex tw-flex-wrap tw-gap-2">
+                        <q-chip
+                            v-for="country in selectedCountries"
+                            :key="country.id"
+                            removable
+                            dense
+                            square
+                            @remove="removeCountry(country.id)"
+                        >
+                            {{ country.name }}
+                        </q-chip>
+                        <span v-if="!selectedCountries.length" class="tw-text-gray-500">
+                            Nenhum país selecionado
+                        </span>
+                    </div>
+                </div>
+            </template>
+        </q-field>
 
         <q-select
             v-model="form.google_ads_account_id"
@@ -403,6 +496,70 @@ function copyTrackingScript() {
                     @click="copyTrackingScript"
                 />
                 <q-btn color="primary" label="Fechar" v-close-popup />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="showCountriesDialog">
+        <q-card style="min-width: 720px; max-width: 95vw; width: 900px; max-height: 90vh;">
+            <q-card-section class="tw-flex tw-items-center tw-justify-between">
+                <div class="tw-text-lg tw-font-semibold">
+                    Selecionar países
+                </div>
+                <q-btn flat dense icon="close" @click="closeCountriesDialog" />
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-section class="tw-space-y-3">
+                <q-input
+                    v-model="countrySearch"
+                    dense
+                    outlined
+                    clearable
+                    autofocus
+                    label="Buscar país por nome ou código"
+                />
+
+                <div class="tw-flex tw-items-center tw-justify-between tw-gap-2">
+                    <div class="tw-text-sm tw-text-gray-600">
+                        {{ draftSelectionSummary }}
+                    </div>
+                    <div class="tw-flex tw-gap-2">
+                        <q-btn flat dense label="Selecionar filtrados" @click="selectAllFilteredCountries" />
+                        <q-btn flat dense label="Limpar" @click="clearDraftCountries" />
+                    </div>
+                </div>
+
+                <div class="tw-border tw-rounded tw-max-h-96 tw-overflow-y-auto tw-p-2">
+                    <q-list separator>
+                        <q-item
+                            v-for="country in filteredCountries"
+                            :key="country.id"
+                            clickable
+                            dense
+                            @click="toggleDraftCountry(country.id)"
+                        >
+                            <q-item-section avatar>
+                                <q-checkbox v-model="countriesDraft" :val="country.id" @click.stop />
+                            </q-item-section>
+                            <q-item-section>
+                                <q-item-label>{{ country.name }}</q-item-label>
+                                <q-item-label caption>{{ country.iso2 }} · {{ country.iso3 }}</q-item-label>
+                            </q-item-section>
+                        </q-item>
+                    </q-list>
+                    <div v-if="!filteredCountries.length" class="tw-text-sm tw-text-gray-500 tw-p-3">
+                        Nenhum país encontrado para esta busca.
+                    </div>
+                </div>
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-actions align="right">
+                <q-btn flat label="Cancelar" @click="closeCountriesDialog" />
+                <q-btn color="primary" label="Aplicar" @click="applyCountriesSelection" />
             </q-card-actions>
         </q-card>
     </q-dialog>

@@ -12,6 +12,7 @@ use App\Models\AffiliatePlatform;
 use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -33,7 +34,11 @@ class CampaignController extends Controller
             $sort = 'created_at';
         }
 
-        $campaignsQuery = Campaign::with(['channel', 'countries', 'conversionGoal'])
+        $campaignsQuery = Campaign::with([
+            'channel',
+            'conversionGoal',
+        ])
+            ->withCount('countries')
             ->where('user_id', $userId);
 
         if ($search !== '') {
@@ -47,6 +52,42 @@ class CampaignController extends Controller
             ->orderBy($sort, $direction)
             ->paginate($perPage)
             ->withQueryString();
+
+        $campaignIds = collect($campaigns->items())
+            ->pluck('id')
+            ->filter()
+            ->values()
+            ->all();
+
+        $countriesPreviewByCampaign = collect();
+
+        if (!empty($campaignIds)) {
+            $rankedCountries = DB::table('campaign_country as cc')
+                ->join('countries as c', 'c.id', '=', 'cc.country_id')
+                ->whereIn('cc.campaign_id', $campaignIds)
+                ->selectRaw('cc.campaign_id, c.name, ROW_NUMBER() OVER (PARTITION BY cc.campaign_id ORDER BY c.name) as row_num');
+
+            $countriesPreviewByCampaign = DB::query()
+                ->fromSub($rankedCountries, 'ranked_countries')
+                ->where('row_num', '<=', 2)
+                ->orderBy('campaign_id')
+                ->orderBy('name')
+                ->get()
+                ->groupBy('campaign_id')
+                ->map(fn ($rows) => collect($rows)->pluck('name')->values()->all());
+        }
+
+        $campaigns->setCollection(
+            $campaigns->getCollection()->map(function (Campaign $campaign) use ($countriesPreviewByCampaign) {
+                $preview = $countriesPreviewByCampaign->get($campaign->id, []);
+                $countriesCount = (int) ($campaign->countries_count ?? 0);
+
+                $campaign->setAttribute('countries_preview', $preview);
+                $campaign->setAttribute('countries_hidden_count', max($countriesCount - count($preview), 0));
+
+                return $campaign;
+            })
+        );
 
         return Inertia::render('Panel/Campaigns/Index', [
             'campaigns' => $campaigns,
@@ -200,6 +241,24 @@ class CampaignController extends Controller
                 'code' => $campaign->code,
                 'platform' => $platform->slug,
             ])->render(),
+        ]);
+    }
+
+    public function countries(Campaign $campaign)
+    {
+        abort_unless((int) $campaign->user_id === (int) auth()->id(), 403);
+
+        $countries = $campaign->countries()
+            ->orderBy('name')
+            ->get(['countries.id', 'countries.name', 'countries.iso2']);
+
+        return response()->json([
+            'campaign' => [
+                'id' => $campaign->id,
+                'name' => $campaign->name,
+                'countries_count' => $countries->count(),
+            ],
+            'countries' => $countries,
         ]);
     }
 

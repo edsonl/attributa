@@ -162,6 +162,8 @@ Route::middleware(['auth', 'verified'])
             //Crud Campanhas :
             Route::get('campaigns/{campaign}/tracking-code', [CampaignController::class, 'tracking_code'])
                 ->name('campaigns.tracking_code');
+            Route::get('campaigns/{campaign}/countries', [CampaignController::class, 'countries'])
+                ->name('campaigns.countries');
             Route::resource('campaigns', CampaignController::class);
             Route::get('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'logs'])
                 ->name('conversion-goals.logs');
@@ -237,4 +239,3 @@ Route::middleware(['auth', 'verified'])
 
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
-
