@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Pageview;
 use App\Models\Campaign;
 use App\Models\IpLookupCache;
+use App\Services\HashidService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -249,6 +250,7 @@ class ActivityController extends Controller
 
         return response()->json([
             'pageview' => $pageview,
+            'composed_code' => $this->buildComposedCode($pageview),
             'url' => $urlData,
             'geo' => $geo,
             'network' => $networkInfo,
@@ -288,5 +290,17 @@ class ActivityController extends Controller
             'path' => $parts['path'] ?? null,
             'query_params' => $queryParams,
         ];
+    }
+
+    protected function buildComposedCode(Pageview $pageview): ?string
+    {
+        $campaignCode = trim((string) ($pageview->campaign_code ?: $pageview->campaign?->code));
+        if ($campaignCode === '') {
+            return null;
+        }
+
+        $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
+
+        return $campaignCode . '-' . $pageviewCode;
     }
 }

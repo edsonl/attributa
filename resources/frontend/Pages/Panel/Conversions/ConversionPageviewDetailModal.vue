@@ -81,6 +81,7 @@ const detailLandingCleanUrl = computed(() => stripQueryString(detailLandingUrl.v
 const detailReferrer = computed(() => detailPageview.value?.referrer ?? null)
 const detailReferrerHost = computed(() => extractHost(detailReferrer.value))
 const detailResolvedGclid = computed(() => resolveGclid())
+const detailComposedCode = computed(() => props.payload?.composed_code ?? null)
 
 const detailUrlParams = computed(() => {
     const params = detailUrl.value?.query_params ?? {}
@@ -320,6 +321,21 @@ async function copyValue(value) {
                                             @click="copyValue(detailResolvedGclid)"
                                         >
                                             <q-tooltip>Copiar GCLID</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                    <div class="detail-label tw-mt-2">Código composto</div>
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="truncated-preview">{{ previewValue(detailComposedCode) }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailComposedCode)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailComposedCode)"
+                                        >
+                                            <q-tooltip>Copiar código composto</q-tooltip>
                                         </q-btn>
                                     </div>
                                 </div>
