@@ -5,9 +5,9 @@
         w.__ATTRIBUTA_LOADED__ = true;
         var js = d.createElement(s);
         js.async = true;
-        js.src = u + '?c=' + encodeURIComponent(c);
+        js.src = u + '?v=1.0&c=' + encodeURIComponent(c);
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document, 'script','{{ rtrim(config('app.url'), '/') . '/api/tracking/script.js?v=2.0.0' }}', '{{ $code }}');
+    })(window, document, 'script','{{ rtrim(config('app.url'), '/') . '/api/tracking/script.js' }}', '{{ $code }}');
 </script>
 <!-- End Attributa Tracking -->

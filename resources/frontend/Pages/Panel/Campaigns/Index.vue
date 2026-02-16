@@ -1,6 +1,8 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
 import { computed, ref, watch } from 'vue'
+import axios from 'axios'
+import { Notify } from 'quasar'
 
 import StatusChip from '@/Components/StatusChip.vue'
 import { qTableLangPt } from '@/lang/qtable-pt'
@@ -78,6 +80,12 @@ const columns = [
         align: 'left',
     },
     {
+        name: 'tracking_snippet',
+        label: 'Acompanhamento',
+        field: 'code',
+        align: 'left',
+    },
+    {
         name: 'countries',
         label: 'Países',
         field: 'countries',
@@ -97,6 +105,11 @@ const columns = [
         align: 'right',
     },
 ]
+
+const showTrackingDialog = ref(false)
+const trackingLoading = ref(false)
+const trackingScript = ref('')
+const trackingTextarea = ref(null)
 
 function fetchTable() {
     const params = {
@@ -147,6 +160,54 @@ function destroyCampaign(campaign) {
     }
 
     router.delete(route('panel.campaigns.destroy', campaignRouteKey(campaign)))
+}
+
+async function openTrackingDialog(campaign) {
+    const routeKey = campaignRouteKey(campaign)
+    if (!routeKey) return
+
+    showTrackingDialog.value = true
+    trackingLoading.value = true
+    trackingScript.value = ''
+
+    try {
+        const response = await axios.get(route('panel.campaigns.tracking_code', routeKey))
+        trackingScript.value = String(response.data.script || '').trim()
+    } catch {
+        Notify.create({
+            type: 'negative',
+            message: 'Não foi possível carregar o código de acompanhamento',
+            position: 'top-right',
+        })
+    } finally {
+        trackingLoading.value = false
+    }
+}
+
+function copyTrackingScript() {
+    if (!trackingTextarea.value) return
+
+    trackingTextarea.value.focus()
+    trackingTextarea.value.select()
+
+    try {
+        const ok = document.execCommand('copy')
+        if (!ok) throw new Error()
+
+        Notify.create({
+            type: 'positive',
+            message: 'Código copiado',
+            timeout: 2000,
+            position: 'top-right',
+        })
+    } catch {
+        Notify.create({
+            type: 'negative',
+            message: 'Não foi possível copiar o código',
+            timeout: 3000,
+            position: 'top-right',
+        })
+    }
 }
 </script>
 
@@ -239,6 +300,20 @@ function destroyCampaign(campaign) {
                         </q-td>
                     </template>
 
+                    <template #body-cell-tracking_snippet="props">
+                        <q-td :props="props">
+                            <q-btn
+                                flat
+                                dense
+                                size="sm"
+                                icon="code"
+                                color="primary"
+                                label="Snippet"
+                                @click="openTrackingDialog(props.row)"
+                            />
+                        </q-td>
+                    </template>
+
                     <!-- Ações -->
                     <template #body-cell-actions="props">
                         <q-td :props="props" class="tw-text-right">
@@ -265,4 +340,42 @@ function destroyCampaign(campaign) {
             </q-card-section>
         </q-card>
     </div>
+
+    <q-dialog v-model="showTrackingDialog">
+        <q-card style="min-width: 720px; max-width: 95vw; min-height: 450px;">
+            <q-card-section class="tw-flex tw-justify-between tw-items-center">
+                <div class="tw-text-lg tw-font-semibold">
+                    Código de acompanhamento
+                </div>
+                <q-btn flat dense icon="close" v-close-popup />
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-section>
+                <div v-if="trackingLoading" class="tw-text-center tw-py-6">
+                    Carregando...
+                </div>
+
+                <textarea
+                    ref="trackingTextarea"
+                    class="tw-w-full tw-h-72 tw-font-mono tw-text-sm tw-p-3 tw-bg-gray-100 tw-rounded"
+                    readonly
+                >{{ trackingScript }}</textarea>
+            </q-card-section>
+
+            <q-separator />
+
+            <q-card-actions align="right">
+                <q-btn
+                    flat
+                    icon="content_copy"
+                    label="Copiar"
+                    :disable="!trackingScript"
+                    @click="copyTrackingScript"
+                />
+                <q-btn color="primary" label="Fechar" v-close-popup />
+            </q-card-actions>
+        </q-card>
+    </q-dialog>
 </template>
