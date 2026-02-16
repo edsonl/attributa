@@ -91,7 +91,11 @@ const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
 const detailDeviceSummary = computed(() => {
     const relationName = detailPageview.value?.device_category?.name
     const type = detailPageview.value?.device_type
-    return relationName || type || '-'
+    const normalizedType = normalizeEnrichedValue(type)
+    if (normalizedType !== '-') return normalizedType
+
+    const normalizedRelation = normalizeEnrichedValue(relationName)
+    return normalizedRelation
 })
 
 const detailBrowserSummary = computed(() => {
@@ -99,9 +103,13 @@ const detailBrowserSummary = computed(() => {
     const name = detailPageview.value?.browser_name
     const version = detailPageview.value?.browser_version
 
-    if (hasText(name) && hasText(version)) return `${name} ${version}`
-    if (hasText(name)) return name
-    if (hasText(relationName)) return relationName
+    const normalizedName = normalizeEnrichedValue(name)
+    const normalizedVersion = normalizeEnrichedValue(version)
+    const normalizedRelation = normalizeEnrichedValue(relationName)
+
+    if (normalizedName !== '-' && normalizedVersion !== '-') return `${normalizedName} ${normalizedVersion}`
+    if (normalizedName !== '-') return normalizedName
+    if (normalizedRelation !== '-') return normalizedRelation
     return '-'
 })
 
@@ -109,8 +117,11 @@ const detailOsSummary = computed(() => {
     const name = detailPageview.value?.os_name
     const version = detailPageview.value?.os_version
 
-    if (hasText(name) && hasText(version)) return `${name} ${version}`
-    if (hasText(name)) return name
+    const normalizedName = normalizeEnrichedValue(name)
+    const normalizedVersion = normalizeEnrichedValue(version)
+
+    if (normalizedName !== '-' && normalizedVersion !== '-') return `${normalizedName} ${normalizedVersion}`
+    if (normalizedName !== '-') return normalizedName
     return '-'
 })
 
@@ -140,6 +151,18 @@ function extractHost(value) {
 
 function hasText(value) {
     return value !== null && value !== undefined && String(value).trim() !== ''
+}
+
+function normalizeEnrichedValue(value) {
+    const raw = String(value ?? '').trim()
+    if (!raw) return '-'
+
+    const normalized = raw.toLowerCase()
+    if (normalized === '-' || normalized === 'unknown' || normalized === 'desconhecido' || normalized === 'unk') {
+        return '-'
+    }
+
+    return raw
 }
 
 function formatFlag(value) {

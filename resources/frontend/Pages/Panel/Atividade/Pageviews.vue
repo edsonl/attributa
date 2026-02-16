@@ -128,6 +128,10 @@ function resolveDeviceBrowserMeta(row) {
     }
 }
 
+function shouldShowDeviceIcon(row) {
+    return resolveDeviceBrowserMeta(row).deviceLabel !== '-'
+}
+
 async function copyText(value, label = 'Valor') {
     if (!value) return
 
@@ -404,7 +408,10 @@ onMounted(() => {
             <template #body-cell-device_browser="props">
                 <q-td :props="props">
                     <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
-                        <div class="tw-inline-flex tw-items-center tw-gap-1">
+                        <div
+                            v-if="shouldShowDeviceIcon(props.row)"
+                            class="tw-inline-flex tw-items-center tw-gap-1"
+                        >
                             <q-icon
                                 :name="resolveDeviceBrowserMeta(props.row).deviceIcon"
                                 size="18px"
@@ -412,14 +419,16 @@ onMounted(() => {
                             />
                             <span>{{ resolveDeviceBrowserMeta(props.row).deviceLabel }}</span>
                         </div>
+                        <span v-else-if="resolveDeviceBrowserMeta(props.row).browserLabel === '-'">-</span>
+                        <span v-else>{{ resolveDeviceBrowserMeta(props.row).browserLabel }}</span>
                         <span
-                            v-if="resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
+                            v-if="shouldShowDeviceIcon(props.row) && resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
                             class="tw-text-slate-400"
                         >
                             •
                         </span>
                         <div
-                            v-if="resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
+                            v-if="shouldShowDeviceIcon(props.row) && resolveDeviceBrowserMeta(props.row).browserLabel && resolveDeviceBrowserMeta(props.row).browserLabel !== '-'"
                             class="tw-inline-flex tw-items-center tw-gap-1"
                         >
                             <span>{{ resolveDeviceBrowserMeta(props.row).browserLabel }}</span>
