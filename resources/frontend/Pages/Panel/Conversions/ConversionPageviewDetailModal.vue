@@ -91,11 +91,11 @@ const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
 const detailDeviceSummary = computed(() => {
     const relationName = detailPageview.value?.device_category?.name
     const type = detailPageview.value?.device_type
-    const normalizedType = normalizeEnrichedValue(type)
-    if (normalizedType !== '-') return normalizedType
-
     const normalizedRelation = normalizeEnrichedValue(relationName)
-    return normalizedRelation
+    if (normalizedRelation !== '-') return normalizedRelation
+
+    const normalizedType = normalizeEnrichedValue(type)
+    return normalizedType
 })
 
 const detailBrowserSummary = computed(() => {
