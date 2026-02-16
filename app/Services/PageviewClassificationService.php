@@ -12,13 +12,9 @@ class PageviewClassificationService
      */
     public function classify(array $payload, ?string $ip = null): array
     {
-        $userAgent = strtolower((string) ($payload['user_agent'] ?? ''));
         $referrer = (string) ($payload['referrer'] ?? '');
 
-        $traffic = $this->classifyTraffic($payload, $referrer, (string) ($payload['url'] ?? ''));
-        $device = $this->classifyDevice($userAgent, $ip);
-
-        return array_merge($traffic, $device);
+        return $this->classifyTraffic($payload, $referrer, (string) ($payload['url'] ?? ''));
     }
 
     /**

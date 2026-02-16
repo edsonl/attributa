@@ -109,8 +109,8 @@ class TrackingController extends Controller
 
         $classification = app(PageviewClassificationService::class)->classify($data, $request->ip());
         $trafficSourceCategoryId = $this->resolveTrafficSourceCategoryId((string) ($classification['traffic_source_slug'] ?? 'unknown'));
-        $deviceCategoryId = $this->resolveDeviceCategoryId((string) ($classification['device_category_slug'] ?? 'unknown'));
-        $browserId = $this->resolveBrowserId((string) ($classification['browser_slug'] ?? 'unknown'));
+        $deviceCategoryId = $this->resolveDeviceCategoryId('unknown');
+        $browserId = $this->resolveBrowserId('unknown');
 
         $pageview = Pageview::create([
             'user_id'      => $campaign->user_id,
@@ -139,13 +139,13 @@ class TrackingController extends Controller
             'traffic_source_reason' => mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 255),
             'device_category_id' => $deviceCategoryId,
             'browser_id' => $browserId,
-            'device_type' => $classification['device_type'] ?? null,
-            'device_brand' => $classification['device_brand'] ?? null,
-            'device_model' => $classification['device_model'] ?? null,
-            'os_name' => $classification['os_name'] ?? null,
-            'os_version' => $classification['os_version'] ?? null,
-            'browser_name' => $classification['browser_name'] ?? null,
-            'browser_version' => $classification['browser_version'] ?? null,
+            'device_type' => null,
+            'device_brand' => null,
+            'device_model' => null,
+            'os_name' => null,
+            'os_version' => null,
+            'browser_name' => null,
+            'browser_version' => null,
             'screen_width' => $data['screen_width'] ?? null,
             'screen_height' => $data['screen_height'] ?? null,
             'viewport_width' => $data['viewport_width'] ?? null,

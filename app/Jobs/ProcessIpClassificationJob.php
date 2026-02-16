@@ -3,13 +3,13 @@
 namespace App\Jobs;
 
 use App\Models\Pageview;
+use App\Services\DeviceClassificationService;
 use App\Services\IpClassifierService;
 use Illuminate\Bus\Queueable;
 //use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 class ProcessIpClassificationJob
 {
@@ -20,16 +20,18 @@ class ProcessIpClassificationJob
     public function handle(): void
     {
         $classifier = app(IpClassifierService::class);
+        $deviceClassifier = app(DeviceClassificationService::class);
 
         Pageview::whereNull('ip_category_id')
             ->limit(50)
             ->get()
-            ->each(function ($pageview) use ($classifier) {
+            ->each(function ($pageview) use ($classifier, $deviceClassifier) {
 
                 $result = $classifier->classify(
                     $pageview->ip,
                     $pageview->user_agent ?? null
                 );
+                $device = $deviceClassifier->classify($pageview->user_agent);
 
                 $pageview->update([
                     'ip_category_id' => $result['ip_category_id'],
@@ -40,6 +42,15 @@ class ProcessIpClassificationJob
                     'latitude' => $result['geo']['latitude'] ?? null,
                     'longitude' => $result['geo']['longitude'] ?? null,
                     'timezone' => $result['geo']['timezone'] ?? null,
+                    'device_category_id' => $device['device_category_id'] ?? null,
+                    'browser_id' => $device['browser_id'] ?? null,
+                    'device_type' => $device['device_type'] ?? null,
+                    'device_brand' => $device['device_brand'] ?? null,
+                    'device_model' => $device['device_model'] ?? null,
+                    'os_name' => $device['os_name'] ?? null,
+                    'os_version' => $device['os_version'] ?? null,
+                    'browser_name' => $device['browser_name'] ?? null,
+                    'browser_version' => $device['browser_version'] ?? null,
                 ]);
             });
     }
