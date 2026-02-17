@@ -6,7 +6,7 @@ import FormCampaign from './FormCampaign.vue'
 const props = defineProps({
     channels: {
         type: Array,
-        required: true,
+        default: () => [],
     },
     countries: {
         type: Array,

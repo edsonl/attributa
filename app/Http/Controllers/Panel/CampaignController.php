@@ -14,6 +14,7 @@ use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -114,7 +115,7 @@ class CampaignController extends Controller
     public function create()
     {
         return Inertia::render('Panel/Campaigns/Create', [
-            'channels'  => $this->channelOptions(),
+            // 'channels'  => $this->channelOptions(), // oculto por enquanto (canal fixo em Google Ads)
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
             'campaignStatuses' => $this->campaignStatusOptions(),
@@ -146,6 +147,7 @@ class CampaignController extends Controller
     public function store(StoreCampaignRequest $request)
     {
         $data = $request->validated();
+        $googleAdsChannelId = $this->requireGoogleAdsChannelId();
 
         $campaign = Campaign::create([
             'user_id'    => auth()->id(),
@@ -153,7 +155,7 @@ class CampaignController extends Controller
             'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'campaign_status_id' => $data['campaign_status_id'],
-            'channel_id' => $data['channel_id'],
+            'channel_id' => $googleAdsChannelId,
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
@@ -181,12 +183,13 @@ class CampaignController extends Controller
                 ->map(fn ($acc) => [
                     'id'    => $acc->id,
                     'label' => $acc->google_ads_customer_id . ($acc->email ? ' - ' . $acc->email : ''),
-             ]),
+            ]),
             'campaign'  => $campaign->load('countries'),
-            'channels'  => $this->channelOptions(),
+            // 'channels'  => $this->channelOptions(), // oculto por enquanto (canal fixo em Google Ads)
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
             'campaignStatuses' => $this->campaignStatusOptions(),
+            'defaults' => $this->campaignDefaults(),
             'conversionGoals' => ConversionGoal::query()
                 ->where('user_id', (int) auth()->id())
                 ->where(function ($query) use ($campaign) {
@@ -212,13 +215,14 @@ class CampaignController extends Controller
     public function update(UpdateCampaignRequest $request, Campaign $campaign)
     {
         $data = $request->validated();
+        $googleAdsChannelId = $this->requireGoogleAdsChannelId();
 
         $campaign->update([
             'name'       => $data['name'],
             'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
             'campaign_status_id' => $data['campaign_status_id'],
-            'channel_id' => $data['channel_id'],
+            'channel_id' => $googleAdsChannelId,
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
@@ -359,10 +363,12 @@ class CampaignController extends Controller
 
     protected function campaignDefaults(): array
     {
+        $googleAdsChannelId = $this->googleAdsChannelId();
+
         $lastCampaign = Campaign::query()
             ->where('user_id', (int) auth()->id())
             ->latest('created_at')
-            ->select(['channel_id', 'affiliate_platform_id'])
+            ->select(['affiliate_platform_id'])
             ->first();
 
         $defaultStatusId = CampaignStatus::query()
@@ -370,10 +376,32 @@ class CampaignController extends Controller
             ->value('id');
 
         return [
-            'channel_id' => $lastCampaign?->channel_id,
+            'channel_id' => $googleAdsChannelId,
             'affiliate_platform_id' => $lastCampaign?->affiliate_platform_id,
             'campaign_status_id' => $defaultStatusId,
         ];
+    }
+
+    protected function googleAdsChannelId(): ?int
+    {
+        $id = Channel::query()
+            ->where('slug', 'google_ads')
+            ->value('id');
+
+        return $id ? (int) $id : null;
+    }
+
+    protected function requireGoogleAdsChannelId(): int
+    {
+        $id = $this->googleAdsChannelId();
+
+        if (!$id) {
+            throw ValidationException::withMessages([
+                'channel_id' => 'Canal Google Ads não configurado. Rode o seed de canais.',
+            ]);
+        }
+
+        return $id;
     }
 
     protected function campaignStatusOptions()

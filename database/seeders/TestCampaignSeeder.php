@@ -17,17 +17,21 @@ class TestCampaignSeeder extends Seeder
 
     public function run(): void
     {
-        $channel = Channel::query()
-            ->where('slug', 'google_ads')
-            ->first() ?? Channel::query()->first();
+        $channel = Channel::query()->firstOrCreate(
+            ['slug' => 'google_ads'],
+            [
+                'name' => 'Google Ads',
+                'active' => true,
+            ]
+        );
 
         $platform = AffiliatePlatform::query()
             ->where('slug', 'dr_cash')
             ->first() ?? AffiliatePlatform::query()->first();
 
-        if (!$channel || !$platform) {
+        if (!$platform) {
             $this->command?->warn(
-                'TestCampaignSeeder: canais/plataformas nao encontrados. Rode ChannelsSeeder e AffiliatePlatformsSeeder primeiro.'
+                'TestCampaignSeeder: plataforma de afiliado não encontrada. Rode AffiliatePlatformsSeeder primeiro.'
             );
             return;
         }

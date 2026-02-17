@@ -57,7 +57,7 @@ class UpdateCampaignRequest extends FormRequest
             ],
 
             'channel_id' => [
-                'required',
+                'nullable',
                 'integer',
                 'exists:channels,id',
             ],
@@ -109,7 +109,6 @@ class UpdateCampaignRequest extends FormRequest
             'campaign_status_id.required' => 'O status da campanha é obrigatório.',
             'campaign_status_id.exists' => 'O status da campanha é inválido.',
 
-            'channel_id.required' => 'O canal é obrigatório.',
             'channel_id.exists' => 'O canal selecionado é inválido.',
 
             'affiliate_platform_id.required' => 'A plataforma é obrigatória.',

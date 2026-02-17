@@ -10,7 +10,7 @@ const props = defineProps({
     },
     channels: {
         type: Array,
-        required: true,
+        default: () => [],
     },
     countries: {
         type: Array,
@@ -31,6 +31,10 @@ const props = defineProps({
     campaignStatuses: {
         type: Array,
         required: true,
+    },
+    defaults: {
+        type: Object,
+        default: () => ({}),
     },
 })
 </script>
@@ -65,6 +69,7 @@ const props = defineProps({
                     :affiliate_platforms="affiliate_platforms"
                     :conversion-goals="conversionGoals"
                     :campaign-statuses="campaignStatuses"
+                    :defaults="defaults"
                 />
             </q-card-section>
         </q-card>

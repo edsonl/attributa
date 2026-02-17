@@ -11,7 +11,7 @@ const props = defineProps({
     },
     channels: {
         type: Array,
-        required: true,
+        default: () => [],
     },
     countries: {
         type: Array,
@@ -48,13 +48,6 @@ const countryOptions = ref(props.countries ?? [])
 const showCountriesDialog = ref(false)
 const countrySearch = ref('')
 const countriesDraft = ref([])
-const channelOptions = computed(() =>
-    (props.channels ?? []).map(option => ({
-        ...option,
-        value: String(option.id),
-        label: option.label ?? option.name,
-    })),
-)
 const affiliateOptions = computed(() =>
     (props.affiliate_platforms ?? []).map(option => ({
         ...option,
@@ -116,7 +109,7 @@ const form = useForm({
     product_url: props.campaign?.product_url ?? '',
     campaign_status_id: toStringOrNull(props.campaign?.campaign_status_id ?? props.defaults?.campaign_status_id ?? null),
     conversion_goal_id: toStringOrNull(props.campaign?.conversion_goal_id),
-    channel_id: toStringOrNull(props.campaign?.channel_id ?? props.defaults?.channel_id ?? null),
+    channel_id: toStringOrNull(props.defaults?.channel_id ?? props.campaign?.channel_id ?? null),
     affiliate_platform_id: toStringOrNull(props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null),
     google_ads_account_id: toStringOrNull(props.campaign?.google_ads_account_id),
     countries: props.campaign?.countries
@@ -124,10 +117,6 @@ const form = useForm({
         : [],
     commission_value: props.campaign?.commission_value ?? null,
 })
-
-watch(channelOptions, (options) => {
-    form.channel_id = normalizeSelectValue(form.channel_id, options)
-}, { immediate: true })
 
 watch(affiliateOptions, (options) => {
     form.affiliate_platform_id = normalizeSelectValue(form.affiliate_platform_id, options)
@@ -332,140 +321,114 @@ function copyTrackingScript() {
 
 <template>
     <form @submit.prevent="submit" class="tw-space-y-6">
-        <!-- Nome -->
-        <q-input
-            v-model="form.name"
-            label="Nome da campanha"
-            outlined
-            dense
-            :error="Boolean(form.errors.name)"
-            :error-message="form.errors.name"
-        />
-
-        <q-input
-            v-model="form.product_url"
-            label="URL do produto autorizada"
-            hint="Exemplo: https://biovitania.online"
-            outlined
-            dense
-            :error="Boolean(form.errors.product_url)"
-            :error-message="form.errors.product_url"
-        />
-
-        <!-- Canal -->
-        <q-select
-            v-model="form.channel_id"
-            :options="channelOptions"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            label="Canal"
-            outlined
-            dense
-            :error="Boolean(form.errors.channel_id)"
-            :error-message="form.errors.channel_id"
-        />
-
-       <q-select
-            v-model="form.affiliate_platform_id"
-            :options="affiliateOptions"
-            option-label="label"
-            option-value="value"
-            emit-value
-            map-options
-            label="Plataforma de Afiliado"
-            outlined
-            dense
-            :error="Boolean(form.errors.affiliate_platform_id)"
-            :error-message="form.errors.affiliate_platform_id"
-        />
-
-        <!-- Países -->
-        <q-field
-            label="Regiões de segmentação (países)"
-            outlined
-            dense
-            stack-label
-            :error="Boolean(countryError)"
-            :error-message="countryError"
-        >
-            <template #control>
-                <div class="tw-flex tw-items-start tw-gap-2 tw-py-1 tw-w-full">
-                    <q-btn
-                        flat
-                        dense
-                        icon="travel_explore"
-                        label="Selecionar"
-                        @click="openCountriesDialog"
-                    />
-                    <div class="tw-flex tw-flex-wrap tw-gap-2">
-                        <q-chip
-                            v-for="country in selectedCountries"
-                            :key="country.id"
-                            removable
-                            dense
-                            square
-                            @remove="removeCountry(country.id)"
-                        >
-                            {{ country.name }}
-                        </q-chip>
-                        <span v-if="!selectedCountries.length" class="tw-text-gray-500">
-                            Nenhum país selecionado
-                        </span>
-                    </div>
-                </div>
-            </template>
-        </q-field>
-
-        <div class="campaign-status-block">
-            <div class="campaign-status-label">
-                Status da campanha
-            </div>
-            <q-option-group
-                v-model="form.campaign_status_id"
-                :options="campaignStatusOptions"
-                type="radio"
-                inline
+        <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-2 tw-gap-4">
+            <!-- Nome -->
+            <q-input
+                v-model="form.name"
+                label="Nome da campanha"
+                outlined
                 dense
+                :error="Boolean(form.errors.name)"
+                :error-message="form.errors.name"
             />
-            <div
-                v-if="form.errors.campaign_status_id"
-                class="campaign-status-error"
-            >
-                {{ form.errors.campaign_status_id }}
+
+            <q-input
+                v-model="form.product_url"
+                label="URL do produto autorizada"
+                hint="Exemplo: https://biovitania.online"
+                outlined
+                dense
+                :error="Boolean(form.errors.product_url)"
+                :error-message="form.errors.product_url"
+            />
+
+            <q-select
+                v-model="form.affiliate_platform_id"
+                :options="affiliateOptions"
+                option-label="label"
+                option-value="value"
+                emit-value
+                map-options
+                label="Plataforma de Afiliado"
+                outlined
+                dense
+                :error="Boolean(form.errors.affiliate_platform_id)"
+                :error-message="form.errors.affiliate_platform_id"
+            />
+
+            <div class="campaign-status-block">
+                <div class="campaign-status-label">
+                    Status da campanha
+                </div>
+                <q-option-group
+                    v-model="form.campaign_status_id"
+                    :options="campaignStatusOptions"
+                    type="radio"
+                    inline
+                    dense
+                />
+                <div
+                    v-if="form.errors.campaign_status_id"
+                    class="campaign-status-error"
+                >
+                    {{ form.errors.campaign_status_id }}
+                </div>
             </div>
+
+            <q-select
+                v-model="form.conversion_goal_id"
+                :options="conversionGoalOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                clearable
+                label="Meta de conversao"
+                hint="Selecione a meta/codigo de conversao vinculada a campanha"
+                outlined
+                dense
+                :error="Boolean(form.errors.conversion_goal_id)"
+                :error-message="form.errors.conversion_goal_id"
+            />
+
+            <!-- Países -->
+            <q-field
+                class="lg:tw-col-span-2"
+                label="Regiões de segmentação (países)"
+                outlined
+                dense
+                stack-label
+                :error="Boolean(countryError)"
+                :error-message="countryError"
+            >
+                <template #control>
+                    <div class="tw-flex tw-items-center tw-gap-2 tw-py-1 tw-min-h-8 tw-w-full">
+                        <q-btn
+                            flat
+                            dense
+                            icon="travel_explore"
+                            label="Selecionar"
+                            @click="openCountriesDialog"
+                        />
+                        <div class="tw-flex tw-items-center tw-flex-wrap tw-gap-2">
+                            <q-chip
+                                v-for="country in selectedCountries"
+                                :key="country.id"
+                                removable
+                                dense
+                                square
+                                @remove="removeCountry(country.id)"
+                            >
+                                {{ country.name }}
+                            </q-chip>
+                            <span v-if="!selectedCountries.length" class="tw-text-gray-500">
+                                Nenhum país selecionado
+                            </span>
+                        </div>
+                    </div>
+                </template>
+            </q-field>
         </div>
-
-        <q-select
-            v-model="form.google_ads_account_id"
-            :options="googleAdsAccountOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            clearable
-            label="Conta de Anúncios"
-            hint="Selecione a conta do Google Ads desta campanha"
-            :error="Boolean(form.errors.google_ads_account_id)"
-            :error-message="form.errors.google_ads_account_id"
-        />
-
-        <q-select
-            v-model="form.conversion_goal_id"
-            :options="conversionGoalOptions"
-            option-value="value"
-            option-label="label"
-            emit-value
-            map-options
-            clearable
-            label="Meta de conversao"
-            hint="Selecione a meta/codigo de conversao vinculada a campanha"
-            outlined
-            dense
-            :error="Boolean(form.errors.conversion_goal_id)"
-            :error-message="form.errors.conversion_goal_id"
-        />
 
         <!-- Botão -->
         <q-btn
@@ -531,8 +494,13 @@ function copyTrackingScript() {
     <q-dialog v-model="showCountriesDialog">
         <q-card style="min-width: 720px; max-width: 95vw; width: 900px; max-height: 90vh;">
             <q-card-section class="tw-flex tw-items-center tw-justify-between">
-                <div class="tw-text-lg tw-font-semibold">
-                    Selecionar países
+                <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
+                    <div class="tw-text-lg tw-font-semibold">
+                        Selecionar países
+                    </div>
+                    <span class="countries-info-badge">
+                        Se a campanha for global, não é necessário selecionar países.
+                    </span>
                 </div>
                 <q-btn flat dense icon="close" @click="closeCountriesDialog" />
             </q-card-section>
@@ -612,5 +580,18 @@ function copyTrackingScript() {
     margin-top: 4px;
     font-size: 12px;
     color: #c10015;
+  }
+
+  .countries-info-badge {
+    display: inline-flex;
+    align-items: center;
+    background-color: #eff6ff;
+    color: #1e3a8a;
+    border: 1px solid #bfdbfe;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+    font-weight: 500;
   }
 </style>

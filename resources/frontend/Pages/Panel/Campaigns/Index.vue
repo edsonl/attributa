@@ -377,8 +377,12 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
                     <template #body-cell-countries="props">
                         <q-td :props="props">
                             <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
-                                <span v-if="Number(props.row.countries_count ?? 0) === 0" class="tw-text-sm tw-text-gray-600">
-                                    0 país(es)
+                                <span
+                                    v-if="Number(props.row.countries_count ?? 0) === 0"
+                                    class="tw-inline-flex tw-items-center tw-gap-1 tw-text-sm tw-text-gray-600"
+                                >
+                                    <q-icon name="public" size="16px" />
+                                    <span>Global</span>
                                 </span>
                                 <span v-else>{{ (props.row.countries_preview ?? []).join(', ') }}</span>
                                 <q-btn
