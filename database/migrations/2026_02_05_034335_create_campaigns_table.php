@@ -11,10 +11,21 @@ return new class extends Migration {
 
             // ID interno da campanha
             $table->bigIncrements('id');
+
+            // IDs relacionais
             $table->unsignedBigInteger('user_id');
+            // Default 2 = status "active" (seed em campaign_statuses)
+            $table->unsignedBigInteger('campaign_status_id')->default(2);
+            $table->unsignedBigInteger('conversion_goal_id')->nullable();
 
             // Conta Google Ads vinculada (opcional)
             $table->unsignedBigInteger('google_ads_account_id')->nullable();
+
+            // Canal principal da campanha (ex: Google Ads, Meta Ads, WhatsApp)
+            $table->unsignedInteger('channel_id');
+
+            // Plataforma de afiliado da campanha (ex: DrCash, Hotmart)
+            $table->unsignedInteger('affiliate_platform_id');
 
             // Código único da campanha (até 20 caracteres), usado para tracking e integrações
             $table->string('code', 20)->unique();
@@ -24,18 +35,6 @@ return new class extends Migration {
 
             // URL do produto autorizada para envio do tracking (origem canônica)
             $table->string('product_url', 255)->nullable();
-
-            // Meta de conversão vinculada à campanha
-            $table->unsignedBigInteger('conversion_goal_id')->nullable();
-
-            // Status atual da campanha (draft, active, paused, finished, archived)
-            $table->string('status')->default('draft');
-
-            // Canal principal da campanha (ex: Google Ads, Meta Ads, WhatsApp)
-            $table->unsignedInteger('channel_id');
-
-            // Canal principal da campanha (ex: DrCash, Hotmart)
-            $table->unsignedInteger("affiliate_platform_id");
 
             // ID da campanha na plataforma externa (Google Ads, Meta, etc.)
             $table->string('external_campaign_id')->nullable();
@@ -72,13 +71,16 @@ return new class extends Migration {
                 ->references('id')
                 ->on('users')
                 ->onDelete('cascade');
+            $table->foreign('campaign_status_id')
+                ->references('id')
+                ->on('campaign_statuses');
             $table->foreign('conversion_goal_id')
                 ->references('id')
                 ->on('conversion_goals');
 
             // Índices auxiliares para filtros frequentes
             $table->index('user_id');
-            $table->index('status');
+            $table->index('campaign_status_id');
             $table->index('channel_id');
             $table->index('external_campaign_id');
             $table->index('affiliate_platform_id');

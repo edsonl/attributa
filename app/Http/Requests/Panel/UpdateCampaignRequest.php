@@ -50,9 +50,10 @@ class UpdateCampaignRequest extends FormRequest
                     ->where(fn ($query) => $query->where('user_id', (int) $this->user()?->id)),
             ],
 
-            'status' => [
+            'campaign_status_id' => [
                 'required',
-                'boolean',
+                'integer',
+                'exists:campaign_statuses,id',
             ],
 
             'channel_id' => [
@@ -105,8 +106,8 @@ class UpdateCampaignRequest extends FormRequest
 
             'conversion_goal_id.exists' => 'A meta de conversão selecionada é inválida.',
 
-            'status.required' => 'O status da campanha é obrigatório.',
-            'status.boolean' => 'O status da campanha é inválido.',
+            'campaign_status_id.required' => 'O status da campanha é obrigatório.',
+            'campaign_status_id.exists' => 'O status da campanha é inválido.',
 
             'channel_id.required' => 'O canal é obrigatório.',
             'channel_id.exists' => 'O canal selecionado é inválido.',
@@ -126,9 +127,9 @@ class UpdateCampaignRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        if ($this->has('status')) {
+        if ($this->has('campaign_status_id')) {
             $this->merge([
-                'status' => filter_var($this->status, FILTER_VALIDATE_BOOLEAN),
+                'campaign_status_id' => (int) $this->input('campaign_status_id'),
             ]);
         }
 

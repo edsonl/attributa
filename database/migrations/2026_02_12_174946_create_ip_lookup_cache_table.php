@@ -13,6 +13,12 @@ return new class extends Migration
             // ID interno do cache de consulta
             $table->id();
 
+            // ID da categoria de IP classificada
+            $table->foreignId('ip_category_id')
+                ->nullable()
+                ->constrained('ip_categories')
+                ->nullOnDelete();
+
             // =============================
             // Identificação
             // =============================
@@ -23,11 +29,6 @@ return new class extends Migration
             // =============================
             // Classificação
             // =============================
-
-            $table->foreignId('ip_category_id')
-                ->nullable()
-                ->constrained('ip_categories')
-                ->nullOnDelete();
 
             // Flags técnicas (opcional mas inteligente guardar)
             $table->boolean('is_proxy')->default(false);

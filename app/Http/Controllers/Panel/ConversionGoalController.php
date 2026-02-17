@@ -102,7 +102,7 @@ class ConversionGoalController extends Controller
 
         return Inertia::render('Panel/ConversionGoals/Edit', [
             'conversionGoal' => $conversionGoal,
-            'timezones' => $this->timezoneOptions(),
+            'timezones' => $this->timezoneOptions((int) $conversionGoal->timezone_id),
         ]);
     }
 
@@ -166,17 +166,23 @@ class ConversionGoalController extends Controller
         ]);
     }
 
-    protected function timezoneOptions()
+    protected function timezoneOptions(?int $includeTimezoneId = null)
     {
         return Timezone::query()
-            ->where('active', true)
+            ->where(function ($query) use ($includeTimezoneId) {
+                $query->where('active', true);
+
+                if (!empty($includeTimezoneId)) {
+                    $query->orWhere('id', $includeTimezoneId);
+                }
+            })
             ->orderBy('utc_offset')
             ->orderBy('identifier')
             ->get(['id', 'identifier', 'label', 'utc_offset'])
             ->map(fn ($timezone) => [
                 'id' => $timezone->id,
                 'identifier' => $timezone->identifier,
-                'label' => $timezone->label,
+                'label' => $timezone->label ?: $timezone->identifier,
                 'utc_offset' => $timezone->utc_offset,
             ]);
     }

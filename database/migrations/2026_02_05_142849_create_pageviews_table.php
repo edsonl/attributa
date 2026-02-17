@@ -10,12 +10,28 @@ return new class extends Migration {
         Schema::create('pageviews', function (Blueprint $table) {
             // ID interno da visita
             $table->id();
-            $table->unsignedBigInteger('user_id');
 
-            // FK para campanha principal (nova estrutura)
+            // IDs relacionais
+            $table->unsignedBigInteger('user_id');
             $table->foreignId('campaign_id')
                 ->nullable()
                 ->constrained('campaigns')
+                ->nullOnDelete();
+            $table->foreignId('traffic_source_category_id')
+                ->nullable()
+                ->constrained('traffic_source_categories')
+                ->nullOnDelete();
+            $table->foreignId('device_category_id')
+                ->nullable()
+                ->constrained('device_categories')
+                ->nullOnDelete();
+            $table->foreignId('browser_id')
+                ->nullable()
+                ->constrained('browsers')
+                ->nullOnDelete();
+            $table->foreignId('ip_category_id')
+                ->nullable()
+                ->constrained('ip_categories')
                 ->nullOnDelete();
 
             // vínculo com a campanha (via code)
@@ -45,23 +61,7 @@ return new class extends Migration {
             $table->string('gbraid')->nullable();
 
             // categoria de origem de tráfego
-            $table->foreignId('traffic_source_category_id')
-                ->nullable()
-                ->constrained('traffic_source_categories')
-                ->nullOnDelete();
             $table->string('traffic_source_reason')->nullable();
-
-            // categoria de dispositivo
-            $table->foreignId('device_category_id')
-                ->nullable()
-                ->constrained('device_categories')
-                ->nullOnDelete();
-
-            // navegador identificado
-            $table->foreignId('browser_id')
-                ->nullable()
-                ->constrained('browsers')
-                ->nullOnDelete();
 
             // dispositivo / navegador
             $table->string('device_type')->nullable();
@@ -83,11 +83,6 @@ return new class extends Migration {
 
             // dados técnicos
             $table->ipAddress('ip')->nullable();
-            // Categoria de risco/classificação de IP
-            $table->foreignId('ip_category_id')
-                ->nullable()
-                ->constrained('ip_categories')
-                ->nullOnDelete();
 
             // Código do país no padrão ISO2
             $table->string('country_code', 2)->nullable()->index();

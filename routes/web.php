@@ -10,6 +10,7 @@ use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\ConversionsController;
 use App\Http\Controllers\Panel\ConversionGoalController;
 use App\Http\Controllers\Panel\CountryController;
+use App\Http\Controllers\Panel\CampaignStatusController;
 use App\Http\Controllers\Panel\BrowserController;
 use App\Http\Controllers\Panel\DeviceCategoryController;
 use App\Http\Controllers\Panel\TrafficSourceCategoryController;
@@ -164,6 +165,10 @@ Route::middleware(['auth', 'verified'])
                 ->name('campaigns.tracking_code');
             Route::get('campaigns/{campaign}/countries', [CampaignController::class, 'countries'])
                 ->name('campaigns.countries');
+            Route::patch('campaigns/{campaign}/toggle-status', [CampaignController::class, 'toggleStatus'])
+                ->name('campaigns.toggle-status');
+            Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus'])
+                ->name('campaigns.update-status');
             Route::resource('campaigns', CampaignController::class);
             Route::get('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'logs'])
                 ->name('conversion-goals.logs');
@@ -186,6 +191,16 @@ Route::middleware(['auth', 'verified'])
                     Route::post('/', [CountryController::class, 'store'])->name('store');
                     Route::put('/{country}', [CountryController::class, 'update'])->name('update');
                     Route::delete('/{country}', [CountryController::class, 'destroy'])->name('destroy');
+                });
+
+            Route::prefix('campaign-statuses')
+                ->name('campaign-statuses.')
+                ->group(function () {
+                    Route::get('/', [CampaignStatusController::class, 'index'])->name('index');
+                    Route::get('/data', [CampaignStatusController::class, 'data'])->name('data');
+                    Route::post('/', [CampaignStatusController::class, 'store'])->name('store');
+                    Route::put('/{campaign_status}', [CampaignStatusController::class, 'update'])->name('update');
+                    Route::delete('/{campaign_status}', [CampaignStatusController::class, 'destroy'])->name('destroy');
                 });
 
             Route::prefix('browsers')

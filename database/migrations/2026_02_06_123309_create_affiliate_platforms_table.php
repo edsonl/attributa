@@ -13,16 +13,16 @@ return new class extends Migration
     {
         Schema::create('affiliate_platforms', function (Blueprint $table) {
 
-           // ID interno do canal
+           // ID interno da plataforma de afiliado
             $table->increments('id');
 
-            // Nome legível do canal (ex: Dr Cash, Hotmart)
+            // Nome legível da plataforma (ex: DrCash, Hotmart)
             $table->string('name');
 
-            // Slug técnico do canal (ex: dr-cash, hotmart, etcc)
+            // Slug técnico da plataforma (ex: dr-cash, hotmart)
             $table->string('slug')->unique();
 
-            // Indica se o canal está ativo para seleção em novas campanhas
+            // Indica se a plataforma está ativa para seleção em campanhas
             $table->boolean('active')->default(true);
 
             // Timestamps padrão do Laravel

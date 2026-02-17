@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Campaign;
 use App\Models\Channel;
 use App\Models\AffiliatePlatform;
+use App\Models\CampaignStatus;
 use App\Models\ConversionGoal;
 use App\Models\Timezone;
 use App\Services\GenerateCampaignCode;
@@ -63,10 +64,19 @@ class TestCampaignSeeder extends Seeder
 
         $conversionGoal->save();
 
+        $activeStatusId = CampaignStatus::query()
+            ->where('slug', 'active')
+            ->value('id');
+
+        if (!$activeStatusId) {
+            $this->command?->warn('TestCampaignSeeder: status "active" não encontrado. Rode as migrations novamente.');
+            return;
+        }
+
         $campaign->user_id = 1;
         $campaign->name = 'Campanha Teste Pageviews';
         $campaign->product_url = 'http://attributa.site/produto-teste';
-        $campaign->status = 'active';
+        $campaign->campaign_status_id = $activeStatusId;
         $campaign->conversion_goal_id = $conversionGoal->id;
         $campaign->channel_id = $channel->id;
         $campaign->affiliate_platform_id = $platform->id;

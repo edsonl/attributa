@@ -15,9 +15,9 @@ class Campaign extends Model
 
     protected $fillable = [
         'user_id',
+        'campaign_status_id',
         'name',
         'product_url',
-        'status',
         'conversion_goal_id',
         'commission_value',
         'channel_id',
@@ -31,7 +31,6 @@ class Campaign extends Model
     ];
 
     protected $casts = [
-        'status' => 'boolean',
         'commission_value' => 'decimal:2',
     ];
 
@@ -54,6 +53,11 @@ class Campaign extends Model
     public function conversionGoal()
     {
         return $this->belongsTo(ConversionGoal::class);
+    }
+
+    public function campaignStatus()
+    {
+        return $this->belongsTo(CampaignStatus::class);
     }
 
     /**

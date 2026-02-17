@@ -29,6 +29,7 @@ class ConversionsController extends Controller
     {
         $userId = (int) auth()->id();
         $perPage    = (int) $request->get('per_page', 20);
+        $perPage    = min(max($perPage, 5), 100);
         $sortBy     = $request->get('sortBy', 'conversion_event_time');
         $descending = filter_var($request->get('descending', true), FILTER_VALIDATE_BOOLEAN);
 

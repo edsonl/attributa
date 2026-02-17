@@ -24,6 +24,13 @@ const form = useForm({
     active: props.conversionGoal?.active ?? true,
 })
 
+function normalizeForSearch(value) {
+    return String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+}
+
 function hasNonRecommendedChars(value) {
     const code = String(value ?? '')
 
@@ -76,16 +83,15 @@ async function submit() {
 
 function onTimezoneFilter(val, update) {
     update(() => {
-        const needle = String(val ?? '').trim().toLowerCase()
+        const needle = normalizeForSearch(String(val ?? '').trim())
         if (needle === '') {
             timezoneOptions.value = props.timezones
             return
         }
 
         timezoneOptions.value = props.timezones.filter((option) =>
-            String(option?.label ?? '')
-                .toLowerCase()
-                .includes(needle)
+            normalizeForSearch(option?.label ?? '').includes(needle) ||
+            normalizeForSearch(option?.identifier ?? '').includes(needle)
         )
     })
 }
@@ -106,7 +112,7 @@ function onTimezoneFilter(val, update) {
             v-model="form.timezone_id"
             :options="timezoneOptions"
             option-value="id"
-            option-label="label"
+            :option-label="(option) => option?.label ?? option?.identifier ?? `ID ${option?.id ?? ''}`"
             emit-value
             map-options
             use-input

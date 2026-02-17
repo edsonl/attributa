@@ -32,7 +32,8 @@ class ActivityController extends Controller
     public function data(Request $request)
     {
         $userId = (int) auth()->id();
-        $perPage    = $request->get('per_page', 20);
+        $perPage    = (int) $request->get('per_page', 20);
+        $perPage    = min(max($perPage, 5), 100);
         $sortBy     = $request->get('sortBy', 'created_at');
         $descending = filter_var($request->get('descending', true), FILTER_VALIDATE_BOOLEAN);
 

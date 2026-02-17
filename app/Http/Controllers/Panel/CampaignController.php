@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Channel;
 use App\Models\Country;
 use App\Models\AffiliatePlatform;
+use App\Models\CampaignStatus;
 use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
 use Illuminate\Http\Request;
@@ -29,8 +30,14 @@ class CampaignController extends Controller
         $perPage = (int) $request->input('per_page', 15);
         $perPage = min(max($perPage, 5), 100);
 
-        $allowedSorts = ['id', 'code', 'name', 'status', 'created_at'];
-        if (!in_array($sort, $allowedSorts, true)) {
+        $allowedSorts = [
+            'id' => 'campaigns.id',
+            'code' => 'campaigns.code',
+            'name' => 'campaigns.name',
+            'status' => 'campaigns.campaign_status_id',
+            'created_at' => 'campaigns.created_at',
+        ];
+        if (!array_key_exists($sort, $allowedSorts)) {
             $sort = 'created_at';
         }
 
@@ -49,7 +56,7 @@ class CampaignController extends Controller
         }
 
         $campaigns = $campaignsQuery
-            ->orderBy($sort, $direction)
+            ->orderBy($allowedSorts[$sort], $direction)
             ->paginate($perPage)
             ->withQueryString();
 
@@ -91,6 +98,7 @@ class CampaignController extends Controller
 
         return Inertia::render('Panel/Campaigns/Index', [
             'campaigns' => $campaigns,
+            'campaignStatusCatalog' => $this->campaignStatusOptions(),
             'filters' => [
                 'search' => $search,
                 'sort' => $sort,
@@ -109,6 +117,7 @@ class CampaignController extends Controller
             'channels'  => $this->channelOptions(),
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
+            'campaignStatuses' => $this->campaignStatusOptions(),
             'googleAdsAccounts' => GoogleAdsAccount::where('user_id', auth()->id())
                 ->where('active', true)
                 ->orderBy('google_ads_customer_id')
@@ -143,7 +152,7 @@ class CampaignController extends Controller
             'name'       => $data['name'],
             'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
-            'status'     => $data['status'],
+            'campaign_status_id' => $data['campaign_status_id'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
@@ -177,6 +186,7 @@ class CampaignController extends Controller
             'channels'  => $this->channelOptions(),
             'countries' => Country::orderBy('name')->get(),
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
+            'campaignStatuses' => $this->campaignStatusOptions(),
             'conversionGoals' => ConversionGoal::query()
                 ->where('user_id', (int) auth()->id())
                 ->where(function ($query) use ($campaign) {
@@ -207,7 +217,7 @@ class CampaignController extends Controller
             'name'       => $data['name'],
             'product_url' => $data['product_url'],
             'conversion_goal_id' => $data['conversion_goal_id'] ?? null,
-            'status'     => $data['status'],
+            'campaign_status_id' => $data['campaign_status_id'],
             'channel_id' => $data['channel_id'],
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
@@ -235,11 +245,9 @@ class CampaignController extends Controller
 
     public function tracking_code(Campaign $campaign)
     {
-        $platform = AffiliatePlatform::find($campaign->affiliate_platform_id);
         return response()->json([
             'script' => view('tracking.snippet', [
                 'code' => $campaign->code,
-                'platform' => $platform->slug,
             ])->render(),
         ]);
     }
@@ -259,6 +267,63 @@ class CampaignController extends Controller
                 'countries_count' => $countries->count(),
             ],
             'countries' => $countries,
+        ]);
+    }
+
+    public function toggleStatus(Campaign $campaign)
+    {
+        $currentSlug = (string) optional($campaign->campaignStatus)->slug;
+        $targetSlug = $currentSlug === 'active' ? 'paused' : 'active';
+
+        $targetStatus = CampaignStatus::query()
+            ->where('slug', $targetSlug)
+            ->where('active', true)
+            ->first();
+
+        if (!$targetStatus) {
+            return response()->json([
+                'message' => 'Status de destino não encontrado.',
+            ], 422);
+        }
+
+        $campaign->campaign_status_id = $targetStatus->id;
+        $campaign->save();
+
+        return response()->json([
+            'message' => 'Status da campanha atualizado com sucesso.',
+            'campaign' => [
+                'id' => $campaign->id,
+                'campaign_status_id' => $targetStatus->id,
+            ],
+        ]);
+    }
+
+    public function updateStatus(Request $request, Campaign $campaign)
+    {
+        $data = $request->validate([
+            'campaign_status_id' => ['required', 'integer'],
+        ]);
+
+        $targetStatus = CampaignStatus::query()
+            ->where('id', (int) $data['campaign_status_id'])
+            ->where('active', true)
+            ->first();
+
+        if (!$targetStatus) {
+            return response()->json([
+                'message' => 'Status de campanha inválido.',
+            ], 422);
+        }
+
+        $campaign->campaign_status_id = $targetStatus->id;
+        $campaign->save();
+
+        return response()->json([
+            'message' => 'Status da campanha atualizado com sucesso.',
+            'campaign' => [
+                'id' => $campaign->id,
+                'campaign_status_id' => $targetStatus->id,
+            ],
         ]);
     }
 
@@ -300,9 +365,30 @@ class CampaignController extends Controller
             ->select(['channel_id', 'affiliate_platform_id'])
             ->first();
 
+        $defaultStatusId = CampaignStatus::query()
+            ->where('slug', 'active')
+            ->value('id');
+
         return [
             'channel_id' => $lastCampaign?->channel_id,
             'affiliate_platform_id' => $lastCampaign?->affiliate_platform_id,
+            'campaign_status_id' => $defaultStatusId,
         ];
+    }
+
+    protected function campaignStatusOptions()
+    {
+        return CampaignStatus::query()
+            ->where('active', true)
+            ->orderBy('id')
+            ->get(['id', 'name', 'slug', 'color_hex'])
+            ->map(fn ($status) => [
+                'id' => $status->id,
+                'name' => $status->name,
+                'slug' => $status->slug,
+                'color_hex' => $status->color_hex,
+                'label' => $status->name,
+                'tooltip' => $status->description ?: ('Status: ' . $status->name),
+            ]);
     }
 }

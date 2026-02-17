@@ -9,13 +9,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('device_categories', function (Blueprint $table) {
+            // ID interno da categoria de dispositivo
             $table->id();
+            // Nome legível da categoria
             $table->string('name');
+            // Slug técnico único
             $table->string('slug')->unique();
+            // Nome do ícone exibido no front (opcional)
             $table->string('icon_name', 100)->nullable();
+            // Cor hexadecimal para badge/indicador
             $table->string('color_hex', 7)->nullable();
+            // Descrição opcional da categoria
             $table->text('description')->nullable();
+            // Define se a categoria é padrão do sistema
             $table->boolean('is_system')->default(true);
+            // Timestamps padrão do Laravel
             $table->timestamps();
         });
     }

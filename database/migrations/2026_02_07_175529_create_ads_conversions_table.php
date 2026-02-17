@@ -11,11 +11,10 @@ return new class extends Migration {
         Schema::create('ads_conversions', function (Blueprint $table) {
             // ID interno da conversão
             $table->bigIncrements('id');
-            $table->unsignedBigInteger('user_id');
 
-            // FK para campanha relacionada
+            // IDs relacionais da conversão
+            $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('campaign_id');
-            // FK para visita de origem
             $table->unsignedBigInteger('pageview_id');
 
             // Data/hora do evento de conversão

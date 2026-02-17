@@ -4,13 +4,16 @@ import { computed, ref, watch } from 'vue'
 import axios from 'axios'
 import { Notify } from 'quasar'
 
-import StatusChip from '@/Components/StatusChip.vue'
 import { qTableLangPt } from '@/lang/qtable-pt'
 
 const props = defineProps({
     campaigns: {
         type: Object,
         required: true,
+    },
+    campaignStatusCatalog: {
+        type: Array,
+        default: () => ([]),
     },
     filters: {
         type: Object,
@@ -115,6 +118,7 @@ const countriesLoading = ref(false)
 const countriesDialogTitle = ref('')
 const countriesDialogCount = ref(0)
 const countriesDialogItems = ref([])
+const statusUpdating = ref({})
 
 function fetchTable() {
     const params = {
@@ -241,6 +245,66 @@ function copyTrackingScript() {
     }
 }
 
+function statusLabel(campaign) {
+    return statusMetaForCampaign(campaign)?.label ?? '-'
+}
+
+function statusColor(campaign) {
+    return statusMetaForCampaign(campaign)?.color_hex ?? '#64748B'
+}
+
+function statusTooltip(campaign) {
+    const meta = statusMetaForCampaign(campaign)
+    if (!meta) return 'Status da campanha'
+    return meta.tooltip ?? `Status da campanha: ${meta.label}`
+}
+
+function statusMetaForCampaign(campaign) {
+    const campaignStatusId = Number(campaign?.campaign_status_id ?? 0)
+    return (props.campaignStatusCatalog ?? []).find(
+        status => Number(status?.id ?? 0) === campaignStatusId
+    ) ?? null
+}
+
+async function updateCampaignStatus(campaign, campaignStatusId) {
+    const routeKey = campaignRouteKey(campaign)
+    if (!routeKey) return
+    if (Number(campaign?.campaign_status_id ?? 0) === Number(campaignStatusId ?? 0)) return
+
+    statusUpdating.value = {
+        ...statusUpdating.value,
+        [campaign.id]: true,
+    }
+
+    try {
+        const response = await axios.patch(route('panel.campaigns.update-status', routeKey), {
+            campaign_status_id: campaignStatusId,
+        })
+        const payload = response.data?.campaign
+
+        if (payload && Number(payload.id) === Number(campaign.id)) {
+            campaign.campaign_status_id = payload.campaign_status_id
+        }
+
+        Notify.create({
+            type: 'positive',
+            message: response.data?.message || 'Status atualizado com sucesso.',
+            position: 'top-right',
+        })
+    } catch {
+        Notify.create({
+            type: 'negative',
+            message: 'Não foi possível atualizar o status da campanha.',
+            position: 'top-right',
+        })
+    } finally {
+        statusUpdating.value = {
+            ...statusUpdating.value,
+            [campaign.id]: false,
+        }
+    }
+}
+
 </script>
 
 <template>
@@ -333,7 +397,49 @@ function copyTrackingScript() {
                     <!-- Status -->
                     <template #body-cell-status="props">
                         <q-td :props="props" class="tw-text-center">
-                            <StatusChip :value="props.row.status" />
+                            <div class="status-cell-wrapper">
+                                <div class="status-pill">
+                                    <span class="status-dot" :style="{ backgroundColor: statusColor(props.row) }" />
+                                    <span>{{ statusLabel(props.row) }}</span>
+                                    <q-tooltip
+                                        :style="{ backgroundColor: statusColor(props.row), color: '#fff' }"
+                                    >
+                                        {{ statusTooltip(props.row) }}
+                                    </q-tooltip>
+                                </div>
+
+                                <q-btn-dropdown
+                                    flat
+                                    round
+                                    dense
+                                    dropdown-icon="arrow_drop_down"
+                                    no-icon-animation
+                                    :disable="Boolean(statusUpdating[props.row.id])"
+                                >
+                                    <q-list dense>
+                                        <q-item
+                                            v-for="status in campaignStatusCatalog"
+                                            :key="status.id"
+                                            clickable
+                                            v-close-popup
+                                            @click="updateCampaignStatus(props.row, status.id)"
+                                        >
+                                            <q-item-section avatar>
+                                                <span
+                                                    class="tw-inline-flex tw-h-3 tw-w-3 tw-rounded-full tw-border tw-border-black/10"
+                                                    :style="{ backgroundColor: status.color_hex }"
+                                                />
+                                            </q-item-section>
+                                            <q-item-section>
+                                                {{ status.label }}
+                                            </q-item-section>
+                                            <q-item-section side v-if="Number(props.row.campaign_status_id) === Number(status.id)">
+                                                <q-icon name="check" size="16px" />
+                                            </q-item-section>
+                                        </q-item>
+                                    </q-list>
+                                </q-btn-dropdown>
+                            </div>
                         </q-td>
                     </template>
 
@@ -461,3 +567,29 @@ function copyTrackingScript() {
         </q-card>
     </q-dialog>
 </template>
+<style scoped>
+.status-cell-wrapper {
+    width: 170px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+    color: #111827;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    display: inline-block;
+}
+</style>

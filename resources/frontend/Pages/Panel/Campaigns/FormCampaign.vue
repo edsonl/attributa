@@ -29,6 +29,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    campaignStatuses: {
+        type: Array,
+        required: true,
+    },
     defaults: {
         type: Object,
         default: () => ({}),
@@ -74,6 +78,13 @@ const conversionGoalOptions = computed(() =>
             : (option.label ?? option.goal_code),
     })),
 )
+const campaignStatusOptions = computed(() =>
+    (props.campaignStatuses ?? []).map(option => ({
+        ...option,
+        value: String(option.id),
+        label: option.label ?? option.name,
+    })),
+)
 
 watch(() => props.countries, (val = []) => {
     countryOptions.value = val
@@ -103,8 +114,8 @@ function toStringOrNull(value) {
 const form = useForm({
     name: props.campaign?.name ?? '',
     product_url: props.campaign?.product_url ?? '',
+    campaign_status_id: toStringOrNull(props.campaign?.campaign_status_id ?? props.defaults?.campaign_status_id ?? null),
     conversion_goal_id: toStringOrNull(props.campaign?.conversion_goal_id),
-    status: props.campaign?.status ?? true,
     channel_id: toStringOrNull(props.campaign?.channel_id ?? props.defaults?.channel_id ?? null),
     affiliate_platform_id: toStringOrNull(props.campaign?.affiliate_platform_id ?? props.defaults?.affiliate_platform_id ?? null),
     google_ads_account_id: toStringOrNull(props.campaign?.google_ads_account_id),
@@ -124,6 +135,10 @@ watch(affiliateOptions, (options) => {
 
 watch(conversionGoalOptions, (options) => {
     form.conversion_goal_id = normalizeSelectValue(form.conversion_goal_id, options)
+}, { immediate: true })
+
+watch(campaignStatusOptions, (options) => {
+    form.campaign_status_id = normalizeSelectValue(form.campaign_status_id, options)
 }, { immediate: true })
 
 watch(googleAdsAccountOptions, (options) => {
@@ -403,6 +418,25 @@ function copyTrackingScript() {
             </template>
         </q-field>
 
+        <div class="campaign-status-block">
+            <div class="campaign-status-label">
+                Status da campanha
+            </div>
+            <q-option-group
+                v-model="form.campaign_status_id"
+                :options="campaignStatusOptions"
+                type="radio"
+                inline
+                dense
+            />
+            <div
+                v-if="form.errors.campaign_status_id"
+                class="campaign-status-error"
+            >
+                {{ form.errors.campaign_status_id }}
+            </div>
+        </div>
+
         <q-select
             v-model="form.google_ads_account_id"
             :options="googleAdsAccountOptions"
@@ -441,12 +475,6 @@ function copyTrackingScript() {
             color="primary"
             label="Ver código de acompanhamento"
             @click="openTrackingDialog"
-        />
-
-        <!-- Status -->
-        <q-toggle
-            v-model="form.status"
-            label="Campanha ativa"
         />
 
         <!-- Ações -->
@@ -567,5 +595,22 @@ function copyTrackingScript() {
 <style lang="css" scoped>
   .bg-white-campanha {
     background-color: #fff;
+  }
+
+  .campaign-status-block {
+    padding-top: 2px;
+  }
+
+  .campaign-status-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+
+  .campaign-status-error {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #c10015;
   }
 </style>
