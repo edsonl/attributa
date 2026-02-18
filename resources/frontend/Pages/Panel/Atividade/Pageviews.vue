@@ -20,6 +20,10 @@ const pagination = ref({
 
 const campaignId = ref(null)
 const campaigns = ref([])
+const dateRange = ref({ from: '', to: '' })
+const tempDateRange = ref({ from: '', to: '' })
+const datePopupOpen = ref(false)
+const filtersReady = ref(false)
 
 const FALLBACK_IP_CATEGORY = {
     label: 'Não determinado',
@@ -32,6 +36,12 @@ const detailLoading = ref(false)
 const detailPayload = ref(null)
 const selected = ref([])
 const hasSelection = computed(() => selected.value.length > 0)
+const dateRangeLabel = computed(() => {
+    const from = String(dateRange.value?.from || '')
+    const to = String(dateRange.value?.to || '')
+    if (!from || !to) return ''
+    return `${formatDateDots(from)}  -  ${formatDateDots(to)}`
+})
 const assetBaseUrl = (
     import.meta.env.VITE_ASSET_URL
         ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
@@ -149,6 +159,125 @@ function fetchCampaigns() {
     })
 }
 
+function toIsoDate(value) {
+    const d = new Date(value)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
+function formatDateDots(isoDate) {
+    if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return ''
+    const [y, m, d] = isoDate.split('-')
+    return `${d}.${m}.${y}`
+}
+
+function getDefaultLast7DaysRange() {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - 6)
+    return {
+        from: toIsoDate(start),
+        to: toIsoDate(end),
+    }
+}
+
+function buildPresetRange(preset) {
+    const now = new Date()
+    const start = new Date(now)
+    const end = new Date(now)
+
+    if (preset === 'last_7') {
+        start.setDate(now.getDate() - 6)
+    } else if (preset === 'last_31') {
+        start.setDate(now.getDate() - 30)
+    } else if (preset === 'month_current') {
+        start.setDate(1)
+    } else if (preset === 'month_previous') {
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+        start.setTime(prev.getTime())
+        end.setTime(prevEnd.getTime())
+    }
+
+    return {
+        from: toIsoDate(start),
+        to: toIsoDate(end),
+    }
+}
+
+function applyPresetRange(preset) {
+    tempDateRange.value = buildPresetRange(preset)
+}
+
+function applyTodayRange() {
+    const today = toIsoDate(new Date())
+    tempDateRange.value = { from: today, to: today }
+}
+
+function openDatePopup() {
+    tempDateRange.value = {
+        from: String(dateRange.value?.from || ''),
+        to: String(dateRange.value?.to || ''),
+    }
+}
+
+function cancelDateRangeSelection() {
+    datePopupOpen.value = false
+}
+
+function applyDateRangeSelection() {
+    const from = String(tempDateRange.value?.from || '')
+    const to = String(tempDateRange.value?.to || '')
+    if (from && to) {
+        dateRange.value = { from, to }
+    }
+    datePopupOpen.value = false
+}
+
+function syncFiltersToUrl() {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+
+    if (campaignId.value) {
+        url.searchParams.set('campaign_id', String(campaignId.value))
+    } else {
+        url.searchParams.delete('campaign_id')
+    }
+
+    if (dateRange.value?.from && dateRange.value?.to) {
+        url.searchParams.set('date_from', dateRange.value.from)
+        url.searchParams.set('date_to', dateRange.value.to)
+    } else {
+        url.searchParams.delete('date_from')
+        url.searchParams.delete('date_to')
+    }
+
+    window.history.replaceState({}, '', url.toString())
+}
+
+function hydrateFiltersFromUrl() {
+    if (typeof window === 'undefined') {
+        dateRange.value = getDefaultLast7DaysRange()
+        return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    campaignId.value = params.get('campaign_id') ? Number(params.get('campaign_id')) : null
+
+    const dateFrom = params.get('date_from')
+    const dateTo = params.get('date_to')
+    const isValidDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
+
+    if (isValidDate(dateFrom) && isValidDate(dateTo)) {
+        dateRange.value = { from: dateFrom, to: dateTo }
+        return
+    }
+
+    dateRange.value = getDefaultLast7DaysRange()
+}
+
 function fetchPageviews(props) {
     loading.value = true
 
@@ -162,6 +291,8 @@ function fetchPageviews(props) {
                 sortBy,
                 descending,
                 campaign_id: campaignId.value,
+                date_from: dateRange.value?.from || undefined,
+                date_to: dateRange.value?.to || undefined,
             },
         })
         .then(res => {
@@ -303,11 +434,26 @@ async function openDetails(row) {
 }
 
 watch(campaignId, () => {
+    if (!filtersReady.value) return
     pagination.value.page = 1
+    syncFiltersToUrl()
     fetchPageviews({ pagination: pagination.value })
 })
 
+watch(
+    () => [dateRange.value?.from, dateRange.value?.to],
+    () => {
+        if (!filtersReady.value) return
+        pagination.value.page = 1
+        syncFiltersToUrl()
+        fetchPageviews({ pagination: pagination.value })
+    }
+)
+
 onMounted(() => {
+    hydrateFiltersFromUrl()
+    syncFiltersToUrl()
+    filtersReady.value = true
     fetchCampaigns()
     fetchPageviews({ pagination: pagination.value })
 })
@@ -317,7 +463,7 @@ onMounted(() => {
     <Head title="Relatório de atividade" />
     <q-card flat bordered class="tw-rounded-2xl tw-p-4">
         <div class="row q-mb-md items-center q-col-gutter-md">
-            <div class="col-12 col-md-4 q-mb-sm q-mb-md-0">
+            <div class="col-12 col-sm-8 col-md-3 q-mb-sm q-mb-md-0">
                 <q-select
                     ref="tableRef"
                     v-model="campaignId"
@@ -327,17 +473,75 @@ onMounted(() => {
                     emit-value
                     map-options
                     clearable
+                    dense
+                    outlined
+                    class="filter-field campaign-filter-field"
                     label="Filtrar por campanha"
                 />
             </div>
-            <div class="col-12 col-md-4 col-lg-3 q-mt-sm q-mt-md-0 q-pl-md-sm">
+            <div class="col-12 col-sm-6 col-md-2 q-mb-sm q-mb-md-0">
+                <q-input
+                    dense
+                    outlined
+                    readonly
+                    class="filter-field"
+                    label="Período"
+                    :model-value="dateRangeLabel"
+                    placeholder="Selecione um intervalo"
+                >
+                    <template #prepend>
+                        <q-icon name="event" />
+                    </template>
+                    <template #append>
+                        <q-icon name="expand_more" />
+                    </template>
+                    <q-popup-proxy
+                        v-model="datePopupOpen"
+                        anchor="bottom left"
+                        self="top left"
+                        :offset="[0, 6]"
+                        transition-show="scale"
+                        transition-hide="scale"
+                        @before-show="openDatePopup"
+                    >
+                        <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[150px_1fr] tw-gap-3 tw-p-3">
+                            <div class="tw-flex tw-flex-col tw-gap-2">
+                                <q-btn flat no-caps dense label="Hoje" @click="applyTodayRange" />
+                                <q-btn flat no-caps dense label="Últimos 7 dias" @click="applyPresetRange('last_7')" />
+                                <q-btn flat no-caps dense label="Últimos 31 dias" @click="applyPresetRange('last_31')" />
+                                <q-btn flat no-caps dense label="Mês atual" @click="applyPresetRange('month_current')" />
+                                <q-btn flat no-caps dense label="Mês anterior" @click="applyPresetRange('month_previous')" />
+                            </div>
+                            <q-date
+                                v-model="tempDateRange"
+                                range
+                                mask="YYYY-MM-DD"
+                                minimal
+                                class="period-date-picker"
+                            />
+                        </div>
+                        <div class="tw-flex tw-justify-end tw-gap-2 tw-px-3 tw-pb-3">
+                            <q-btn flat no-caps label="Cancelar" @click="cancelDateRangeSelection" />
+                            <q-btn color="primary" no-caps label="Aplicar" @click="applyDateRangeSelection" />
+                        </div>
+                    </q-popup-proxy>
+                </q-input>
+            </div>
+            <div class="col-12 col-md q-mt-sm q-mt-md-0 tw-flex md:tw-justify-end">
                 <q-btn
                     color="negative"
-                    label="Remover selecionados"
+                    icon="delete"
                     :disable="!hasSelection"
                     @click="deleteSelected"
-                    class="tw-w-full lg:tw-w-auto bulk-delete-btn"
-                />
+                    class="bulk-delete-btn"
+                    round
+                    dense
+                    aria-label="Remover selecionados"
+                >
+                    <q-tooltip anchor="center left" self="center right" :offset="[8, 0]">
+                        {{ hasSelection ? 'Remover selecionados' : 'Selecione registros para remover' }}
+                    </q-tooltip>
+                </q-btn>
             </div>
         </div>
 
@@ -348,6 +552,7 @@ onMounted(() => {
             :loading="loading"
             v-model:pagination="pagination"
             :binary-state-sort="true"
+            :rows-per-page-options="[10, 15, 20, 25, 50]"
             @request="fetchPageviews"
             selection="multiple"
             v-model:selected="selected"
@@ -364,7 +569,11 @@ onMounted(() => {
                         <span
                             class="tw-inline-flex tw-h-3 tw-w-3 tw-rounded-full tw-border tw-border-white/20 tw-shadow-sm"
                             :style="{ backgroundColor: resolveIpCategoryMeta(props.row).color }"
-                        />
+                        >
+                            <q-tooltip class="tw-text-xs tw-max-w-xs tw-leading-snug">
+                                {{ resolveIpCategoryMeta(props.row).description }}
+                            </q-tooltip>
+                        </span>
                         <span>{{ props.value || '-' }}</span>
                         <q-btn
                             v-if="props.value"
@@ -376,11 +585,10 @@ onMounted(() => {
                             color="primary"
                             @click="copyText(props.value, 'IP')"
                         >
-                            <q-tooltip>Copiar IP</q-tooltip>
+                            <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">
+                                Copiar IP
+                            </q-tooltip>
                         </q-btn>
-                        <q-tooltip class="tw-text-xs tw-max-w-xs tw-leading-snug">
-                            {{ resolveIpCategoryMeta(props.row).description }}
-                        </q-tooltip>
                     </div>
                 </q-td>
             </template>
@@ -444,7 +652,7 @@ onMounted(() => {
                             v-if="resolveCountryFlag(props.row)"
                             :src="resolveCountryFlag(props.row)"
                             :alt="props.value"
-                            class="tw-w-6 tw-h-4 tw-rounded-sm tw-object-cover tw-border tw-border-gray-200"
+                            class="country-flag"
                         />
                         <span>{{ props.value ? props.value.toUpperCase() : '-' }}</span>
                     </div>
@@ -515,7 +723,8 @@ onMounted(() => {
                         dense
                         flat
                         icon="delete"
-                        color="negative"
+                        size="sm"
+                        class="row-delete-btn"
                         @click="deletePageview(props.row.id)"
                     />
                 </q-td>
@@ -538,5 +747,43 @@ onMounted(() => {
     opacity: 0.4;
     box-shadow: none;
     border-color: transparent;
+}
+
+.filter-field :deep(.q-field__control) {
+    min-height: 44px;
+}
+
+.campaign-filter-field :deep(.q-field__native) {
+    align-items: center;
+    line-height: 1.2;
+}
+
+.row-delete-btn {
+    color: #94a3b8;
+    transition: color 0.15s ease-in-out, transform 0.15s ease-in-out;
+}
+
+.row-delete-btn:hover,
+.row-delete-btn:focus-visible {
+    color: #ef4444;
+}
+
+.country-flag {
+    width: 20px;
+    height: 13px;
+    border-radius: 2px;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+}
+
+.period-date-picker :deep(.q-date__today) {
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px #94a3b8;
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.period-date-picker :deep(.q-date__today.bg-primary) {
+    box-shadow: inset 0 0 0 2px #ffffff;
+    background: var(--q-primary);
 }
 </style>

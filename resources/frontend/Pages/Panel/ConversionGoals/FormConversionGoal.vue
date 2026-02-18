@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { router, useForm } from '@inertiajs/vue3'
-import { useQuasar } from 'quasar'
 
 const props = defineProps({
     conversionGoal: {
@@ -15,7 +14,6 @@ const props = defineProps({
 })
 
 const isEdit = computed(() => !!props.conversionGoal)
-const $q = useQuasar()
 const timezoneOptions = ref(props.timezones)
 
 const form = useForm({
@@ -31,47 +29,10 @@ function normalizeForSearch(value) {
         .toLowerCase()
 }
 
-function hasNonRecommendedChars(value) {
-    const code = String(value ?? '')
-
-    const hasWhitespace = /\s/.test(code)
-    const hasAccented = /[^\u0000-\u007F]/.test(code)
-    const hasSpecial = /[^A-Za-z0-9_-]/.test(code)
-
-    return hasWhitespace || hasAccented || hasSpecial
-}
-
-function confirmRecommendedChars() {
-    return new Promise((resolve) => {
-        $q.dialog({
-            title: 'Atenção',
-            message: 'Não é recomendado usar espaços, acentos ou caracteres especiais no código da meta de conversão. Deseja continuar mesmo assim?',
-            ok: {
-                label: 'Continuar',
-                color: 'warning',
-                unelevated: true,
-            },
-            cancel: {
-                label: 'Cancelar',
-                flat: true,
-            },
-            persistent: true,
-        })
-            .onOk(() => resolve(true))
-            .onCancel(() => resolve(false))
-            .onDismiss(() => resolve(false))
-    })
-}
-
-async function submit() {
+function submit() {
     form.goal_code = String(form.goal_code ?? '').trim()
-
-    if (hasNonRecommendedChars(form.goal_code)) {
-        const shouldContinue = await confirmRecommendedChars()
-        if (!shouldContinue) {
-            return
-        }
-    }
+    // Enforce no spaces/special chars and max 30 before submit.
+    form.goal_code = form.goal_code.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30)
 
     if (isEdit.value) {
         form.put(route('panel.conversion-goals.update', props.conversionGoal.hashid ?? props.conversionGoal.id))
@@ -95,44 +56,69 @@ function onTimezoneFilter(val, update) {
         )
     })
 }
+
+function onGoalCodeInput(value) {
+    const sanitized = String(value ?? '')
+        .replace(/[^A-Za-z0-9_-]/g, '')
+        .slice(0, 30)
+
+    if (sanitized !== value) {
+        form.goal_code = sanitized
+    }
+}
 </script>
 
 <template>
     <form @submit.prevent="submit" class="tw-space-y-2 tw-pt-4">
-        <q-input
-            v-model="form.goal_code"
-            label="Codigo da meta de conversao"
-            outlined
-            dense
-            :error="Boolean(form.errors.goal_code)"
-            :error-message="form.errors.goal_code"
-        />
+        <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-3">
+            <div class="tw-space-y-2">
+                <q-input
+                    v-model="form.goal_code"
+                    label="Codigo da meta de conversao"
+                    outlined
+                    dense
+                    maxlength="30"
+                    counter
+                    :error="Boolean(form.errors.goal_code)"
+                    :error-message="form.errors.goal_code"
+                    @update:model-value="onGoalCodeInput"
+                />
+                <q-banner dense class="tw-bg-sky-50 tw-text-sky-800 tw-rounded-md">
+                    Use apenas letras, números, <code>-</code> e <code>_</code>. Sem espaços ou caracteres especiais.
+                    Limite: <strong>30 caracteres</strong>.
+                </q-banner>
+            </div>
 
-        <q-select
-            v-model="form.timezone_id"
-            :options="timezoneOptions"
-            option-value="id"
-            :option-label="(option) => option?.label ?? option?.identifier ?? `ID ${option?.id ?? ''}`"
-            emit-value
-            map-options
-            use-input
-            input-debounce="0"
-            @filter="onTimezoneFilter"
-            label="Timezone"
-            outlined
-            dense
-            :clearable="false"
-            :error="Boolean(form.errors.timezone_id)"
-            :error-message="form.errors.timezone_id"
-            hint="Deve corresponder ao fuso horario configurado na sua conta do Google Ads."
-        />
+            <div class="tw-space-y-2">
+                <q-select
+                    v-model="form.timezone_id"
+                    :options="timezoneOptions"
+                    option-value="id"
+                    :option-label="(option) => option?.label ?? option?.identifier ?? `ID ${option?.id ?? ''}`"
+                    emit-value
+                    map-options
+                    use-input
+                    input-debounce="0"
+                    @filter="onTimezoneFilter"
+                    label="Timezone"
+                    outlined
+                    dense
+                    :clearable="false"
+                    :error="Boolean(form.errors.timezone_id)"
+                    :error-message="form.errors.timezone_id"
+                    hint="Deve corresponder ao fuso horario configurado na sua conta do Google Ads."
+                />
 
-        <q-toggle
-            v-model="form.active"
-            label="Meta ativa"
-            :true-value="true"
-            :false-value="false"
-        />
+                <div class="tw-flex tw-items-center tw-px-1 tw-pt-1">
+                    <q-toggle
+                        v-model="form.active"
+                        label="Meta ativa"
+                        :true-value="true"
+                        :false-value="false"
+                    />
+                </div>
+            </div>
+        </div>
 
         <div class="tw-flex tw-justify-end tw-gap-2">
             <q-btn flat label="Cancelar" @click="router.visit(route('panel.conversion-goals.index'))" />

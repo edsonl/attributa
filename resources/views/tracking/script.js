@@ -3,12 +3,16 @@
     if (window.__ATTRIBUTA_PAGEVIEW_SENT__) return;
     window.__ATTRIBUTA_PAGEVIEW_SENT__ = true;
 
-    // Código da campanha definido no backend (pode vir null)
+    // Tokens definidos no backend (pode vir null)
+    let USER_CODE = '{USER_CODE}';
     let CAMPAIGN_CODE = '{CAMPAIGN_CODE}';
+    let AUTH_TS = '{AUTH_TS}';
+    let AUTH_NONCE = '{AUTH_NONCE}';
+    let AUTH_SIG = '{AUTH_SIG}';
 
     // Validação final
-    if (!CAMPAIGN_CODE) {
-        console.warn('[Attributa] Campaign code não informado');
+    if (!USER_CODE || !CAMPAIGN_CODE || !AUTH_TS || !AUTH_NONCE || !AUTH_SIG) {
+        console.warn('[Attributa] Dados de autenticação do tracking não informados');
         return;
     }
 
@@ -90,7 +94,11 @@
     // Payload base
     // ===============================
     var payload = {
+        user_code: USER_CODE,
         campaign_code: CAMPAIGN_CODE,
+        auth_ts: AUTH_TS,
+        auth_nonce: AUTH_NONCE,
+        auth_sig: AUTH_SIG,
         url: window.location.href,
         landing_url: window.location.href,
         referrer: document.referrer || null,
@@ -184,7 +192,7 @@
         var pageviewCode = getCookie('at_pageview_code');
         if (!pageviewCode) return;
 
-        var COMPOSED_CODE = CAMPAIGN_CODE + '-' + pageviewCode;
+        var COMPOSED_CODE = USER_CODE + '-' + CAMPAIGN_CODE + '-' + pageviewCode;
         var SUB_KEYS = ['sub1', 'sub2', 'sub3', 'sub4', 'sub5'];
 
         // ----- Forms -----

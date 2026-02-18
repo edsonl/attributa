@@ -8,27 +8,38 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('campaigns', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
 
             // ID interno da campanha
-            $table->bigIncrements('id');
+            $table->id();
 
             // IDs relacionais
-            $table->unsignedBigInteger('user_id');
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
             // Default 2 = status "active" (seed em campaign_statuses)
-            $table->unsignedBigInteger('campaign_status_id')->default(2);
-            $table->unsignedBigInteger('conversion_goal_id')->nullable();
+            $table->foreignId('campaign_status_id')
+                ->default(2)
+                ->constrained('campaign_statuses');
+            $table->foreignId('conversion_goal_id')
+                ->nullable()
+                ->constrained('conversion_goals');
 
             // Conta Google Ads vinculada (opcional)
-            $table->unsignedBigInteger('google_ads_account_id')->nullable();
+            $table->foreignId('google_ads_account_id')
+                ->nullable()
+                ->constrained('google_ads_accounts');
 
             // Canal principal da campanha (ex: Google Ads, Meta Ads, WhatsApp)
-            $table->unsignedInteger('channel_id');
+            $table->foreignId('channel_id');
 
             // Plataforma de afiliado da campanha (ex: DrCash, Hotmart)
-            $table->unsignedInteger('affiliate_platform_id');
+            $table->foreignId('affiliate_platform_id');
 
-            // Código único da campanha (até 20 caracteres), usado para tracking e integrações
-            $table->string('code', 20)->unique();
+            // Código único da campanha baseado em hashid (margem para crescimento futuro)
+            $table->string('code', 32)->unique();
 
             // Nome da campanha / produto (exibição interna)
             $table->string('name');
@@ -62,21 +73,6 @@ return new class extends Migration {
 
             // Soft delete para preservar histórico da campanha
             $table->softDeletes();
-
-
-            $table->foreign('google_ads_account_id')
-                ->references('id')
-                ->on('google_ads_accounts');
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
-            $table->foreign('campaign_status_id')
-                ->references('id')
-                ->on('campaign_statuses');
-            $table->foreign('conversion_goal_id')
-                ->references('id')
-                ->on('conversion_goals');
 
             // Índices auxiliares para filtros frequentes
             $table->index('user_id');

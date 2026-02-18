@@ -12,6 +12,7 @@ class ConversionGoalLog extends Model
     protected $fillable = [
         'goal_id',
         'message',
+        'status',
     ];
 
     public function conversionGoal()

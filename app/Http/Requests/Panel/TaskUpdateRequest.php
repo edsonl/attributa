@@ -13,7 +13,7 @@ class TaskUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title' => ['required','string','max:255'],
+            'title' => ['required','string','max:191'],
             'description' => ['nullable','string'],
             'status' => ['required', Rule::in(['pending','in_progress','done'])],
             'priority' => ['required', Rule::in(['low','medium','high'])],

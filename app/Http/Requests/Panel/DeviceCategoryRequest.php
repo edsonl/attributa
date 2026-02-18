@@ -29,11 +29,11 @@ class DeviceCategoryRequest extends FormRequest
         $deviceCategoryId = $this->route('device_category')?->id;
 
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:191'],
             'slug' => [
                 'required',
                 'string',
-                'max:255',
+                'max:191',
                 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('device_categories', 'slug')->ignore($deviceCategoryId),
             ],

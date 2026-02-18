@@ -251,7 +251,8 @@ class CampaignController extends Controller
     {
         return response()->json([
             'script' => view('tracking.snippet', [
-                'code' => $campaign->code,
+                'userCode' => app(\App\Services\HashidService::class)->encode((int) $campaign->user_id),
+                'campaignCode' => $campaign->code,
             ])->render(),
         ]);
     }

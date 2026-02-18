@@ -8,19 +8,26 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('conversion_goals', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno da meta de conversão
-            $table->bigIncrements('id');
+            $table->id();
 
             // IDs relacionais
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('timezone_id');
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
+            $table->foreignId('timezone_id')
+                ->constrained('timezones');
 
             // Identificadores e credenciais da meta
             $table->string('user_slug_id', 32);
             $table->string('googleads_password', 25);
 
             // Código único da meta de conversão por usuário
-            $table->string('goal_code',60);
+            $table->string('goal_code', 30);
 
             // Controle de ativação da meta
             $table->boolean('active')->default(true);
@@ -38,14 +45,6 @@ return new class extends Migration {
             $table->index('goal_code');
             $table->unique(['user_id', 'goal_code']);
 
-            // Integridade referencial
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
-            $table->foreign('timezone_id')
-                ->references('id')
-                ->on('timezones');
         });
     }
 

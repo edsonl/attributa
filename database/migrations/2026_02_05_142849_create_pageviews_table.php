@@ -8,11 +8,17 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('pageviews', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno da visita
             $table->id();
 
             // IDs relacionais
-            $table->unsignedBigInteger('user_id');
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
             $table->foreignId('campaign_id')
                 ->nullable()
                 ->constrained('campaigns')
@@ -34,14 +40,14 @@ return new class extends Migration {
                 ->constrained('ip_categories')
                 ->nullOnDelete();
 
-            // vínculo com a campanha (via code)
-            $table->string('campaign_code', 20)->index();
+            // vínculo com a campanha (via hashid code)
+            $table->string('campaign_code', 32)->index();
 
             // dados da visita
             $table->text('url');
             $table->text('landing_url')->nullable();
             $table->text('referrer')->nullable();
-            $table->string('user_agent')->nullable();
+            $table->text('user_agent')->nullable();
 
             // dados de aquisição e identificação de tráfego
             $table->string('utm_source')->nullable();
@@ -51,7 +57,7 @@ return new class extends Migration {
             $table->string('utm_content')->nullable();
 
             // GCLID capturado na visita
-            $table->string('gclid', 255)->nullable();
+            $table->string('gclid', 150)->nullable();
             // Identificador de campanha do Google Ads
             $table->string('gad_campaignid')->nullable();
             $table->string('fbclid')->nullable();
@@ -82,7 +88,7 @@ return new class extends Migration {
             $table->string('language', 20)->nullable();
 
             // dados técnicos
-            $table->ipAddress('ip')->nullable();
+            $table->string('ip', 45)->nullable();
 
             // Código do país no padrão ISO2
             $table->string('country_code', 2)->nullable()->index();
@@ -115,11 +121,10 @@ return new class extends Migration {
             $table->index('browser_id');
             $table->index('utm_source');
             $table->index('utm_medium');
+            $table->index('campaign_id');
+            $table->index('gclid');
+            $table->index('created_at');
 
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
         });
     }
 

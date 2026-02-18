@@ -9,9 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('countries', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
 
             // ID interno do país
-            $table->bigIncrements('id');
+            $table->id();
 
             // Código ISO 2 do país (ex: BR, US, IT)
             $table->char('iso2', 2)->index();

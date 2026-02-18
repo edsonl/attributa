@@ -26,14 +26,15 @@ class DatabaseSeeder extends Seeder
             TestCampaignSeeder::class,
             TestPageviewsSeeder::class,
             TestAdsConversionsSeeder::class,
+            TestConversionGoalLogsSeeder::class,
         ]);
 
-        if (app()->environment('local')) {
-            $this->call([
-                TestCampaignSeeder::class,
-                TestPageviewsSeeder::class,
-                TestAdsConversionsSeeder::class,
-            ]);
-        }
+        //if (app()->environment('local')) {
+            //$this->call([
+            //    TestCampaignSeeder::class,
+            //    TestPageviewsSeeder::class,
+            //    TestAdsConversionsSeeder::class,
+            //]);
+        //}
     }
 }

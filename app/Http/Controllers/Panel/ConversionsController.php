@@ -76,6 +76,10 @@ class ConversionsController extends Controller
         $tz = 'America/Sao_Paulo';
 
         $paginator->getCollection()->transform(function ($row) use ($tz) {
+            $statusRaw = $row->getRawOriginal('google_upload_status');
+            $row->google_upload_status_slug = AdsConversion::googleUploadStatusLabel($statusRaw);
+            $row->google_upload_status_label = AdsConversion::googleUploadStatusDisplayLabel($statusRaw);
+
             $row->conversion_event_time_formatted = $row->conversion_event_time
                 ? Carbon::parse($row->conversion_event_time, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;

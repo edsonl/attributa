@@ -8,7 +8,6 @@ use App\Models\AffiliatePlatform;
 use App\Models\CampaignStatus;
 use App\Models\ConversionGoal;
 use App\Models\Timezone;
-use App\Services\GenerateCampaignCode;
 use Illuminate\Database\Seeder;
 
 class TestCampaignSeeder extends Seeder
@@ -87,29 +86,6 @@ class TestCampaignSeeder extends Seeder
         $campaign->external_campaign_id = self::TEST_EXTERNAL_CAMPAIGN_ID;
         $campaign->commission_value = 1.00;
         $campaign->timezone = 'America/Sao_Paulo';
-
-        // Garante padrão CMP-XX-... mesmo quando o registro já existe de execuções antigas.
-        if (!preg_match('/^CMP-[A-Z]{2}-[A-Z0-9]+$/', (string) $campaign->code)) {
-            $normalized = trim((string) preg_replace('/[^A-Za-z]+/', ' ', (string) $channel->name));
-            $channelCode = 'XX';
-            if ($normalized !== '') {
-                $words = preg_split('/\s+/', $normalized) ?: [];
-                if (count($words) >= 2) {
-                    $channelCode = strtoupper(substr((string) $words[0], 0, 1) . substr((string) $words[1], 0, 1));
-                } else {
-                    $channelCode = strtoupper(substr((string) ($words[0] ?? ''), 0, 2));
-                }
-
-                $channelCode = preg_replace('/[^A-Z]/', '', (string) $channelCode) ?? 'XX';
-                if (strlen($channelCode) < 2) {
-                    $channelCode = str_pad($channelCode, 2, 'X');
-                }
-
-                $channelCode = substr($channelCode, 0, 2);
-            }
-
-            $campaign->code = app(GenerateCampaignCode::class)->generate($channelCode);
-        }
 
         $campaign->save();
     }

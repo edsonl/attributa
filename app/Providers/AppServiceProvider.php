@@ -25,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Mantido ativo para compatibilidade com limites de índice do ambiente atual
+        // (evita "Specified key was too long" com utf8mb4 em chaves primárias/índices).
         Schema::defaultStringLength(191);
 
         Vite::useBuildDirectory('dist');

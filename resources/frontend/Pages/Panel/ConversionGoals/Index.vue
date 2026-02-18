@@ -358,6 +358,32 @@ async function deleteCurrentGoalLogs() {
         }
     })
 }
+
+function logStatusDotClass(status) {
+    if (status === 'success') {
+        return 'tw-bg-emerald-500'
+    }
+    if (status === 'warning') {
+        return 'tw-bg-amber-500'
+    }
+    if (status === 'error') {
+        return 'tw-bg-rose-500'
+    }
+    return 'tw-bg-slate-400'
+}
+
+function logStatusTitle(status) {
+    if (status === 'success') {
+        return 'Sucesso'
+    }
+    if (status === 'warning') {
+        return 'Atenção'
+    }
+    if (status === 'error') {
+        return 'Erro'
+    }
+    return 'Informação'
+}
 </script>
 
 <template>
@@ -615,7 +641,20 @@ async function deleteCurrentGoalLogs() {
                         :pagination-label="qTableLangPt.pagination"
                         binary-state-sort
                         @request="onLogsRequest"
-                    />
+                    >
+                        <template #body-cell-message="props">
+                            <q-td :props="props">
+                                <div class="tw-flex tw-items-center tw-gap-2">
+                                    <span
+                                        class="tw-inline-block tw-h-2.5 tw-w-2.5 tw-rounded-full"
+                                        :class="logStatusDotClass(props.row.status)"
+                                        :title="logStatusTitle(props.row.status)"
+                                    />
+                                    <span>{{ props.row.message }}</span>
+                                </div>
+                            </q-td>
+                        </template>
+                    </q-table>
                 </q-card-section>
             </q-card>
         </q-dialog>

@@ -18,6 +18,9 @@ class ConversionCallbackController extends Controller
         $log->info('CALLBACK RAW', $request->query());
 
         $campaignCode = null;
+        $userCode = null;
+        $userIdFromToken = null;
+        $campaignIdFromToken = null;
         $pageviewId = null;
         $pageviewToken = null;
 
@@ -35,32 +38,32 @@ class ConversionCallbackController extends Controller
                 continue;
             }
 
-            /**
-             * Formato esperado:
-             * CMP-GO-01KH6EF278-0xAbCd12 (novo hash)
-             *
-             * Banco salva:
-             * CMP-GO-01KH6EF278
-             */
-            if (preg_match('/^(CMP-[A-Z]{2}-[A-Z0-9]+)-([A-Za-z0-9]+)$/i', trim((string) $sub), $matches)) {
-                $campaignCode = strtoupper($matches[1]);
-                $pageviewToken = (string) $matches[2];
+            $parts = explode('-', trim((string) $sub), 3);
+            if (count($parts) === 3) {
+                [$userCode, $campaignCode, $pageviewToken] = $parts;
+                $userIdFromToken = $this->resolveUserIdFromToken($userCode);
+                $campaignIdFromToken = $this->resolveCampaignIdFromToken($campaignCode);
                 $pageviewId = $this->resolvePageviewIdFromToken($pageviewToken);
 
                 $log->info('SUB MATCH', [
                     'source_field'   => $subField,
                     'sub'           => $sub,
+                    'user_code'     => $userCode,
+                    'user_id'       => $userIdFromToken,
                     'campaign_code' => $campaignCode,
+                    'campaign_id'   => $campaignIdFromToken,
                     'pageview_token'=> $pageviewToken,
                     'pageview_id'   => $pageviewId,
                 ]);
 
-                break;
+                if ($userIdFromToken && $campaignIdFromToken && $pageviewId) {
+                    break;
+                }
             }
         }
 
-        if (!$campaignCode || !$pageviewId) {
-            $log->warning('Código CMP inválido', [
+        if (!$userIdFromToken || !$campaignIdFromToken || !$pageviewId) {
+            $log->warning('Código composto inválido', [
                 'query' => $request->query()
             ]);
             return 'ignored';
@@ -68,6 +71,8 @@ class ConversionCallbackController extends Controller
 
         // 🔎 Buscar campanha
         $campaign = Campaign::with('conversionGoal')
+            ->where('id', $campaignIdFromToken)
+            ->where('user_id', $userIdFromToken)
             ->where('code', $campaignCode)
             ->first();
 
@@ -97,6 +102,16 @@ class ConversionCallbackController extends Controller
                 'callback_campaign_id' => $campaign->id,
                 'callback_campaign_code' => $campaignCode,
                 'pageview_campaign_code' => $pageview->campaign_code,
+            ]);
+            return 'ignored';
+        }
+
+        if ((int) $pageview->user_id !== (int) $campaign->user_id) {
+            $log->warning('Pageview não pertence ao usuário da campanha do callback', [
+                'pageview_id' => $pageview->id,
+                'pageview_user_id' => $pageview->user_id,
+                'campaign_user_id' => $campaign->user_id,
+                'user_code' => $userCode,
             ]);
             return 'ignored';
         }
@@ -138,7 +153,7 @@ class ConversionCallbackController extends Controller
             'conversion_value'      => (float) $request->query('amount', 1.00),
             'currency_code'         => $request->query('cy', 'USD'),
             'conversion_event_time' => now(),
-            'google_upload_status'  => 'pending',
+            'google_upload_status'  => AdsConversion::STATUS_PENDING,
         ]);
 
         $log->info('Conversão criada', [
@@ -149,6 +164,26 @@ class ConversionCallbackController extends Controller
     }
 
     protected function resolvePageviewIdFromToken(string $token): ?int
+    {
+        $value = trim($token);
+        if ($value === '') {
+            return null;
+        }
+
+        return app(HashidService::class)->decode($value);
+    }
+
+    protected function resolveCampaignIdFromToken(string $token): ?int
+    {
+        $value = trim($token);
+        if ($value === '') {
+            return null;
+        }
+
+        return app(HashidService::class)->decode($value);
+    }
+
+    protected function resolveUserIdFromToken(string $token): ?int
     {
         $value = trim($token);
         if ($value === '') {

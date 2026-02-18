@@ -18,7 +18,7 @@ class StoreConversionGoalRequest extends FormRequest
             'goal_code' => [
                 'required',
                 'string',
-                'max:60',
+                'max:30',
                 'regex:/^[A-Za-z0-9_-]+$/',
                 Rule::unique('conversion_goals', 'goal_code')
                     ->where(fn ($query) => $query->where('user_id', (int) $this->user()?->id)),
@@ -39,7 +39,7 @@ class StoreConversionGoalRequest extends FormRequest
     {
         return [
             'goal_code.required' => 'O código da meta de conversão é obrigatório.',
-            'goal_code.max' => 'O código da meta de conversão não pode ter mais de 60 caracteres.',
+            'goal_code.max' => 'O código da meta de conversão não pode ter mais de 30 caracteres.',
             'goal_code.regex' => 'Use apenas letras, números, hífen e underscore (sem espaços, acentos ou caracteres especiais).',
             'goal_code.unique' => 'Este código já está cadastrado para o seu usuário.',
             'timezone_id.required' => 'O timezone da meta de conversão é obrigatório.',

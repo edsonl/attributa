@@ -9,20 +9,28 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('ads_conversions', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno da conversão
-            $table->bigIncrements('id');
+            $table->id();
 
             // IDs relacionais da conversão
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('campaign_id');
-            $table->unsignedBigInteger('pageview_id');
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
+            $table->foreignId('campaign_id')
+                ->constrained('campaigns');
+            $table->foreignId('pageview_id')
+                ->constrained('pageviews');
 
             // Data/hora do evento de conversão
             $table->dateTime('conversion_event_time')
                 ->default(DB::raw('CURRENT_TIMESTAMP'));
 
             // GCLID associado à conversão
-            $table->string('gclid', 255)->nullable();
+            $table->string('gclid', 150)->nullable();
 
             // Nome da ação/conversão enviada
             $table->string('conversion_name')->nullable();
@@ -36,8 +44,9 @@ return new class extends Migration {
                 ->default('USD');
 
             // Status de envio da conversão para Google Ads
-            $table->enum('google_upload_status', ['pending','processing','prossecing','success','exported','error'])
-                ->default('pending');
+            $table->unsignedTinyInteger('google_upload_status')
+                ->default(0)
+                ->comment('0=pending,1=processing,2=processing_export,3=success,4=exported,5=error');
 
             // Data/hora do último envio ao Google
             $table->dateTime('google_uploaded_at')->nullable();
@@ -50,11 +59,9 @@ return new class extends Migration {
             // Índice para filtros por nome de conversão
             $table->index('user_id');
             $table->index('conversion_name');
-
-            // Integridade referencial da conversão
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('pageview_id')->references('id')->on('pageviews');
-            $table->foreign('campaign_id')->references('id')->on('campaigns');
+            $table->index('campaign_id');
+            $table->index('gclid');
+            $table->index('created_at');
         });
 
     }

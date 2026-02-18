@@ -31,9 +31,14 @@ class ActivityController extends Controller
      */
     public function data(Request $request)
     {
+        $validated = $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
         $userId = (int) auth()->id();
         $perPage    = (int) $request->get('per_page', 20);
-        $perPage    = min(max($perPage, 5), 100);
+        $perPage    = min(max($perPage, 5), 50);
         $sortBy     = $request->get('sortBy', 'created_at');
         $descending = filter_var($request->get('descending', true), FILTER_VALIDATE_BOOLEAN);
 
@@ -97,6 +102,23 @@ class ActivityController extends Controller
 
         if ($request->filled('campaign_id')) {
             $query->where('pageviews.campaign_id', $request->campaign_id);
+        }
+
+        // Filtro de período no timezone da operação (America/Sao_Paulo), convertido para UTC na consulta.
+        $dateFrom = $validated['date_from'] ?? null;
+        $dateTo = $validated['date_to'] ?? null;
+        $filterTimezone = 'America/Sao_Paulo';
+
+        if ($dateFrom && $dateTo) {
+            $startUtc = Carbon::createFromFormat('Y-m-d', $dateFrom, $filterTimezone)->startOfDay()->setTimezone('UTC');
+            $endUtc = Carbon::createFromFormat('Y-m-d', $dateTo, $filterTimezone)->endOfDay()->setTimezone('UTC');
+            $query->whereBetween('pageviews.created_at', [$startUtc, $endUtc]);
+        } elseif ($dateFrom) {
+            $startUtc = Carbon::createFromFormat('Y-m-d', $dateFrom, $filterTimezone)->startOfDay()->setTimezone('UTC');
+            $query->where('pageviews.created_at', '>=', $startUtc);
+        } elseif ($dateTo) {
+            $endUtc = Carbon::createFromFormat('Y-m-d', $dateTo, $filterTimezone)->endOfDay()->setTimezone('UTC');
+            $query->where('pageviews.created_at', '<=', $endUtc);
         }
 
         $paginator = $query->paginate($perPage);
@@ -296,12 +318,13 @@ class ActivityController extends Controller
     protected function buildComposedCode(Pageview $pageview): ?string
     {
         $campaignCode = trim((string) ($pageview->campaign_code ?: $pageview->campaign?->code));
-        if ($campaignCode === '') {
+        if ($campaignCode === '' || empty($pageview->user_id)) {
             return null;
         }
 
+        $userCode = app(HashidService::class)->encode((int) $pageview->user_id);
         $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
 
-        return $campaignCode . '-' . $pageviewCode;
+        return $userCode . '-' . $campaignCode . '-' . $pageviewCode;
     }
 }

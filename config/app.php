@@ -129,7 +129,14 @@ return [
         'min_length' => (int) env('HASHIDS_MIN_LENGTH',12),
     ],
 
-    'conversions_processing_to_exported_hours' => (int) env('CONVERSIONS_PROCESSING_TO_EXPORTED_HOURS', 1),
-    'conversion_goal_logs_retention_days' => (int) env('CONVERSION_GOAL_LOGS_RETENTION_DAYS', 10),
+    // Assinatura HMAC do collect tracking (anti-tampering).
+    // Fixo por enquanto: em produção, mover para variável secreta.
+    'tracking_signature_secret' => 'f3K9pQ2mL8xT7vR1nW6zC4bY0dH5jS8u',
+    // Janela máxima de validade da assinatura (em segundos).
+    'tracking_signature_window_seconds' => 300,
+    // TTL do nonce anti-replay no cache (em segundos).
+    'tracking_nonce_ttl_seconds' => 300,
+
+    'conversion_goal_logs_retention_days' => 10,
 
 ];

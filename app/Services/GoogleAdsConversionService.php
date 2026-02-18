@@ -20,7 +20,7 @@ class GoogleAdsConversionService
     public function send(AdsConversion $conversion): void
     {
         // 🔒 Segurança: só envia se estiver pendente
-        if ($conversion->google_upload_status !== 'pending') {
+        if (AdsConversion::normalizeGoogleUploadStatus($conversion->getRawOriginal('google_upload_status')) !== AdsConversion::STATUS_PENDING) {
             Log::channel('google_ads')->info('Google Ads Upload SKIPPED (status != pending)', [
                 'conversion_id' => $conversion->id,
                 'status'        => $conversion->google_upload_status,
@@ -37,7 +37,7 @@ class GoogleAdsConversionService
             ]);
 
             $conversion->update([
-                'google_upload_status' => 'error',
+                'google_upload_status' => AdsConversion::STATUS_ERROR,
                 'google_upload_error'  => 'Campanha ou conta Google Ads não encontrada',
             ]);
             return;
@@ -126,7 +126,7 @@ class GoogleAdsConversionService
             ]);
 
             $conversion->update([
-                'google_upload_status' => 'success',
+                'google_upload_status' => AdsConversion::STATUS_SUCCESS,
                 'google_uploaded_at'   => now(),
                 'google_upload_error'  => null,
             ]);
@@ -145,7 +145,7 @@ class GoogleAdsConversionService
             ]);
 
             $conversion->update([
-                'google_upload_status' => 'error',
+                'google_upload_status' => AdsConversion::STATUS_ERROR,
                 'google_upload_error'  => Str::limit($e->getMessage(), 1000),
             ]);
         }

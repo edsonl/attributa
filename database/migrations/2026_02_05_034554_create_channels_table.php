@@ -9,9 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('channels', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
 
             // ID interno do canal
-            $table->increments('id');
+            $table->id();
 
             // Nome legível do canal (ex: Google Ads, Meta Ads, WhatsApp)
             $table->string('name');

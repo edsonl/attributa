@@ -26,8 +26,8 @@ class AccountController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'name'     => ['required', 'string', 'max:191'],
+            'email'    => ['required', 'email', 'max:191', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
         ]);
 

@@ -29,11 +29,11 @@ class TrafficSourceCategoryRequest extends FormRequest
         $trafficSourceCategoryId = $this->route('traffic_source_category')?->id;
 
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:191'],
             'slug' => [
                 'required',
                 'string',
-                'max:255',
+                'max:191',
                 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('traffic_source_categories', 'slug')->ignore($trafficSourceCategoryId),
             ],

@@ -12,11 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('google_ads_accounts', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno da conta conectada
-            $table->bigIncrements('id');
+            $table->id();
 
             // Dono da conta dentro do Attributa
-            $table->unsignedBigInteger('user_id');
+            $table->foreignId('user_id')
+                ->constrained()
+                ->cascadeOnDelete();
 
             // ID da conta Google Ads (ex: 123-456-7890)
             $table->string('google_ads_customer_id', 32);
@@ -39,11 +45,6 @@ return new class extends Migration
             $table->unique(['user_id', 'google_ads_customer_id']);
             $table->index('google_ads_customer_id');
 
-            // FK
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
         });
     }
 

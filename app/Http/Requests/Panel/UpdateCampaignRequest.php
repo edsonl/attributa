@@ -29,13 +29,13 @@ class UpdateCampaignRequest extends FormRequest
             'name' => [
                 'required',
                 'string',
-                'max:255',
+                'max:191',
             ],
 
             'product_url' => [
                 'required',
                 'string',
-                'max:500',
+                'max:255',
                 function (string $attribute, mixed $value, \Closure $fail) {
                     if (Campaign::normalizeProductUrl((string) $value) === null) {
                         $fail('Informe uma URL válida com http:// ou https://.');
@@ -100,9 +100,9 @@ class UpdateCampaignRequest extends FormRequest
     {
         return [
             'name.required' => 'O nome da campanha é obrigatório.',
-            'name.max' => 'O nome da campanha não pode ter mais de 255 caracteres.',
+            'name.max' => 'O nome da campanha não pode ter mais de 191 caracteres.',
             'product_url.required' => 'A URL do produto é obrigatória.',
-            'product_url.max' => 'A URL do produto não pode ter mais de 500 caracteres.',
+            'product_url.max' => 'A URL do produto não pode ter mais de 255 caracteres.',
 
             'conversion_goal_id.exists' => 'A meta de conversão selecionada é inválida.',
 

@@ -9,27 +9,31 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('conversion_goal_logs', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno do log
-            $table->bigIncrements('id');
+            $table->id();
 
             // ID da meta de conversão relacionada
-            $table->unsignedBigInteger('goal_id');
+            $table->foreignId('goal_id')
+                ->constrained('conversion_goals')
+                ->cascadeOnDelete();
 
             // Mensagem curta do evento registrado
             $table->string('message', 255);
+            // Status visual do log (usado para bolinha de cor na tela)
+            $table->enum('status', ['success', 'warning', 'error', 'info'])->default('info');
 
             // Timestamps padrão do Laravel
             $table->timestamps();
 
             // Índices para consulta por meta e ordenação temporal
             $table->index('goal_id');
+            $table->index('status');
             $table->index('created_at');
 
-            // Integridade referencial do log
-            $table->foreign('goal_id')
-                ->references('id')
-                ->on('conversion_goals')
-                ->onDelete('cascade');
         });
     }
 

@@ -145,6 +145,12 @@ return [
             'level' => 'info',
         ],
 
+        'tracking_gclid_alert' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/tracking-gclid-alert.log'),
+            'level' => 'warning',
+        ],
+
     ],
 
 ];

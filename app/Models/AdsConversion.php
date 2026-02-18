@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Carbon;
 
 class AdsConversion extends Model
@@ -11,6 +12,40 @@ class AdsConversion extends Model
     use HasFactory;
 
     protected $table = 'ads_conversions';
+
+    public const STATUS_PENDING = 0;
+    public const STATUS_PROCESSING = 1;
+    public const STATUS_PROCESSING_EXPORT = 2;
+    public const STATUS_SUCCESS = 3;
+    public const STATUS_EXPORTED = 4;
+    public const STATUS_ERROR = 5;
+
+    public const STATUS_BY_LABEL = [
+        'pending' => self::STATUS_PENDING,
+        'processing' => self::STATUS_PROCESSING,
+        'processing_export' => self::STATUS_PROCESSING_EXPORT,
+        'success' => self::STATUS_SUCCESS,
+        'exported' => self::STATUS_EXPORTED,
+        'error' => self::STATUS_ERROR,
+    ];
+
+    public const LABEL_BY_STATUS = [
+        self::STATUS_PENDING => 'pending',
+        self::STATUS_PROCESSING => 'processing',
+        self::STATUS_PROCESSING_EXPORT => 'processing_export',
+        self::STATUS_SUCCESS => 'success',
+        self::STATUS_EXPORTED => 'exported',
+        self::STATUS_ERROR => 'error',
+    ];
+
+    public const DISPLAY_LABEL_BY_SLUG = [
+        'pending' => 'Pendente',
+        'processing' => 'Processando',
+        'processing_export' => 'Processando',
+        'success' => 'Sucesso',
+        'exported' => 'Exportado',
+        'error' => 'Erro',
+    ];
 
     /**
      * Campos que podem ser atribuídos em massa
@@ -36,6 +71,7 @@ class AdsConversion extends Model
         'conversion_event_time' => 'datetime',
         'google_uploaded_at'    => 'datetime',
         'conversion_value'      => 'decimal:2',
+        'google_upload_status'  => 'integer',
     ];
 
     /**
@@ -44,8 +80,54 @@ class AdsConversion extends Model
     protected $attributes = [
         'conversion_value'      => 1.00,
         'currency_code'         => 'USD',
-        'google_upload_status'  => 'pending',
+        'google_upload_status'  => self::STATUS_PENDING,
     ];
+
+    protected function googleUploadStatus(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => self::googleUploadStatusLabel($value),
+            set: fn ($value) => self::normalizeGoogleUploadStatus($value),
+        );
+    }
+
+    public static function normalizeGoogleUploadStatus(int|string|null $status): int
+    {
+        if (is_int($status)) {
+            return array_key_exists($status, self::LABEL_BY_STATUS)
+                ? $status
+                : self::STATUS_PENDING;
+        }
+
+        if (is_string($status)) {
+            $normalized = strtolower(trim($status));
+
+            if (array_key_exists($normalized, self::STATUS_BY_LABEL)) {
+                return self::STATUS_BY_LABEL[$normalized];
+            }
+
+            if (is_numeric($normalized)) {
+                $numeric = (int) $normalized;
+                return array_key_exists($numeric, self::LABEL_BY_STATUS)
+                    ? $numeric
+                    : self::STATUS_PENDING;
+            }
+        }
+
+        return self::STATUS_PENDING;
+    }
+
+    public static function googleUploadStatusLabel(int|string|null $status): string
+    {
+        $normalized = self::normalizeGoogleUploadStatus($status);
+        return self::LABEL_BY_STATUS[$normalized] ?? 'pending';
+    }
+
+    public static function googleUploadStatusDisplayLabel(int|string|null $status): string
+    {
+        $slug = self::googleUploadStatusLabel($status);
+        return self::DISPLAY_LABEL_BY_SLUG[$slug] ?? ucfirst($slug);
+    }
 
     /* =====================================================
      | Relationships
@@ -71,7 +153,7 @@ class AdsConversion extends Model
     public function scopePendingGoogleUpload($query)
     {
         return $query
-            ->where('google_upload_status', 'pending')
+            ->where('google_upload_status', self::STATUS_PENDING)
             ->whereNotNull('gclid');
     }
 
@@ -80,7 +162,7 @@ class AdsConversion extends Model
      */
     public function scopeGoogleUploaded($query)
     {
-        return $query->where('google_upload_status', 'success');
+        return $query->where('google_upload_status', self::STATUS_SUCCESS);
     }
 
     /**
@@ -88,7 +170,7 @@ class AdsConversion extends Model
      */
     public function scopeGoogleUploadError($query)
     {
-        return $query->where('google_upload_status', 'error');
+        return $query->where('google_upload_status', self::STATUS_ERROR);
     }
 
     /* =====================================================
@@ -101,7 +183,7 @@ class AdsConversion extends Model
     public function markAsUploaded(): void
     {
         $this->update([
-            'google_upload_status' => 'success',
+            'google_upload_status' => self::STATUS_SUCCESS,
             'google_uploaded_at'   => now(),
             'google_upload_error'  => null,
         ]);
@@ -113,7 +195,7 @@ class AdsConversion extends Model
     public function markAsUploadError(string $error): void
     {
         $this->update([
-            'google_upload_status' => 'error',
+            'google_upload_status' => self::STATUS_ERROR,
             'google_upload_error'  => $error,
         ]);
     }
@@ -133,7 +215,7 @@ class AdsConversion extends Model
      */
     public function canBeUploadedToGoogle(): bool
     {
-        return $this->google_upload_status === 'pending'
+        return self::normalizeGoogleUploadStatus($this->getRawOriginal('google_upload_status')) === self::STATUS_PENDING
             && !empty($this->gclid)
             && !empty($this->conversion_event_time);
     }

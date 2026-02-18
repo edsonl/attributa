@@ -7,57 +7,96 @@ use App\Models\ConversionGoalLog;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use App\Models\AdsConversion;
+use Illuminate\Support\Facades\Log;
 
 class GoogleAdsConversionsController extends Controller
 {
     public function goalExport(Request $request, string $userSlugId, string $goalCode)
     {
+        $normalizedGoalCode = trim($goalCode);
+
         // Resolve a meta diretamente pelos segmentos da URL de integração.
         $goal = ConversionGoal::query()
             ->with('timezone:id,identifier')
             ->where('user_slug_id', $userSlugId)
-            ->where('goal_code', strtoupper(trim($goalCode)))
+            ->where('goal_code', $normalizedGoalCode)
             ->first();
 
         if (!$goal) {
+
+            $hasUserSlugParam = trim($userSlugId) !== '';
+            $hasGoalCodeParam = trim($goalCode) !== '';
+            $userSlugLooksValid = (bool) preg_match('/^[A-Za-z0-9]+$/', $userSlugId);
+            $goalCodeLooksValid = (bool) preg_match('/^[A-Za-z0-9_-]{1,30}$/', $goalCode);
+
+            $slugExists = ConversionGoal::query()
+                ->where('user_slug_id', $userSlugId)
+                ->exists();
+
+            if ($hasUserSlugParam && $hasGoalCodeParam && $userSlugLooksValid && $goalCodeLooksValid && $slugExists) {
+                $goalForUserLog = ConversionGoal::query()
+                    ->where('user_slug_id', $userSlugId)
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($goalForUserLog) {
+                    $this->writeGoalLog(
+                        $goalForUserLog,
+                        'Verifique a URL e o nome da meta de conversão.',
+                        'warning'
+                    );
+                }
+            }
+
             return response('Not Found', 404);
         }
 
-        $this->writeGoalLog($goal, 'Requisição CSV do Google Ads recebida.');
+        $this->writeGoalLog($goal, 'Requisição CSV do Google Ads recebida.', 'info');
+        $this->writeTechnicalLog($request, $goal, 'request_received');
 
         $expectedUser = 'googleads-' . $goal->user_slug_id;
         $expectedPass = (string) $goal->googleads_password;
 
         // Basic Auth por meta (usuário/senha específicos da integração dessa meta).
-        if (!$this->authenticateBasic($request, $expectedUser, $expectedPass, $goal)) {
-            $this->writeGoalLog($goal, 'Falha na autenticação da requisição CSV.');
+        $authResult = $this->authenticateBasic($request, $expectedUser, $expectedPass, $goal);
+        if ($authResult !== 'success') {
+            if ($authResult === 'missing_header') {
+                $this->writeGoalLog($goal, 'Teste de conexão do Google Ads concluído com sucesso.', 'success');
+                $this->writeTechnicalLog($request, $goal, 'connection_test_ok', 'info', [
+                    'auth_result' => $authResult,
+                ]);
+            } else {
+                $this->writeGoalLog($goal, 'Autenticação inválida na requisição CSV.', 'error');
+                $this->writeTechnicalLog($request, $goal, 'authentication_failed', 'warning', [
+                    'auth_result' => $authResult,
+                ]);
+            }
+
             return response('Unauthorized', 401, [
                 'WWW-Authenticate' => 'Basic realm="Google Ads Conversions"'
             ]);
         }
 
-        $this->writeGoalLog($goal, 'Autenticação da requisição CSV realizada com sucesso.');
+        $this->writeGoalLog($goal, 'Autenticação da requisição CSV realizada com sucesso.', 'success');
+        $this->writeTechnicalLog($request, $goal, 'authentication_success');
 
         return $this->exportConversionsByGoal($goal, $userSlugId);
     }
 
-    protected function authenticateBasic(Request $request, string $expectedUser, string $expectedPass, ?ConversionGoal $goal = null): bool
+    protected function authenticateBasic(Request $request, string $expectedUser, string $expectedPass, ?ConversionGoal $goal = null): string
     {
         $authHeader = $request->header('Authorization');
 
         if (!$authHeader || !str_starts_with($authHeader, 'Basic ')) {
-            if ($goal) {
-                $this->writeGoalLog($goal, 'Header Authorization ausente ou inválido.');
-            }
-            return false;
+            return 'missing_header';
         }
 
         $decoded = base64_decode(substr($authHeader, 6));
         if (!str_contains((string) $decoded, ':')) {
             if ($goal) {
-                $this->writeGoalLog($goal, 'Formato de Basic Auth inválido.');
+                $this->writeGoalLog($goal, 'Formato de autenticação inválido na requisição CSV.', 'error');
             }
-            return false;
+            return 'invalid_format';
         }
 
         [$user, $pass] = explode(':', $decoded, 2);
@@ -65,12 +104,12 @@ class GoogleAdsConversionsController extends Controller
         // Garante que a credencial usada pertence à URL/Meta solicitada.
         if ($user !== $expectedUser || $pass !== $expectedPass) {
             if ($goal) {
-                $this->writeGoalLog($goal, 'Credenciais inválidas para requisição CSV.');
+                $this->writeGoalLog($goal, 'Credenciais inválidas na requisição CSV.', 'error');
             }
-            return false;
+            return 'invalid_credentials';
         }
 
-        return true;
+        return 'success';
     }
 
     protected function exportConversionsByGoal(ConversionGoal $goal, string $userSlugId)
@@ -87,7 +126,11 @@ class GoogleAdsConversionsController extends Controller
             ->where('conversion_goals.id', $goal->id)
             ->where('conversion_goals.user_slug_id', $userSlugId)
             ->where('conversion_goals.goal_code', $goal->goal_code)
-            //->where('google_upload_status', 'pending')
+            ->whereIn('ads_conversions.google_upload_status', [
+                AdsConversion::STATUS_PENDING,
+                AdsConversion::STATUS_PROCESSING,
+                AdsConversion::STATUS_PROCESSING_EXPORT,
+            ])
             ->whereNotNull('ads_conversions.gclid')
             ->whereNotNull('ads_conversions.conversion_name')
             ->whereNotNull('ads_conversions.conversion_event_time')
@@ -98,7 +141,8 @@ class GoogleAdsConversionsController extends Controller
 
         $this->writeGoalLog(
             $goal,
-            'Conversões encontradas: ' . $conversions->count() . ' registro(s).'
+            'Conversões encontradas: ' . $conversions->count() . ' registro(s).',
+            'info'
         );
 
         return $this->buildCsvAndMark($conversions, $timezoneIdentifier, $goal);
@@ -144,25 +188,30 @@ class GoogleAdsConversionsController extends Controller
         if ($goal) {
             $this->writeGoalLog(
                 $goal,
-                'CSV gerado (' . strlen((string) $csv) . ' bytes, timezone ' . $timezoneIdentifier . ').'
+                'CSV gerado (' . strlen((string) $csv) . ' bytes, timezone ' . $timezoneIdentifier . ').',
+                'success'
             );
         }
 
         if (!empty($ids)) {
             // Após exportar o lote, marca os registros para evitar reexportação imediata.
-            //AdsConversion::whereIn('id', $ids)->update([
-            //    'google_upload_status' => 'prossecing',
-            //    'google_uploaded_at'   => now(),
-            //]);
+            $updated = AdsConversion::query()
+                ->whereIn('id', $ids)
+                ->where('google_upload_status', AdsConversion::STATUS_PENDING)
+                ->update([
+                'google_upload_status' => AdsConversion::STATUS_PROCESSING_EXPORT,
+                'google_uploaded_at'   => now(),
+            ]);
 
             if ($goal) {
-                /*$this->writeGoalLog(
+                $this->writeGoalLog(
                     $goal,
-                    'Conversões marcadas como prossecing: ' . count($ids) . ' item(ns).'
-                );*/
+                    'Conversões marcadas como processing_export: ' . $updated . ' item(ns).',
+                    'success'
+                );
             }
         } elseif ($goal) {
-            $this->writeGoalLog($goal, 'Nenhuma conversão para marcar como prossecing.');
+            $this->writeGoalLog($goal, 'Nenhuma conversão disponível para marcação de processamento.', 'info');
         }
 
         return response($csv, 200, [
@@ -171,11 +220,65 @@ class GoogleAdsConversionsController extends Controller
         ]);
     }
 
-    protected function writeGoalLog(ConversionGoal $goal, string $message): void
+    protected function writeGoalLog(ConversionGoal $goal, string $message, string $status = 'info'): void
     {
+        $allowedStatuses = ['success', 'warning', 'error', 'info'];
+        $normalizedStatus = in_array($status, $allowedStatuses, true) ? $status : 'info';
+
         ConversionGoalLog::query()->create([
             'goal_id' => $goal->id,
             'message' => mb_substr($message, 0, 255),
+            'status' => $normalizedStatus,
         ]);
+
+        Log::channel('google_ads_https')->info('Google Ads goal log', [
+            'goal_id' => $goal->id,
+            'user_slug_id' => $goal->user_slug_id,
+            'goal_code' => $goal->goal_code,
+            'message' => mb_substr($message, 0, 255),
+            'status' => $normalizedStatus,
+        ]);
+    }
+
+    protected function writeTechnicalLog(
+        Request $request,
+        ?ConversionGoal $goal,
+        string $event,
+        string $level = 'info',
+        array $extra = []
+    ): void {
+        $authHeader = (string) $request->header('Authorization', '');
+        $authorization = [
+            'present' => $authHeader !== '',
+            'scheme' => str_starts_with($authHeader, 'Basic ') ? 'Basic' : ($authHeader === '' ? null : 'other'),
+        ];
+
+        $headers = collect($request->headers->all())
+            ->map(function ($values, $key) {
+                $sensitive = ['authorization', 'cookie', 'x-api-key', 'x-auth-token'];
+                if (in_array(strtolower((string) $key), $sensitive, true)) {
+                    return ['[REDACTED]'];
+                }
+
+                return $values;
+            })
+            ->toArray();
+
+        $context = array_merge([
+            'event' => $event,
+            'goal_id' => $goal?->id,
+            'user_slug_id' => $goal?->user_slug_id,
+            'goal_code' => $goal?->goal_code,
+            'method' => $request->getMethod(),
+            'path' => $request->path(),
+            'full_url' => $request->fullUrl(),
+            'query' => $request->query(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'authorization' => $authorization,
+            'headers' => $headers,
+        ], $extra);
+
+        Log::channel('google_ads_https')->log($level, 'Google Ads HTTPS callback', $context);
     }
 }

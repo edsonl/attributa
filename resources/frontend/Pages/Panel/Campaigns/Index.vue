@@ -489,7 +489,7 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
     </div>
 
     <q-dialog v-model="showTrackingDialog">
-        <q-card style="min-width: 720px; max-width: 95vw; min-height: 450px;">
+        <q-card style="min-width: 750px; max-width: 95vw; min-height: 450px;">
             <q-card-section class="tw-flex tw-justify-between tw-items-center">
                 <div class="tw-text-lg tw-font-semibold">
                     Código de acompanhamento

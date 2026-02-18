@@ -55,14 +55,24 @@ function resolveCountryFlag(row) {
 }
 
 function normalizeStatus(value) {
-    return String(value ?? '').trim().toLowerCase()
+    const raw = String(value ?? '').trim().toLowerCase()
+    const byCode = {
+        '0': 'pending',
+        '1': 'processing',
+        '2': 'processing_export',
+        '3': 'success',
+        '4': 'exported',
+        '5': 'error',
+    }
+
+    return byCode[raw] ?? raw
 }
 
 function statusBadgeColor(value) {
     const status = normalizeStatus(value)
 
     if (status === 'exported' || status === 'success') return 'positive'
-    if (status === 'prossecing' || status === 'processing') return 'warning'
+    if (status === 'processing_export' || status === 'processing') return 'warning'
     if (status === 'pending') return 'grey-6'
     if (status === 'error' || status === 'failed') return 'negative'
     return 'primary'
@@ -72,7 +82,7 @@ function statusBadgeLabel(value) {
     const status = normalizeStatus(value)
 
     if (status === 'exported') return 'Exportado'
-    if (status === 'prossecing' || status === 'processing') return 'Processando'
+    if (status === 'processing_export' || status === 'processing') return 'Processando'
     if (status === 'pending') return 'Pendente'
     if (status === 'error' || status === 'failed') return 'Erro'
     if (status === 'success') return 'Sucesso'
@@ -235,7 +245,10 @@ onMounted(() => {
 
             <template #body-cell-google_upload_status="props">
                 <q-td :props="props">
-                    <q-badge :color="statusBadgeColor(props.value)" :label="statusBadgeLabel(props.value)" />
+                    <q-badge
+                        :color="statusBadgeColor(props.row.google_upload_status_slug ?? props.value)"
+                        :label="props.row.google_upload_status_label ?? statusBadgeLabel(props.row.google_upload_status_slug ?? props.value)"
+                    />
                 </q-td>
             </template>
         </q-table>

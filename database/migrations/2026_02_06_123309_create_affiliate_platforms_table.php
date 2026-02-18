@@ -12,9 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('affiliate_platforms', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
 
            // ID interno da plataforma de afiliado
-            $table->increments('id');
+            $table->id();
 
             // Nome legível da plataforma (ex: DrCash, Hotmart)
             $table->string('name');

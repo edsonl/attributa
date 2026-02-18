@@ -58,7 +58,7 @@ class TestAdsConversionsSeeder extends Seeder
                 'conversion_value' => 1.00 + ($index * 0.25),
                 'currency_code' => 'USD',
                 'conversion_event_time' => optional($pageview->created_at)->addSeconds(30) ?? now(),
-                'google_upload_status' => 'pending',
+                'google_upload_status' => AdsConversion::STATUS_PENDING,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

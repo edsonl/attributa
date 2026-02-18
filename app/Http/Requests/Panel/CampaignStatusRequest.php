@@ -29,11 +29,11 @@ class CampaignStatusRequest extends FormRequest
         $campaignStatusId = $this->route('campaign_status')?->id;
 
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:191'],
             'slug' => [
                 'required',
                 'string',
-                'max:255',
+                'max:191',
                 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('campaign_statuses', 'slug')->ignore($campaignStatusId),
             ],
@@ -44,4 +44,3 @@ class CampaignStatusRequest extends FormRequest
         ];
     }
 }
-

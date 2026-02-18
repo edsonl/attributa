@@ -42,7 +42,7 @@ class CountryRequest extends FormRequest
                 'size:3',
                 Rule::unique('countries', 'iso3')->ignore($countryId),
             ],
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:191'],
             'currency' => ['required', 'string', 'size:3'],
             'currency_symbol' => ['nullable', 'string', 'max:5'],
             'timezone_default' => ['required', 'string', 'max:191'],
@@ -62,7 +62,7 @@ class CountryRequest extends FormRequest
             'iso3.unique' => 'Ja existe um pais com este codigo ISO3.',
 
             'name.required' => 'Informe o nome do pais.',
-            'name.max' => 'O nome pode ter no maximo 255 caracteres.',
+            'name.max' => 'O nome pode ter no maximo 191 caracteres.',
 
             'currency.required' => 'Informe a moeda padrao do pais.',
             'currency.size' => 'O codigo da moeda deve ter exatamente 3 letras.',

@@ -82,7 +82,7 @@ class ConversionGoal extends Model
 
     public function setGoalCodeAttribute($value): void
     {
-        $this->attributes['goal_code'] = strtoupper(trim((string) $value));
+        $this->attributes['goal_code'] = trim((string) $value);
     }
 
     protected function resolveHashidRouteBindingQuery(Builder $query, int $id): Builder

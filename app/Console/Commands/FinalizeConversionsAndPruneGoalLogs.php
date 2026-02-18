@@ -10,18 +10,23 @@ class FinalizeConversionsAndPruneGoalLogs extends Command
 {
     protected $signature = 'conversions:flush';
 
-    protected $description = 'Finaliza conversões prossecing antigas e remove logs antigos de metas.';
+    protected $description = 'Finaliza conversões processing_export antigas e remove logs antigos de metas.';
 
     public function handle(): int
     {
-        $processingHours = (int) config('app.conversions_processing_to_exported_hours', 1);
+        // Janela fixa de segurança antes de mover processing -> exported.
+        $processingHours = 2;
+        
         $processingCutoff = now()->subHours($processingHours);
 
         $updated = AdsConversion::query()
-            ->where('google_upload_status', 'prossecing')
+            ->whereIn('google_upload_status', [
+                AdsConversion::STATUS_PROCESSING,
+                AdsConversion::STATUS_PROCESSING_EXPORT,
+            ])
             ->where('google_uploaded_at', '<=', $processingCutoff)
             ->update([
-                'google_upload_status' => 'exported',
+                'google_upload_status' => AdsConversion::STATUS_EXPORTED,
                 'google_uploaded_at' => now(),
             ]);
 
@@ -32,7 +37,7 @@ class FinalizeConversionsAndPruneGoalLogs extends Command
             ->where('created_at', '<', $cutoff)
             ->delete();
 
-        $this->info("Conversões atualizadas para exported (mín. {$processingHours}h em prossecing): {$updated}");
+        $this->info("Conversões atualizadas para exported (mín. {$processingHours}h em processing/processing_export): {$updated}");
         $this->info("Logs removidos (mais de {$retentionDays} dias): {$deletedLogs}");
 
         return self::SUCCESS;

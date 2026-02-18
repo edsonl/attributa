@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
-use App\Services\GenerateCampaignCode;
+use App\Services\HashidService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Traits\HasHashid;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class Campaign extends Model
 {
@@ -76,41 +77,23 @@ class Campaign extends Model
     protected static function booted()
     {
         static::creating(function (Campaign $campaign) {
-            if ($campaign->code) {
+            if (!empty($campaign->code)) {
                 return;
             }
 
-            $channelCode = self::resolveChannelCode(optional($campaign->channel)->name ?? null);
-
-            $campaign->code = app(GenerateCampaignCode::class)
-                ->generate($channelCode);
+            // Código temporário curto para satisfazer NOT NULL + UNIQUE no insert inicial.
+            $campaign->code = 'TMP' . strtoupper(Str::random(17));
         });
 
-    }
+        static::created(function (Campaign $campaign) {
+            $finalCode = app(HashidService::class)->encode((int) $campaign->id);
+            if ((string) $campaign->code === $finalCode) {
+                return;
+            }
 
-    protected static function resolveChannelCode(?string $rawChannelName): string
-    {
-        $normalized = trim((string) preg_replace('/[^A-Za-z]+/', ' ', (string) $rawChannelName));
-        if ($normalized === '') {
-            return 'XX';
-        }
-
-        $words = preg_split('/\s+/', $normalized) ?: [];
-        if (count($words) >= 2) {
-            $first = strtoupper(substr((string) $words[0], 0, 1));
-            $second = strtoupper(substr((string) $words[1], 0, 1));
-            $code = $first . $second;
-        } else {
-            $word = strtoupper((string) ($words[0] ?? ''));
-            $code = substr($word, 0, 2);
-        }
-
-        $code = preg_replace('/[^A-Z]/', '', (string) $code) ?? '';
-        if (strlen($code) < 2) {
-            $code = str_pad($code, 2, 'X');
-        }
-
-        return substr($code, 0, 2);
+            $campaign->code = $finalCode;
+            $campaign->saveQuietly();
+        });
     }
 
     public static function normalizeProductUrl(?string $value): ?string

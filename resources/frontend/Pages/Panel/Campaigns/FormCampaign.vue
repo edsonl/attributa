@@ -450,7 +450,7 @@ function copyTrackingScript() {
     <!-- ===== DIALOG ===== -->
     <q-dialog v-model="showTrackingDialog">
         <q-card style="
-                min-width: 720px;
+                min-width: 750px;
                 max-width: 95vw;
                 min-height: 450px;
                 ">

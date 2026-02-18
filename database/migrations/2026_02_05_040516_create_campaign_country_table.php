@@ -8,12 +8,19 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('campaign_country', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
 
             // ID da campanha relacionada
-            $table->unsignedBigInteger('campaign_id');
+            $table->foreignId('campaign_id')
+                ->constrained('campaigns')
+                ->cascadeOnDelete();
 
             // ID do país relacionado
-            $table->unsignedBigInteger('country_id');
+            $table->foreignId('country_id')
+                ->constrained('countries')
+                ->cascadeOnDelete();
 
             // Timestamps padrão (quando o país foi associado à campanha)
             $table->timestamps();
@@ -31,23 +38,6 @@ return new class extends Migration {
             $table->index('campaign_id');
             $table->index('country_id');
 
-            /*
-             |--------------------------------------------------------------------------
-             | Foreign Keys
-             |--------------------------------------------------------------------------
-             | Definidas explicitamente para manter integridade referencial
-             | (onDelete cascade evita lixo quando campanha ou país é removido)
-             */
-
-            $table->foreign('campaign_id')
-                ->references('id')
-                ->on('campaigns')
-                ->onDelete('cascade');
-
-            $table->foreign('country_id')
-                ->references('id')
-                ->on('countries')
-                ->onDelete('cascade');
         });
     }
 

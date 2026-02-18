@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('timezones', function (Blueprint $table) {
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
+
             // ID interno do fuso horário
-            $table->bigIncrements('id');
+            $table->id();
             // Identificador IANA (ex: America/Sao_Paulo)
             $table->string('identifier', 64)->unique();
             // Nome legível para seleção em telas
