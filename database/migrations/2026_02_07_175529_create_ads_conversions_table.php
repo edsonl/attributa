@@ -25,7 +25,9 @@ return new class extends Migration {
                 ->constrained('users')
                 ->nullOnDelete();
             $table->foreignId('campaign_id')
-                ->constrained('campaigns');
+                ->nullable()
+                ->constrained('campaigns')
+                ->nullOnDelete();
             $table->foreignId('pageview_id')
                 ->nullable()
                 ->constrained('pageviews')
