@@ -117,6 +117,15 @@ class ConversionCallbackController extends Controller
         }
 
         $gclid = $pageview->gclid;
+        $gbraid = $pageview->gbraid;
+        $wbraid = $pageview->wbraid;
+        $userAgent = $pageview->user_agent ?: $request->userAgent();
+        $ipAddress = $pageview->ip ?: $request->ip();
+
+        $gclid = $gclid ? mb_substr((string) $gclid, 0, 150) : null;
+        $gbraid = $gbraid ? mb_substr((string) $gbraid, 0, 150) : null;
+        $wbraid = $wbraid ? mb_substr((string) $wbraid, 0, 150) : null;
+        $ipAddress = $ipAddress ? mb_substr((string) $ipAddress, 0, 45) : null;
 
         // ✅ Marca conversão (idempotente)
         if (!$pageview->conversion) {
@@ -149,6 +158,10 @@ class ConversionCallbackController extends Controller
             'campaign_id'           => $campaign->id,
             'pageview_id'           => $pageview->id,
             'gclid'                 => $gclid,
+            'gbraid'                => $gbraid,
+            'wbraid'                => $wbraid,
+            'user_agent'            => $userAgent,
+            'ip_address'            => $ipAddress,
             'conversion_name'       => $campaign->conversionGoal?->goal_code,
             'conversion_value'      => (float) $request->query('amount', 1.00),
             'currency_code'         => $request->query('cy', 'USD'),

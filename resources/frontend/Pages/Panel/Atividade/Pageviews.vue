@@ -724,7 +724,7 @@ onMounted(() => {
                         flat
                         icon="delete"
                         size="sm"
-                        class="row-delete-btn"
+                        class="qtable-delete-btn"
                         @click="deletePageview(props.row.id)"
                     />
                 </q-td>
@@ -756,16 +756,6 @@ onMounted(() => {
 .campaign-filter-field :deep(.q-field__native) {
     align-items: center;
     line-height: 1.2;
-}
-
-.row-delete-btn {
-    color: #94a3b8;
-    transition: color 0.15s ease-in-out, transform 0.15s ease-in-out;
-}
-
-.row-delete-btn:hover,
-.row-delete-btn:focus-visible {
-    color: #ef4444;
 }
 
 .country-flag {

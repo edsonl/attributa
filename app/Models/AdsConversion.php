@@ -52,9 +52,15 @@ class AdsConversion extends Model
      */
     protected $fillable = [
         'user_id',
+        'created_by',
+        'is_manual',
         'campaign_id',
         'pageview_id',
         'gclid',
+        'gbraid',
+        'wbraid',
+        'user_agent',
+        'ip_address',
         'conversion_name',
         'conversion_value',
         'currency_code',
@@ -72,6 +78,7 @@ class AdsConversion extends Model
         'google_uploaded_at'    => 'datetime',
         'conversion_value'      => 'decimal:2',
         'google_upload_status'  => 'integer',
+        'is_manual'             => 'boolean',
     ];
 
     /**
@@ -81,6 +88,7 @@ class AdsConversion extends Model
         'conversion_value'      => 1.00,
         'currency_code'         => 'USD',
         'google_upload_status'  => self::STATUS_PENDING,
+        'is_manual'             => false,
     ];
 
     protected function googleUploadStatus(): Attribute

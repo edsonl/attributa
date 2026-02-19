@@ -11,7 +11,19 @@ class AffiliatePlatform extends Model
 
     protected $fillable = [
         'name',
-        'id'
+        'slug',
+        'active',
+        'integration_type',
+        'tracking_param_mapping',
+        'conversion_param_mapping',
+        'postback_additional_params',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
+        'tracking_param_mapping' => 'array',
+        'conversion_param_mapping' => 'array',
+        'postback_additional_params' => 'array',
     ];
 
     /**

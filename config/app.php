@@ -125,8 +125,8 @@ return [
     ],
 
     'hashids' => [
-        'salt' => env('HASHIDS_SALT', 'attributa|2026'),
-        'min_length' => (int) env('HASHIDS_MIN_LENGTH',12),
+        'salt' =>'attributa|2026',
+        'min_length' => 12,
     ],
 
     // Assinatura HMAC do collect tracking (anti-tampering).

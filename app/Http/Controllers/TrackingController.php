@@ -413,6 +413,7 @@ class TrackingController extends Controller
             $campaign = null;
             if ($decodedUserId && $decodedCampaignId) {
                 $campaign = Campaign::query()
+                    ->with('affiliatePlatform:id,tracking_param_mapping')
                     ->where('id', $decodedCampaignId)
                     ->where('user_id', $decodedUserId)
                     ->where('code', $campaignCode)
@@ -454,6 +455,13 @@ class TrackingController extends Controller
             $authTs = time();
             $authNonce = Str::random(24);
             $authSig = $this->buildTrackingSignature($userCode, $campaignCode, $authTs, $authNonce);
+            $trackingParamMapping = $campaign->affiliatePlatform?->tracking_param_mapping;
+            $trackingParamKeys = is_array($trackingParamMapping)
+                ? array_values(array_filter(array_map(
+                    fn ($k) => trim((string) $k),
+                    array_keys($trackingParamMapping)
+                )))
+                : [];
 
             $replacements = [
                 "'{ENDPOINT}'"       => json_encode($endpoint),
@@ -462,6 +470,7 @@ class TrackingController extends Controller
                 "'{AUTH_TS}'"        => json_encode($authTs),
                 "'{AUTH_NONCE}'"     => json_encode($authNonce),
                 "'{AUTH_SIG}'"       => json_encode($authSig),
+                "'{TRACKING_PARAM_KEYS}'" => json_encode($trackingParamKeys),
             ];
 
             $js = str_replace(

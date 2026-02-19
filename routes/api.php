@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\GoogleAdsConversionsController;
 use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\ConversionCallbackPlatformController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ConversionCallbackController;
@@ -20,3 +21,8 @@ Route::get(
 
 //Resposta de conversão plataforma de afiliado
 Route::get('/callback/conversion', [ConversionCallbackController::class, 'handle']);
+
+Route::get(
+    '/callback-platform/{platformSlug}/{userCode}',
+    [ConversionCallbackPlatformController::class, 'handle']
+)->name('api.callback-platform.handle');

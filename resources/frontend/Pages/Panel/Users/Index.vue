@@ -36,9 +36,9 @@ const routes = {
         <template #body-cell-actions="props">
             <q-td :props="props" class="tw-text-right">
                 <Link :href="route(routes.edit, props.row.id)">
-                    <q-btn dense flat icon="edit" />
+                    <q-btn dense flat size="sm" icon="edit" class="qtable-edit-btn" />
                 </Link>
-                <q-btn dense flat icon="delete" color="negative" @click="destroyOne(props.row.id)" />
+                <q-btn dense flat size="sm" icon="delete" class="qtable-delete-btn" @click="destroyOne(props.row.id)" />
             </q-td>
         </template>
     </IndexTable>

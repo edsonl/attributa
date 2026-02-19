@@ -492,7 +492,7 @@ function logStatusTitle(status) {
                                 dense
                                 size="sm"
                                 icon="edit"
-                                color="primary"
+                                class="qtable-edit-btn"
                                 @click="editItem(props.row)"
                             />
 
@@ -501,7 +501,7 @@ function logStatusTitle(status) {
                                 dense
                                 size="sm"
                                 icon="delete"
-                                color="negative"
+                                class="qtable-delete-btn"
                                 @click="destroyItem(props.row)"
                             />
                         </q-td>

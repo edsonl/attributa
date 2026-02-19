@@ -149,3 +149,73 @@
 }
 /* (opcional) denso */
 .q-btn--dense .q-btn__content { line-height: 1 !important; }
+
+/* Ajuste visual: centraliza melhor placeholder em QInput dense (campos sem label interna) */
+.q-field--dense:not(.q-field--labeled) .q-field__native,
+.q-field--dense:not(.q-field--labeled) .q-field__input {
+    padding-top: 7px;
+    padding-bottom: 5px;
+}
+
+/* Ajuste visual: centraliza melhor texto/label em QInput dense com label (estado repouso) */
+.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__native,
+.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__input,
+.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__prefix,
+.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__suffix {
+    padding-top: 16px;
+    padding-bottom: 0;
+}
+
+.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__label {
+    top: 12px;
+}
+
+/* Ajuste visual: centraliza melhor placeholder/valor em QSelect dense com label */
+.q-select.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__native,
+.q-select.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__input,
+.q-select.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__prefix,
+.q-select.q-field--labeled.q-field--dense:not(.q-field--float) .q-field__suffix {
+    padding-top: 18px;
+    padding-bottom: 0;
+    align-items: center;
+}
+
+/* Botoes padrao de acoes em colunas de QTable (editar/excluir) */
+.qtable-edit-btn,
+.qtable-delete-btn {
+    min-width: 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 9999px !important;
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.qtable-edit-btn .q-icon,
+.qtable-delete-btn .q-icon {
+    font-size: 18px !important;
+}
+
+.qtable-edit-btn .q-focus-helper,
+.qtable-delete-btn .q-focus-helper {
+    opacity: 0 !important;
+}
+
+.qtable-edit-btn {
+    color: #60a5fa !important;
+}
+
+.qtable-edit-btn:hover,
+.qtable-edit-btn:focus-visible {
+    color: #2563eb !important;
+    background-color: rgba(37, 99, 235, 0.12) !important;
+}
+
+.qtable-delete-btn {
+    color: #94a3b8 !important;
+}
+
+.qtable-delete-btn:hover,
+.qtable-delete-btn:focus-visible {
+    color: #ef4444 !important;
+    background-color: rgba(239, 68, 68, 0.12) !important;
+}

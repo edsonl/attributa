@@ -287,6 +287,7 @@ const links = [
     { label: 'Navegadores', icon: 'language', route: 'panel.browsers.index'},
     { label: 'Categorias de dispositivo', icon: 'devices', route: 'panel.device-categories.index'},
     { label: 'Origem de tráfego', icon: 'moving', route: 'panel.traffic-source-categories.index'},
+    { label: 'Plataformas afiliado', icon: 'hub', route: 'panel.affiliate-platforms.index'},
 ]
 
 // Usuário (foto/nome/iniciais)

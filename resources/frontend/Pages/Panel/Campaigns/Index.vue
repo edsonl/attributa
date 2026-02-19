@@ -469,7 +469,7 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
                                 dense
                                 size="sm"
                                 icon="edit"
-                                color="primary"
+                                class="qtable-edit-btn"
                                 @click="editCampaign(props.row)"
                             />
 
@@ -478,7 +478,7 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
                                 dense
                                 size="sm"
                                 icon="delete"
-                                color="negative"
+                                class="qtable-delete-btn"
                                 @click="destroyCampaign(props.row)"
                             />
                         </q-td>

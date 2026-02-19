@@ -11,6 +11,7 @@ use App\Http\Controllers\Panel\ConversionsController;
 use App\Http\Controllers\Panel\ConversionGoalController;
 use App\Http\Controllers\Panel\CountryController;
 use App\Http\Controllers\Panel\CampaignStatusController;
+use App\Http\Controllers\Panel\AffiliatePlatformController;
 use App\Http\Controllers\Panel\BrowserController;
 use App\Http\Controllers\Panel\DeviceCategoryController;
 use App\Http\Controllers\Panel\TrafficSourceCategoryController;
@@ -146,6 +147,16 @@ Route::middleware(['auth', 'verified'])
                     Route::get('/data', [ConversionsController::class, 'data'])->name('data');
                     // Campanhas (filtro)
                     Route::get('/campaigns', [ConversionsController::class, 'campaigns'])->name('campaigns');
+                    // Timezones para cadastro manual
+                    Route::get('/timezones', [ConversionsController::class, 'timezones'])->name('timezones');
+                    // Metadados de exportação (range)
+                    Route::get('/export/range', [ConversionsController::class, 'exportRange'])->name('export-range');
+                    // Exportação CSV (Google import)
+                    Route::get('/export/csv', [ConversionsController::class, 'exportCsv'])->name('export-csv');
+                    // Cadastro manual
+                    Route::post('/manual', [ConversionsController::class, 'storeManual'])->name('store-manual');
+                    // Exclusão de conversão
+                    Route::delete('/{conversion}', [ConversionsController::class, 'destroy'])->name('destroy');
             });
 
 
@@ -231,6 +242,16 @@ Route::middleware(['auth', 'verified'])
                     Route::post('/', [TrafficSourceCategoryController::class, 'store'])->name('store');
                     Route::put('/{traffic_source_category}', [TrafficSourceCategoryController::class, 'update'])->name('update');
                     Route::delete('/{traffic_source_category}', [TrafficSourceCategoryController::class, 'destroy'])->name('destroy');
+                });
+
+            Route::prefix('affiliate-platforms')
+                ->name('affiliate-platforms.')
+                ->group(function () {
+                    Route::get('/', [AffiliatePlatformController::class, 'index'])->name('index');
+                    Route::get('/data', [AffiliatePlatformController::class, 'data'])->name('data');
+                    Route::post('/', [AffiliatePlatformController::class, 'store'])->name('store');
+                    Route::put('/{affiliate_platform}', [AffiliatePlatformController::class, 'update'])->name('update');
+                    Route::delete('/{affiliate_platform}', [AffiliatePlatformController::class, 'destroy'])->name('destroy');
                 });
 
 

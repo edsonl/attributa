@@ -227,8 +227,8 @@ onMounted(() => {
                 </template>
                 <template #body-cell-actions="props">
                     <q-td :props="props" class="tw-text-right">
-                        <q-btn dense flat icon="edit" @click="openEdit(props.row)" />
-                        <q-btn dense flat icon="delete" color="negative" @click="deleteRow(props.row.id)" />
+                        <q-btn dense flat size="sm" icon="edit" class="qtable-edit-btn" @click="openEdit(props.row)" />
+                        <q-btn dense flat size="sm" icon="delete" class="qtable-delete-btn" @click="deleteRow(props.row.id)" />
                     </q-td>
                 </template>
             </q-table>
@@ -256,4 +256,3 @@ onMounted(() => {
         </q-card>
     </q-dialog>
 </template>
-

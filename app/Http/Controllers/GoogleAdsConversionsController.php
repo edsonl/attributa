@@ -131,7 +131,12 @@ class GoogleAdsConversionsController extends Controller
                 AdsConversion::STATUS_PROCESSING,
                 AdsConversion::STATUS_PROCESSING_EXPORT,
             ])
+            ->where(function ($query) {
+                $query->where('ads_conversions.is_manual', false)
+                    ->orWhereNull('ads_conversions.is_manual');
+            })
             ->whereNotNull('ads_conversions.gclid')
+            ->where('ads_conversions.gclid', '<>', '')
             ->whereNotNull('ads_conversions.conversion_name')
             ->whereNotNull('ads_conversions.conversion_event_time')
             ->orderBy('ads_conversions.conversion_event_time', 'asc')
@@ -155,11 +160,15 @@ class GoogleAdsConversionsController extends Controller
         // Cabeçalho sempre presente, mesmo sem linhas de conversão.
         fputcsv($output, [
             'Google Click ID',
+            'GBRAID',
+            'WBRAID',
             'Conversion Name',
             'Conversion Time',
             'Conversion Value',
             'Conversion Currency',
             'Order ID',
+            'User Agent',
+            'IP Address',
         ]);
 
         foreach ($conversions as $c) {
@@ -171,11 +180,15 @@ class GoogleAdsConversionsController extends Controller
 
             fputcsv($output, [
                 $c->gclid,
+                $c->gbraid,
+                $c->wbraid,
                 $c->conversion_name,
                 $eventTime,
                 number_format((float) $c->conversion_value, 2, '.', ''),
                 $c->currency_code,
-                'PV-' . $c->pageview_id,
+                $c->pageview_id ? ('PV-' . $c->pageview_id) : ('CV-' . $c->id),
+                $c->user_agent,
+                $c->ip_address,
             ]);
         }
 

@@ -20,17 +20,28 @@ return new class extends Migration {
             $table->foreignId('user_id')
                 ->constrained()
                 ->cascadeOnDelete();
+            $table->foreignId('created_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
             $table->foreignId('campaign_id')
                 ->constrained('campaigns');
             $table->foreignId('pageview_id')
+                ->nullable()
                 ->constrained('pageviews');
 
             // Data/hora do evento de conversão
             $table->dateTime('conversion_event_time')
                 ->default(DB::raw('CURRENT_TIMESTAMP'));
 
-            // GCLID associado à conversão
+            // Identificadores de clique para importação no Google Ads
             $table->string('gclid', 150)->nullable();
+            $table->string('gbraid', 150)->nullable();
+            $table->string('wbraid', 150)->nullable();
+
+            // Metadados de contexto da conversão
+            $table->text('user_agent')->nullable();
+            $table->string('ip_address', 45)->nullable();
 
             // Nome da ação/conversão enviada
             $table->string('conversion_name')->nullable();
@@ -52,6 +63,7 @@ return new class extends Migration {
             $table->dateTime('google_uploaded_at')->nullable();
             // Mensagem de erro do envio (se houver)
             $table->text('google_upload_error')->nullable();
+            $table->boolean('is_manual')->default(false);
 
             // Timestamps padrão do Laravel
             $table->timestamps();
@@ -61,6 +73,10 @@ return new class extends Migration {
             $table->index('conversion_name');
             $table->index('campaign_id');
             $table->index('gclid');
+            $table->index('gbraid');
+            $table->index('wbraid');
+            $table->index('ip_address');
+            $table->index('is_manual');
             $table->index('created_at');
         });
 

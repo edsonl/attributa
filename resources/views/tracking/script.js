@@ -9,6 +9,7 @@
     let AUTH_TS = '{AUTH_TS}';
     let AUTH_NONCE = '{AUTH_NONCE}';
     let AUTH_SIG = '{AUTH_SIG}';
+    let TRACKING_PARAM_KEYS = '{TRACKING_PARAM_KEYS}';
 
     // Validação final
     if (!USER_CODE || !CAMPAIGN_CODE || !AUTH_TS || !AUTH_NONCE || !AUTH_SIG) {
@@ -151,7 +152,7 @@
                         var pageviewCode = json && json.pageview_code;
                         if (pageviewCode) {
                             setCookie('at_pageview_code', pageviewCode, 90);
-                            initSubInjection();
+                            initSubInjection(TRACKING_PARAM_KEYS);
                         }
                     })
                     .catch(function () {});
@@ -173,7 +174,7 @@
                             var pageviewCode = json && json.pageview_code;
                             if (pageviewCode) {
                                 setCookie('at_pageview_code', pageviewCode, 90);
-                                initSubInjection();
+                                initSubInjection(TRACKING_PARAM_KEYS);
                             }
                         } catch (e) {}
                     }
@@ -185,15 +186,21 @@
 
     sendPayload(endpoint, payload);
 
-    // ===============================
-    // SUBs injection (Dr.Cash)
-    // ===============================
-    function initSubInjection() {
+    // ==============================================
+    // Injeção de parâmetros de tracking (forms/links)
+    // ==============================================
+    function initSubInjection(paramKeys) {
         var pageviewCode = getCookie('at_pageview_code');
         if (!pageviewCode) return;
 
         var COMPOSED_CODE = USER_CODE + '-' + CAMPAIGN_CODE + '-' + pageviewCode;
-        var SUB_KEYS = ['sub1', 'sub2', 'sub3', 'sub4', 'sub5'];
+        var keys = Array.isArray(paramKeys)
+            ? paramKeys
+                .map(function (key) { return String(key || '').trim(); })
+                .filter(function (key) { return key.length > 0; })
+            : [];
+
+        if (keys.length === 0) return;
 
         // ----- Forms -----
         function upsertHiddenInput(form, name, value) {
@@ -208,7 +215,7 @@
         }
 
         document.querySelectorAll('form').forEach(function (form) {
-            SUB_KEYS.forEach(function (key) {
+            keys.forEach(function (key) {
                 upsertHiddenInput(form, key, COMPOSED_CODE);
             });
         });
@@ -232,7 +239,7 @@
                     return;
                 }
 
-                SUB_KEYS.forEach(function (key) {
+                keys.forEach(function (key) {
                     url.searchParams.set(key, COMPOSED_CODE);
                 });
 
