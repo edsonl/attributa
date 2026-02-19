@@ -46,6 +46,16 @@ class ConversionCallbackPlatformController extends Controller
             return 'ignored';
         }
 
+        $status = strtolower(trim((string) $request->query('status', '')));
+        if ($status !== 'approved') {
+            $log->info('Callback platform ignorado: status diferente de approved.', [
+                'platform_slug' => $platformSlug,
+                'status' => $status,
+                'query' => $request->query(),
+            ]);
+            return 'ignored';
+        }
+
         $composedCode = $this->resolveComposedCodeFromRequest($request, $platform);
         if (!$composedCode) {
             $log->warning('Callback platform ignorado: código composto não encontrado.', [
