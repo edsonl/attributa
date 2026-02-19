@@ -166,7 +166,7 @@ class GoogleAdsConversionsController extends Controller
             'Conversion Name',
             'Conversion Time',
             'Conversion Value',
-            'Conversion Currency',
+            'Currency Code',
             'Order ID',
             'User Agent',
             'IP Address',

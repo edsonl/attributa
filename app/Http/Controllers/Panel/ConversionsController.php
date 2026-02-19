@@ -397,7 +397,7 @@ class ConversionsController extends Controller
             'Conversion Name',
             'Conversion Time',
             'Conversion Value',
-            'Conversion Currency',
+            'Currency Code',
             'Order ID',
         ]);
 
