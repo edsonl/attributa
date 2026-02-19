@@ -28,7 +28,8 @@ return new class extends Migration {
                 ->constrained('campaigns');
             $table->foreignId('pageview_id')
                 ->nullable()
-                ->constrained('pageviews');
+                ->constrained('pageviews')
+                ->nullOnDelete();
 
             // Data/hora do evento de conversão
             $table->dateTime('conversion_event_time')
