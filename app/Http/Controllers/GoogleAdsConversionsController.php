@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use App\Models\AdsConversion;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class GoogleAdsConversionsController extends Controller
 {
@@ -190,6 +191,31 @@ class GoogleAdsConversionsController extends Controller
                 $c->user_agent,
                 $c->ip_address,
             ]);
+        }
+
+        if ($goal && (bool) $goal->csv_fake_line_enabled && $conversions->isEmpty()) {
+            $fakeEventTime = now('UTC')
+                ->setTimezone($timezoneIdentifier)
+                ->format('Y-m-d H:i:sP');
+
+            fputcsv($output, [
+                'TEST-GCLID-' . Str::upper(Str::random(10)),
+                '',
+                '',
+                $goal->goal_code ?: 'TEST_CONVERSION',
+                $fakeEventTime,
+                '1.00',
+                'USD',
+                'TEST-' . now()->format('YmdHis'),
+                'Mozilla/5.0 (Integration Test)',
+                '127.0.0.1',
+            ]);
+
+            $this->writeGoalLog(
+                $goal,
+                'Linha fake adicionada ao CSV para suporte à integração/mapeamento.',
+                'info'
+            );
         }
 
         rewind($output);

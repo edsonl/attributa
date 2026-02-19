@@ -32,12 +32,16 @@ return new class extends Migration {
             // Controle de ativação da meta
             $table->boolean('active')->default(true);
 
+            // Gera uma linha fake no CSV para facilitar mapeamento no Google Ads durante integração
+            $table->boolean('csv_fake_line_enabled')->default(false);
+
             // Timestamps e soft delete para histórico
             $table->timestamps();
             $table->softDeletes();
 
             // Índices para filtros e busca
             $table->index('active');
+            $table->index('csv_fake_line_enabled');
             $table->index('user_id');
             $table->index('user_slug_id');
             $table->index('googleads_password');

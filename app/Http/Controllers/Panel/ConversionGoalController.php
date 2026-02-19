@@ -71,6 +71,7 @@ class ConversionGoalController extends Controller
     {
         return Inertia::render('Panel/ConversionGoals/Create', [
             'timezones' => $this->timezoneOptions(),
+            'defaultTimezoneId' => $this->defaultTimezoneId(),
         ]);
     }
 
@@ -103,6 +104,7 @@ class ConversionGoalController extends Controller
         return Inertia::render('Panel/ConversionGoals/Edit', [
             'conversionGoal' => $conversionGoal,
             'timezones' => $this->timezoneOptions((int) $conversionGoal->timezone_id),
+            'defaultTimezoneId' => $this->defaultTimezoneId(),
         ]);
     }
 
@@ -166,6 +168,24 @@ class ConversionGoalController extends Controller
         ]);
     }
 
+    public function updateCsvFakeLine(Request $request, ConversionGoal $conversionGoal)
+    {
+        abort_unless((int) $conversionGoal->user_id === (int) auth()->id(), 403);
+
+        $data = $request->validate([
+            'csv_fake_line_enabled' => ['required', 'boolean'],
+        ]);
+
+        $conversionGoal->update([
+            'csv_fake_line_enabled' => (bool) $data['csv_fake_line_enabled'],
+        ]);
+
+        return response()->json([
+            'message' => 'Configuração de integração atualizada com sucesso.',
+            'csv_fake_line_enabled' => (bool) $conversionGoal->csv_fake_line_enabled,
+        ]);
+    }
+
     protected function timezoneOptions(?int $includeTimezoneId = null)
     {
         return Timezone::query()
@@ -185,5 +205,25 @@ class ConversionGoalController extends Controller
                 'label' => $timezone->label ?: $timezone->identifier,
                 'utc_offset' => $timezone->utc_offset,
             ]);
+    }
+
+    protected function defaultTimezoneId(): ?int
+    {
+        $preferred = Timezone::query()
+            ->where('identifier', 'America/Sao_Paulo')
+            ->where('active', true)
+            ->value('id');
+
+        if ($preferred) {
+            return (int) $preferred;
+        }
+
+        $fallback = Timezone::query()
+            ->where('active', true)
+            ->orderBy('utc_offset')
+            ->orderBy('identifier')
+            ->value('id');
+
+        return $fallback ? (int) $fallback : null;
     }
 }

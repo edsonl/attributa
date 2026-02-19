@@ -387,8 +387,6 @@ class ConversionsController extends Controller
                 'conversion_value',
                 'currency_code',
                 'pageview_id',
-                'user_agent',
-                'ip_address',
             ]);
 
         $output = fopen('php://temp', 'r+');
@@ -401,8 +399,6 @@ class ConversionsController extends Controller
             'Conversion Value',
             'Conversion Currency',
             'Order ID',
-            'User Agent',
-            'IP Address',
         ]);
 
         foreach ($rows as $row) {
@@ -419,8 +415,6 @@ class ConversionsController extends Controller
                 number_format((float) $row->conversion_value, 2, '.', ''),
                 $row->currency_code ?: 'USD',
                 $row->pageview_id ? ('PV-' . $row->pageview_id) : ('CV-' . $row->id),
-                $row->user_agent,
-                $row->ip_address,
             ]);
         }
 

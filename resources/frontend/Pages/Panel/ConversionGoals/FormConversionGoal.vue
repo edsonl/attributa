@@ -11,6 +11,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    defaultTimezoneId: {
+        type: Number,
+        default: null,
+    },
 })
 
 const isEdit = computed(() => !!props.conversionGoal)
@@ -18,7 +22,7 @@ const timezoneOptions = ref(props.timezones)
 
 const form = useForm({
     goal_code: props.conversionGoal?.goal_code ?? '',
-    timezone_id: props.conversionGoal?.timezone_id ?? null,
+    timezone_id: props.conversionGoal?.timezone_id ?? props.defaultTimezoneId ?? null,
     active: props.conversionGoal?.active ?? true,
 })
 

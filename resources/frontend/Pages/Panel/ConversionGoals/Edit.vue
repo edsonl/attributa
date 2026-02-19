@@ -11,6 +11,10 @@ defineProps({
         type: Array,
         default: () => [],
     },
+    defaultTimezoneId: {
+        type: Number,
+        default: null,
+    },
 })
 </script>
 
@@ -34,7 +38,7 @@ defineProps({
 
         <q-card flat bordered>
             <q-card-section>
-                <FormConversionGoal :conversion-goal="conversionGoal" :timezones="timezones" />
+                <FormConversionGoal :conversion-goal="conversionGoal" :timezones="timezones" :default-timezone-id="defaultTimezoneId" />
             </q-card-section>
         </q-card>
 

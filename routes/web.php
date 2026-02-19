@@ -185,6 +185,8 @@ Route::middleware(['auth', 'verified'])
                 ->name('conversion-goals.logs');
             Route::delete('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'destroyLogs'])
                 ->name('conversion-goals.logs.destroy');
+            Route::patch('conversion-goals/{conversion_goal}/csv-fake-line', [ConversionGoalController::class, 'updateCsvFakeLine'])
+                ->name('conversion-goals.csv-fake-line');
             Route::resource('conversion-goals', ConversionGoalController::class)->except(['show']);
 
             //CRUD Usuários

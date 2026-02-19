@@ -25,6 +25,7 @@ const search = ref(props.filters?.search ?? '')
 const $q = useQuasar()
 const integrationDialog = ref(false)
 const integrationPayload = ref(null)
+const integrationModeSaving = ref(false)
 const logsDialog = ref(false)
 const logsLoading = ref(false)
 const logsGoalCode = ref('')
@@ -215,12 +216,40 @@ function destroyItem(item) {
 
 function openIntegration(item) {
     integrationPayload.value = {
+        id: goalRouteKey(item),
         url: item.integration_url,
         username: `googleads-${item.user_slug_id}`,
         password: item.googleads_password,
+        csv_fake_line_enabled: Boolean(item.csv_fake_line_enabled),
     }
 
     integrationDialog.value = true
+}
+
+async function saveCsvFakeLineSetting() {
+    if (!integrationPayload.value?.id || integrationModeSaving.value) {
+        return
+    }
+
+    integrationModeSaving.value = true
+    try {
+        await axios.patch(
+            route('panel.conversion-goals.csv-fake-line', integrationPayload.value.id),
+            { csv_fake_line_enabled: Boolean(integrationPayload.value.csv_fake_line_enabled) }
+        )
+
+        $q.notify({
+            type: 'positive',
+            message: 'Configuração de integração salva.',
+        })
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Não foi possível salvar a configuração de integração.',
+        })
+    } finally {
+        integrationModeSaving.value = false
+    }
 }
 
 async function copyValue(value, label) {
@@ -584,6 +613,29 @@ function logStatusTitle(status) {
                             <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(integrationPayload?.password, 'Senha')" />
                         </template>
                     </q-input>
+
+                    <div v-if="integrationPayload" class="tw-rounded-md tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-3 tw-space-y-2">
+                        <q-toggle
+                            v-model="integrationPayload.csv_fake_line_enabled"
+                            label="Gerar linha fake no CSV para integração"
+                            :true-value="true"
+                            :false-value="false"
+                        />
+                        <div class="tw-text-xs tw-text-slate-600">
+                            Use este modo apenas para facilitar o mapeamento inicial no Google Ads quando não houver conversões.
+                            Recomenda-se desativar após concluir a integração.
+                        </div>
+                        <div class="tw-flex tw-justify-end">
+                            <q-btn
+                                color="primary"
+                                unelevated
+                                dense
+                                label="Salvar configuração"
+                                :loading="integrationModeSaving"
+                                @click="saveCsvFakeLineSetting"
+                            />
+                        </div>
+                    </div>
                 </q-card-section>
 
                 <q-separator />

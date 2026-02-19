@@ -23,10 +23,12 @@ class ConversionGoal extends Model
         'timezone_id',
         'goal_code',
         'active',
+        'csv_fake_line_enabled',
     ];
 
     protected $casts = [
         'active' => 'boolean',
+        'csv_fake_line_enabled' => 'boolean',
     ];
 
     protected $appends = [
