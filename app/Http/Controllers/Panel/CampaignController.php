@@ -12,6 +12,7 @@ use App\Models\AffiliatePlatform;
 use App\Models\CampaignStatus;
 use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
+use App\Models\Pageview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -240,7 +241,14 @@ class CampaignController extends Controller
      */
     public function destroy(Campaign $campaign)
     {
-        $campaign->delete();
+        DB::transaction(function () use ($campaign) {
+            Pageview::query()
+                ->where('campaign_id', (int) $campaign->id)
+                ->where('user_id', (int) $campaign->user_id)
+                ->delete();
+
+            $campaign->delete();
+        });
 
         return redirect()
             ->route('panel.campaigns.index')
