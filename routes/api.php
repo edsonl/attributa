@@ -11,6 +11,10 @@ Route::post('/tracking/collect', [TrackingController::class, 'collect'])
     ->middleware('throttle:tracking')
 ->name('tracking.collect');
 
+Route::post('/tracking/event', [TrackingController::class, 'event'])
+    ->middleware('throttle:tracking')
+    ->name('tracking.event');
+
 Route::get('/tracking/script.js', [TrackingController::class, 'script'])->name('tracking.script');
 
 Route::get(

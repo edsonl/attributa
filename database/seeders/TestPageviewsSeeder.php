@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\DeviceCategory;
 use App\Models\IpCategory;
 use App\Models\Pageview;
+use App\Models\PageviewEvent;
 use App\Models\TrafficSourceCategory;
 use Illuminate\Database\Seeder;
 
@@ -330,6 +331,141 @@ class TestPageviewsSeeder extends Seeder
         }
 
         Pageview::query()->insert($rows);
+
+        $seededPageviews = Pageview::query()
+            ->where('campaign_id', $campaign->id)
+            ->where('campaign_code', $campaign->code)
+            ->orderBy('id')
+            ->get(['id', 'user_id', 'campaign_id', 'conversion', 'created_at']);
+
+        $eventRows = [];
+        foreach ($seededPageviews as $index => $pageview) {
+            $step = $index + 1;
+            $baseTime = $pageview->created_at ?? now();
+
+            // Parte das visitas recebe engajamento para simular comportamento real.
+            if ($step % 4 !== 0) {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'page_engaged',
+                    'target_url' => "https://teste.com/produto-{$step}",
+                    'element_id' => null,
+                    'element_name' => 'Page engaged (time_10s)',
+                    'element_classes' => null,
+                    'form_fields_checked' => null,
+                    'form_fields_filled' => null,
+                    'form_has_user_data' => null,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(10)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
+                ];
+            }
+
+            // Simula interação principal: alterna entre clique e formulário,
+            // garantindo exemplos claros dos dois tipos no conjunto de teste.
+            if ($step % 2 === 0) {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'link_click',
+                    'target_url' => "https://teste.com/produto-{$step}/checkout",
+                    'element_id' => null,
+                    'element_name' => "Link {$step} - Comprar agora",
+                    'element_classes' => 'btn btn-primary cta-checkout',
+                    'form_fields_checked' => null,
+                    'form_fields_filled' => null,
+                    'form_has_user_data' => null,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(16)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
+                ];
+            } else {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'form_submit',
+                    'target_url' => "https://teste.com/produto-{$step}/lead",
+                    'element_id' => null,
+                    'element_name' => "Formulário {$step}",
+                    'element_classes' => 'lead-form checkout-step',
+                    'form_fields_checked' => 2,
+                    'form_fields_filled' => 2,
+                    'form_has_user_data' => true,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(18)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
+                ];
+            }
+
+            // Reforço determinístico para teste manual rápido:
+            // primeira visita sempre tem clique;
+            // segunda visita sempre tem submit de formulário.
+            if ($step === 1) {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'link_click',
+                    'target_url' => "https://teste.com/produto-{$step}/detalhes",
+                    'element_id' => null,
+                    'element_name' => "Link {$step} - Ver detalhes",
+                    'element_classes' => 'btn btn-secondary cta-details',
+                    'form_fields_checked' => null,
+                    'form_fields_filled' => null,
+                    'form_has_user_data' => null,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(14)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
+                ];
+            }
+
+            if ($step === 2) {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'form_submit',
+                    'target_url' => "https://teste.com/produto-{$step}/cadastro",
+                    'element_id' => null,
+                    'element_name' => "Formulário {$step} - Cadastro",
+                    'element_classes' => 'lead-form profile-step',
+                    'form_fields_checked' => 2,
+                    'form_fields_filled' => 2,
+                    'form_has_user_data' => true,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(20)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
+                ];
+            }
+
+            // Para visitas convertidas, garante um fluxo mais "completo".
+            if ((bool) $pageview->conversion) {
+                $eventRows[] = [
+                    'user_id' => $pageview->user_id,
+                    'campaign_id' => $pageview->campaign_id,
+                    'pageview_id' => $pageview->id,
+                    'event_type' => 'form_submit',
+                    'target_url' => "https://teste.com/produto-{$step}/checkout/submit",
+                    'element_id' => null,
+                    'element_name' => "Formulário {$step} - Checkout",
+                    'element_classes' => 'checkout-form final-step',
+                    'form_fields_checked' => 3,
+                    'form_fields_filled' => 3,
+                    'form_has_user_data' => true,
+                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(24)?->valueOf(),
+                    'created_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
+                    'updated_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
+                ];
+            }
+        }
+
+        if (!empty($eventRows)) {
+            PageviewEvent::query()->insert($eventRows);
+        }
     }
 
     protected function extractQueryValue(string $query, string $key): ?string

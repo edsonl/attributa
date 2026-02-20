@@ -112,4 +112,9 @@ class Pageview extends Model
         return $this->belongsTo(Browser::class);
     }
 
+    public function events()
+    {
+        return $this->hasMany(PageviewEvent::class);
+    }
+
 }

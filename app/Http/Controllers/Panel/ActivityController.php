@@ -221,6 +221,23 @@ class ActivityController extends Controller
             'deviceCategory:id,name,slug,description',
             'browser:id,name,slug,description',
         ]);
+        $pageview->load([
+            'events' => function ($query) {
+                $query
+                    ->select([
+                        'id',
+                        'pageview_id',
+                        'event_type',
+                        'target_url',
+                        'element_name',
+                        'form_fields_checked',
+                        'form_fields_filled',
+                        'form_has_user_data',
+                        'created_at',
+                    ])
+                    ->orderBy('created_at', 'asc');
+            },
+        ]);
 
         $tz = 'America/Sao_Paulo';
         $pageview->created_at_formatted = optional($pageview->created_at)
@@ -271,12 +288,31 @@ class ActivityController extends Controller
                 : null,
         ];
 
+        $events = $pageview->events
+            ->map(function ($event) use ($tz) {
+                return [
+                    'id' => $event->id,
+                    'event_type' => $event->event_type,
+                    'target_url' => $event->target_url,
+                    'element_name' => $event->element_name,
+                    'form_fields_checked' => $event->form_fields_checked,
+                    'form_fields_filled' => $event->form_fields_filled,
+                    'form_has_user_data' => $event->form_has_user_data,
+                    'created_at' => $event->created_at,
+                    'created_at_formatted' => optional($event->created_at)
+                        ? Carbon::parse($event->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        : null,
+                ];
+            })
+            ->values();
+
         return response()->json([
             'pageview' => $pageview,
             'composed_code' => $this->buildComposedCode($pageview),
             'url' => $urlData,
             'geo' => $geo,
             'network' => $networkInfo,
+            'events' => $events,
             'ip_lookup_raw' => $ipLookup,
         ]);
     }

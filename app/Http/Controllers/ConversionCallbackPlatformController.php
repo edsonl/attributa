@@ -125,9 +125,15 @@ class ConversionCallbackPlatformController extends Controller
             return 'ignored';
         }
 
-        if (!$pageview->conversion) {
-            $pageview->update(['conversion' => 1]);
+        if ($pageview->conversion) {
+            $log->info('Callback platform ignorado: pageview já convertida.', [
+                'platform_slug' => $platformSlug,
+                'pageview_id' => $pageview->id,
+            ]);
+            return 'ignored';
         }
+
+        $pageview->update(['conversion' => 1]);
 
         $existingConversion = AdsConversion::query()
             ->where('pageview_id', $pageview->id)
@@ -150,7 +156,7 @@ class ConversionCallbackPlatformController extends Controller
             'gclid' => $pageview->gclid,
             'gbraid' => $pageview->gbraid,
             'wbraid' => $pageview->wbraid,
-            'user_agent' => $pageview->user_agent ?: $request->userAgent(),
+            'user_agent' => '',
             'ip_address' => $pageview->ip ?: $request->ip(),
             'conversion_name' => $campaign->conversionGoal?->goal_code,
             'conversion_value' => $conversionValue,
@@ -309,8 +315,8 @@ class ConversionCallbackPlatformController extends Controller
         // O usuário altera apenas o valor (nome do parâmetro recebido no postback).
         // Exemplo:
         // mappingKey = "conversion_value"
-        // conversion_param_mapping = { "conversion_value": "amount", "currency_code": "cy" }
-        // query = ?amount=9.50&cy=USD
+        // conversion_param_mapping = { "conversion_value": "payment", "currency_code": "cy" }
+        // query = ?payment=9.50&cy=USD
         $mapping = $platform->conversion_param_mapping ?: [];
         $field = trim((string) ($mapping[$mappingKey] ?? ''));
         if ($field === '') {

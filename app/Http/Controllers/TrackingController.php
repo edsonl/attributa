@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\Browser;
 use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
+use App\Models\PageviewEvent;
 use App\Services\HashidService;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
@@ -28,8 +29,8 @@ class TrackingController extends Controller
 
         // Validação estrutural do payload recebido pelo snippet.
         $data = $request->validate([
-            'user_code'    => 'required|string|max:191',
-            'campaign_code' => 'required|string|max:191',
+            'user_code'    => 'required|string|max:32',
+            'campaign_code' => 'required|string|max:32',
             'auth_ts'      => 'required|integer',
             'auth_nonce'   => 'required|string|min:16|max:64|regex:/^[A-Za-z0-9]+$/',
             'auth_sig'     => 'required|string|size:64|regex:/^[a-f0-9]+$/',
@@ -334,8 +335,147 @@ class TrackingController extends Controller
 
         return response()->json([
             'pageview_code' => $pageviewCode,
+            'event_sig' => $this->buildEventSignature(
+                (string) $data['user_code'],
+                (string) $data['campaign_code'],
+                $pageviewCode
+            ),
         ]);
 
+    }
+
+    public function event(Request $request)
+    {
+        $log = Log::channel('tracking_collect');
+
+        $data = $request->validate([
+            'user_code' => 'required|string|max:32',
+            'campaign_code' => 'required|string|max:32',
+            'pageview_code' => 'required|string|max:32',
+            'event_sig' => 'required|string|size:64|regex:/^[a-f0-9]+$/',
+            'event_type' => 'required|string|in:link_click,form_submit,page_engaged',
+            'event_ts' => 'nullable|integer|min:1',
+            'target_url' => 'nullable|string',
+            'element_id' => 'nullable|string',
+            'element_name' => 'nullable|string',
+            'element_classes' => 'nullable|string',
+            'form_fields_checked' => 'nullable|integer|min:0|max:500',
+            'form_fields_filled' => 'nullable|integer|min:0|max:500',
+            'form_has_user_data' => 'nullable|boolean',
+        ]);
+
+        $truncate = static function ($value, int $limit): ?string {
+            if ($value === null) {
+                return null;
+            }
+
+            $normalized = trim((string) $value);
+            if ($normalized === '') {
+                return null;
+            }
+
+            return mb_substr($normalized, 0, $limit);
+        };
+
+        $userCode = (string) ($truncate($data['user_code'] ?? '', 32) ?? '');
+        $campaignCode = (string) ($truncate($data['campaign_code'] ?? '', 32) ?? '');
+        $pageviewCode = (string) ($truncate($data['pageview_code'] ?? '', 32) ?? '');
+        $eventType = (string) ($truncate($data['event_type'] ?? '', 30) ?? '');
+        $targetUrl = $truncate($data['target_url'] ?? null, 2000);
+        $elementId = $truncate($data['element_id'] ?? null, 191);
+        $elementName = $truncate($data['element_name'] ?? null, 191);
+        $elementClasses = $truncate($data['element_classes'] ?? null, 500);
+
+        $expectedEventSig = $this->buildEventSignature(
+            $userCode,
+            $campaignCode,
+            $pageviewCode
+        );
+
+        if (!hash_equals($expectedEventSig, strtolower((string) $data['event_sig']))) {
+            $log->warning('Tracking event rejeitado: assinatura inválida.', [
+                'event_type' => (string) ($data['event_type'] ?? ''),
+                'user_code' => $userCode,
+                'campaign_code' => $campaignCode,
+                'pageview_code' => $pageviewCode,
+                'ip' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'message' => 'Assinatura do evento inválida.',
+            ], 422);
+        }
+
+        $userIdFromCode = app(HashidService::class)->decode($userCode);
+        $campaignIdFromCode = app(HashidService::class)->decode($campaignCode);
+        $pageviewIdFromCode = app(HashidService::class)->decode($pageviewCode);
+
+        if (!$userIdFromCode || !$campaignIdFromCode || !$pageviewIdFromCode) {
+            return response()->json([
+                'message' => 'Tokens do evento inválidos.',
+            ], 422);
+        }
+
+        $campaign = Campaign::query()
+            ->where('id', $campaignIdFromCode)
+            ->where('user_id', $userIdFromCode)
+            ->where('code', $campaignCode)
+            ->first();
+
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'Campanha inválida.',
+            ], 422);
+        }
+
+        $allowedOrigin = Campaign::normalizeProductUrl($campaign->product_url);
+        if (!$allowedOrigin) {
+            return response()->json([
+                'message' => 'Origem de tracking não configurada para a campanha.',
+            ], 403);
+        }
+
+        $requestOrigin = $this->extractRequestOrigin($request);
+        if (!$requestOrigin || !$this->originsMatch($allowedOrigin, $requestOrigin)) {
+            return response()->json([
+                'message' => 'Origem não autorizada para esta campanha.',
+            ], 403);
+        }
+
+        $pageview = Pageview::query()
+            ->where('id', $pageviewIdFromCode)
+            ->where('user_id', $campaign->user_id)
+            ->where('campaign_id', $campaign->id)
+            ->where('campaign_code', $campaign->code)
+            ->first();
+
+        if (!$pageview) {
+            return response()->json([
+                'message' => 'Pageview inválida para esta campanha.',
+            ], 422);
+        }
+
+        $event = PageviewEvent::create([
+            'user_id' => $campaign->user_id,
+            'campaign_id' => $campaign->id,
+            'pageview_id' => $pageview->id,
+            'event_type' => $eventType,
+            'target_url' => $targetUrl,
+            'element_id' => $elementId,
+            'element_name' => $elementName,
+            'element_classes' => $elementClasses,
+            'form_fields_checked' => $data['form_fields_checked'] ?? null,
+            'form_fields_filled' => $data['form_fields_filled'] ?? null,
+            'form_has_user_data' => array_key_exists('form_has_user_data', $data)
+                ? (bool) $data['form_has_user_data']
+                : null,
+            'event_ts_ms' => $data['event_ts'] ?? null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'event_id' => $event->id,
+        ]);
     }
 
     protected function resolveTrafficSourceCategoryId(string $slug): ?int
@@ -450,6 +590,7 @@ class TrackingController extends Controller
 
             // 🔹 Valores dinâmicos
             $endpoint = rtrim(config('app.url'), '/') . '/api/tracking/collect';
+            $eventEndpoint = rtrim(config('app.url'), '/') . '/api/tracking/event';
 
             // 🔹 Replace seguro (JS válido)
             $authTs = time();
@@ -465,6 +606,7 @@ class TrackingController extends Controller
 
             $replacements = [
                 "'{ENDPOINT}'"       => json_encode($endpoint),
+                "'{EVENT_ENDPOINT}'" => json_encode($eventEndpoint),
                 "'{USER_CODE}'"      => json_encode($userCode),
                 "'{CAMPAIGN_CODE}'"  => json_encode($campaignCode),
                 "'{AUTH_TS}'"        => json_encode($authTs),
@@ -515,6 +657,14 @@ class TrackingController extends Controller
     protected function buildTrackingSignature(string $userCode, string $campaignCode, int $authTs, string $authNonce): string
     {
         $payload = implode('|', [$userCode, $campaignCode, $authTs, $authNonce]);
+        $secret = (string) config('app.tracking_signature_secret', '');
+
+        return hash_hmac('sha256', $payload, $secret);
+    }
+
+    protected function buildEventSignature(string $userCode, string $campaignCode, string $pageviewCode): string
+    {
+        $payload = implode('|', [$userCode, $campaignCode, $pageviewCode]);
         $secret = (string) config('app.tracking_signature_secret', '');
 
         return hash_hmac('sha256', $payload, $secret);

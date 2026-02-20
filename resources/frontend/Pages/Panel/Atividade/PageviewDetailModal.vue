@@ -82,12 +82,107 @@ const detailReferrer = computed(() => detailPageview.value?.referrer ?? null)
 const detailReferrerHost = computed(() => extractHost(detailReferrer.value))
 const detailResolvedGclid = computed(() => resolveGclid())
 const detailComposedCode = computed(() => props.payload?.composed_code ?? null)
+const detailEvents = computed(() => (Array.isArray(props.payload?.events) ? props.payload.events : []))
 
 const detailUrlParams = computed(() => {
     const params = detailUrl.value?.query_params ?? {}
     return Object.entries(params)
 })
 const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
+
+const detailFlowEventSummary = computed(() => {
+    const summary = {
+        page_engaged: { first: null, count: 0 },
+        form_submit: { first: null, count: 0 },
+        link_click: { first: null, count: 0 },
+    }
+
+    detailEvents.value.forEach((event) => {
+        const type = String(event?.event_type || '').toLowerCase()
+        if (!Object.prototype.hasOwnProperty.call(summary, type)) {
+            return
+        }
+
+        if (!summary[type].first) {
+            summary[type].first = event
+        }
+        summary[type].count += 1
+    })
+
+    return summary
+})
+
+const visitFlowSteps = computed(() => {
+    const engaged = detailFlowEventSummary.value.page_engaged
+    const formSubmit = detailFlowEventSummary.value.form_submit
+    const linkClick = detailFlowEventSummary.value.link_click
+    const interactionUsesForm = Boolean(formSubmit.first)
+    const interactionBase = interactionUsesForm ? formSubmit : linkClick
+
+    const pageViewCaption = detailPageview.value?.created_at_formatted || 'Não identificado'
+
+    const engagedCaption = engaged.first
+        ? `${engaged.first.created_at_formatted || '-'}${engaged.count > 1 ? ` (+${engaged.count - 1})` : ''}`
+        : 'Sem engajamento detectado'
+
+    const interactionBaseCaption = interactionBase.first
+        ? `${interactionBase.first.created_at_formatted || '-'}${interactionBase.count > 1 ? ` (+${interactionBase.count - 1})` : ''}`
+        : (interactionUsesForm ? 'Sem envio de formulário' : 'Sem clique em link')
+    const formDataCaption = interactionUsesForm && interactionBase.first
+        ? (interactionBase.first.form_has_user_data ? 'Dados informados' : 'Sem dados informados')
+        : ''
+    const interactionCaption = formDataCaption
+        ? `${interactionBaseCaption} • ${formDataCaption}`
+        : interactionBaseCaption
+
+    const conversionDone = Boolean(detailPageview.value?.conversion)
+    const conversionCaption = conversionDone
+        ? `${detailPageview.value?.created_at_formatted || '-'} • Convertido`
+        : 'Não convertido'
+
+    return [
+        {
+            name: 1,
+            title: 'Page View',
+            caption: pageViewCaption,
+            icon: 'visibility',
+            done: true,
+            color: 'primary',
+        },
+        {
+            name: 2,
+            title: 'Page Engaged',
+            caption: engagedCaption,
+            icon: 'insights',
+            done: Boolean(engaged.first),
+            color: Boolean(engaged.first) ? 'primary' : 'grey-6',
+        },
+        {
+            name: 3,
+            title: interactionUsesForm ? 'Form Submit' : 'Link Click',
+            caption: interactionCaption,
+            icon: interactionUsesForm ? 'fact_check' : 'ads_click',
+            done: Boolean(interactionBase.first),
+            color: Boolean(interactionBase.first) ? 'primary' : 'grey-6',
+        },
+        {
+            name: 4,
+            title: 'Conversão',
+            caption: conversionCaption,
+            icon: conversionDone ? 'task_alt' : 'radio_button_unchecked',
+            done: conversionDone,
+            color: conversionDone ? 'positive' : 'grey-6',
+        },
+    ]
+})
+
+const visitFlowActiveStep = computed(() => {
+    const doneSteps = visitFlowSteps.value.filter(step => step.done)
+    if (doneSteps.length === 0) {
+        return 1
+    }
+    return doneSteps[doneSteps.length - 1].name
+})
 
 const detailDeviceSummary = computed(() => {
     const relationName = detailPageview.value?.device_category?.name
@@ -323,7 +418,9 @@ async function copyValue(value) {
                                             <q-tooltip>Copiar GCLID</q-tooltip>
                                         </q-btn>
                                     </div>
-                                    <div class="detail-label tw-mt-2">Id de acompanhamento</div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Id de acompanhamento</div>
                                     <div class="value-with-copy value-with-copy--inline">
                                         <div class="truncated-preview">{{ previewValue(detailComposedCode) }}</div>
                                         <q-btn
@@ -340,28 +437,33 @@ async function copyValue(value) {
                                     </div>
                                 </div>
                                 <div>
-                                    <div class="detail-label">Conversão</div>
-                                    <div class="tw-mt-1">
-                                        <q-badge
-                                            v-if="detailPageview.conversion"
-                                            color="green"
-                                            label="Convertido"
-                                        />
-                                        <q-badge
-                                            v-else
-                                            color="grey-4"
-                                            text-color="dark"
-                                            label="Não convertido"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
                                     <div class="detail-label">Canal</div>
                                     <div class="detail-value">
                                         {{ detailTrafficCategoryName }}
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="subsection-separator" />
+                            <q-stepper
+                                flat
+                                animated
+                                alternative-labels
+                                class="visit-flow-stepper"
+                                :vertical="$q.screen.lt.lg"
+                                :model-value="visitFlowActiveStep"
+                            >
+                                <q-step
+                                    v-for="step in visitFlowSteps"
+                                    :key="step.name"
+                                    :name="step.name"
+                                    :title="step.title"
+                                    :caption="step.caption"
+                                    :icon="step.icon"
+                                    :done="step.done"
+                                    :color="step.color"
+                                />
+                            </q-stepper>
 
                             <div class="subsection-separator" />
                             <div class="subsection-title">GEOLOCALIZAÇÃO</div>
@@ -639,6 +741,66 @@ async function copyValue(value) {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #475569;
+}
+
+.visit-flow-stepper {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab) {
+    cursor: default;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab .q-focus-helper) {
+    display: none;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab:hover) {
+    background: transparent;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab) {
+    color: #9ca3af;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab.q-stepper__tab--done .q-stepper__title),
+.visit-flow-stepper :deep(.q-stepper__tab.q-stepper__tab--done .q-stepper__caption) {
+    color: #475569;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab:nth-child(4).q-stepper__tab--done .q-stepper__title),
+.visit-flow-stepper :deep(.q-stepper__tab:nth-child(4).q-stepper__tab--done .q-stepper__caption) {
+    color: var(--q-positive);
+}
+
+@media (min-width: 1024px) {
+    .visit-flow-stepper :deep(.q-stepper__header) {
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    .visit-flow-stepper :deep(.q-stepper__tab) {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 0;
+        padding: 0.3rem 0.2rem 0;
+    }
+
+    .visit-flow-stepper :deep(.q-stepper__step-inner) {
+        padding-bottom: 0;
+    }
+
+    .visit-flow-stepper :deep(.q-stepper__title) {
+        font-size: 0.9rem;
+        line-height: 1.05;
+    }
+
+    .visit-flow-stepper :deep(.q-stepper__caption) {
+        font-size: 0.76rem;
+        line-height: 1.05;
+    }
 }
 
 .rounded-borders {

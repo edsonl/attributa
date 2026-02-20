@@ -4,18 +4,36 @@
     window.__ATTRIBUTA_PAGEVIEW_SENT__ = true;
 
     // Tokens definidos no backend (pode vir null)
-    let USER_CODE = '{USER_CODE}';
-    let CAMPAIGN_CODE = '{CAMPAIGN_CODE}';
-    let AUTH_TS = '{AUTH_TS}';
-    let AUTH_NONCE = '{AUTH_NONCE}';
-    let AUTH_SIG = '{AUTH_SIG}';
-    let TRACKING_PARAM_KEYS = '{TRACKING_PARAM_KEYS}';
+    var USER_CODE = '{USER_CODE}';
+    var CAMPAIGN_CODE = '{CAMPAIGN_CODE}';
+    var AUTH_TS = '{AUTH_TS}';
+    var AUTH_NONCE = '{AUTH_NONCE}';
+    var AUTH_SIG = '{AUTH_SIG}';
+    var TRACKING_PARAM_KEYS = '{TRACKING_PARAM_KEYS}';
 
     // Validação final
     if (!USER_CODE || !CAMPAIGN_CODE || !AUTH_TS || !AUTH_NONCE || !AUTH_SIG) {
         console.warn('[Attributa] Dados de autenticação do tracking não informados');
         return;
     }
+
+    function normalizeTrackingParamKeys(raw) {
+        if (!Array.isArray(raw)) {
+            return [];
+        }
+
+        var keys = [];
+        raw.forEach(function (item) {
+            var value = String(item || '').trim();
+            if (!value) return;
+            if (keys.indexOf(value) !== -1) return;
+            keys.push(value);
+        });
+
+        return keys;
+    }
+
+    var trackingParamKeys = normalizeTrackingParamKeys(TRACKING_PARAM_KEYS);
 
     // ===============================
     // Cookies helpers
@@ -90,7 +108,6 @@
         trackedData[key] = value || null;
     });
 
-
     // ===============================
     // Payload base
     // ===============================
@@ -129,9 +146,8 @@
     // ===============================
     // Envio do tracking
     // ===============================
-    //var protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    //var endpoint = protocol + '//attributa.cloud/tracking/collect';
     var endpoint = '{ENDPOINT}';
+    var eventEndpoint = '{EVENT_ENDPOINT}';
 
     function sendPayload(endpoint, payload) {
         var data = JSON.stringify(payload);
@@ -150,9 +166,14 @@
                     })
                     .then(function (json) {
                         var pageviewCode = json && json.pageview_code;
+                        var eventSig = json && json.event_sig;
                         if (pageviewCode) {
                             setCookie('at_pageview_code', pageviewCode, 90);
-                            initSubInjection(TRACKING_PARAM_KEYS);
+                            if (eventSig) {
+                                setCookie('at_event_sig', eventSig, 90);
+                            }
+                            initSubInjection(trackingParamKeys);
+                            initInteractionTracking(trackingParamKeys);
                         }
                     })
                     .catch(function () {});
@@ -160,7 +181,6 @@
             } catch (e) {}
         }
 
-        // fallback legado
         // 2️⃣ Fallback legado (XMLHttpRequest)
         try {
             var xhr = new XMLHttpRequest();
@@ -172,9 +192,14 @@
                         try {
                             var json = JSON.parse(xhr.responseText);
                             var pageviewCode = json && json.pageview_code;
+                            var eventSig = json && json.event_sig;
                             if (pageviewCode) {
                                 setCookie('at_pageview_code', pageviewCode, 90);
-                                initSubInjection(TRACKING_PARAM_KEYS);
+                                if (eventSig) {
+                                    setCookie('at_event_sig', eventSig, 90);
+                                }
+                                initSubInjection(trackingParamKeys);
+                                initInteractionTracking(trackingParamKeys);
                             }
                         } catch (e) {}
                     }
@@ -183,8 +208,6 @@
             xhr.send(data);
         } catch (e) {}
     }
-
-    sendPayload(endpoint, payload);
 
     // ==============================================
     // Injeção de parâmetros de tracking (forms/links)
@@ -202,7 +225,6 @@
 
         if (keys.length === 0) return;
 
-        // ----- Forms -----
         function upsertHiddenInput(form, name, value) {
             var input = form.querySelector('input[name="' + name + '"]');
             if (!input) {
@@ -220,7 +242,6 @@
             });
         });
 
-        // ----- Links -----
         document.querySelectorAll('a[href]').forEach(function (a) {
             var href = a.getAttribute('href') || '';
             if (!href || href === '#' || href.startsWith('#')) return;
@@ -229,7 +250,6 @@
             try {
                 var url = new URL(href, window.location.href);
 
-                // ignora âncoras da própria página
                 if (
                     url.origin === window.location.origin &&
                     url.pathname === window.location.pathname &&
@@ -248,4 +268,328 @@
         });
     }
 
+    // ==============================================
+    // Eventos de interação (link click / form submit)
+    // ==============================================
+    function initInteractionTracking(paramKeys) {
+        if (window.__ATTRIBUTA_EVENTS_INIT__) return;
+        window.__ATTRIBUTA_EVENTS_INIT__ = true;
+
+        var engagedSent = false;
+        var interactionCount = 0;
+        var engagedTimer = null;
+        var scrollTriggered = false;
+
+        var ignoredNamesMap = {};
+        (Array.isArray(paramKeys) ? paramKeys : []).forEach(function (name) {
+            var normalized = String(name || '').trim().toLowerCase();
+            if (normalized) {
+                ignoredNamesMap[normalized] = true;
+            }
+        });
+
+        function getElementPosition(el, selector) {
+            var list = document.querySelectorAll(selector);
+            for (var i = 0; i < list.length; i++) {
+                if (list[i] === el) {
+                    return i + 1;
+                }
+            }
+            return 1;
+        }
+
+        function getSafeText(value, maxLen) {
+            var text = String(value || '').replace(/\s+/g, ' ').trim();
+            if (!text) return '';
+            return text.length > maxLen ? text.slice(0, maxLen) : text;
+        }
+
+        function getElementClasses(el) {
+            return getSafeText(el && el.className ? el.className : '', 500) || null;
+        }
+
+        function getElementName(el, kind) {
+            if (!el || !el.getAttribute) return null;
+
+            var attrName = getSafeText(el.getAttribute('name'), 191);
+            if (attrName) return attrName;
+
+            var dataName = getSafeText(el.getAttribute('data-name'), 191);
+            if (dataName) return dataName;
+
+            if (kind === 'form') {
+                return 'Formulário ' + getElementPosition(el, 'form');
+            }
+
+            if (kind === 'link') {
+                var linkIndex = getElementPosition(el, 'a[href]');
+                var linkText = getSafeText(el.textContent, 120);
+                return linkText ? ('Link ' + linkIndex + ' - ' + linkText) : ('Link ' + linkIndex);
+            }
+
+            return null;
+        }
+
+        function resolveTrackingContext() {
+            var pageviewCode = getCookie('at_pageview_code');
+            var eventSig = getCookie('at_event_sig');
+            if (!pageviewCode || !eventSig) {
+                return null;
+            }
+
+            return {
+                user_code: USER_CODE,
+                campaign_code: CAMPAIGN_CODE,
+                pageview_code: pageviewCode,
+                event_sig: eventSig
+            };
+        }
+
+        function sendEvent(eventPayload) {
+            if (!eventEndpoint) return;
+
+            var context = resolveTrackingContext();
+            if (!context) return;
+
+            var payload = {
+                user_code: context.user_code,
+                campaign_code: context.campaign_code,
+                pageview_code: context.pageview_code,
+                event_sig: context.event_sig,
+                event_ts: Date.now()
+            };
+
+            for (var key in eventPayload) {
+                if (Object.prototype.hasOwnProperty.call(eventPayload, key)) {
+                    payload[key] = eventPayload[key];
+                }
+            }
+
+            var data = JSON.stringify(payload);
+
+            if (navigator.sendBeacon) {
+                try {
+                    var blob = new Blob([data], { type: 'application/json' });
+                    var sent = navigator.sendBeacon(eventEndpoint, blob);
+                    if (sent) return;
+                } catch (e) {}
+            }
+
+            if (window.fetch) {
+                try {
+                    fetch(eventEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: data,
+                        keepalive: true
+                    }).catch(function () {});
+                } catch (e) {}
+            }
+        }
+
+        function markEngaged(reason) {
+            if (engagedSent) return;
+            engagedSent = true;
+
+            if (engagedTimer) {
+                clearTimeout(engagedTimer);
+                engagedTimer = null;
+            }
+
+            sendEvent({
+                event_type: 'page_engaged',
+                target_url: getSafeText(window.location.href, 2000),
+                element_name: getSafeText('Page engaged (' + reason + ')', 191),
+                element_id: null,
+                element_classes: null
+            });
+        }
+
+        function getScrollPercent() {
+            var doc = document.documentElement || document.body;
+            if (!doc) return 0;
+
+            var scrollTop = window.pageYOffset || doc.scrollTop || 0;
+            var maxScroll = Math.max((doc.scrollHeight || 0) - (window.innerHeight || 0), 0);
+            if (maxScroll <= 0) return 100;
+
+            return Math.min(100, Math.max(0, (scrollTop / maxScroll) * 100));
+        }
+
+        function findLinkElement(target) {
+            if (!target) return null;
+            if (target.closest) {
+                return target.closest('a[href]');
+            }
+
+            var node = target;
+            while (node && node !== document) {
+                if (node.tagName && node.tagName.toLowerCase() === 'a' && node.getAttribute('href')) {
+                    return node;
+                }
+                node = node.parentNode;
+            }
+
+            return null;
+        }
+
+        function resolveLinkTargetUrl(a) {
+            var href = a ? (a.getAttribute('href') || '') : '';
+            if (!href || href === '#' || href.charAt(0) === '#') return null;
+            if (href.toLowerCase().indexOf('javascript:') === 0) return null;
+
+            try {
+                return new URL(href, window.location.href).toString();
+            } catch (e) {
+                return href;
+            }
+        }
+
+        function fieldHasValue(field) {
+            var tag = (field.tagName || '').toLowerCase();
+            var type = tag === 'input' ? String(field.type || '').toLowerCase() : '';
+
+            if (type === 'checkbox' || type === 'radio') {
+                return !!field.checked;
+            }
+
+            if (type === 'file') {
+                return field.files && field.files.length > 0;
+            }
+
+            if (tag === 'select' && field.multiple) {
+                if (!field.options) return false;
+                for (var i = 0; i < field.options.length; i++) {
+                    var option = field.options[i];
+                    if (option.selected && String(option.value || '').trim() !== '') {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            return String(field.value || '').trim() !== '';
+        }
+
+        function getFormMetrics(form) {
+            var fields = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select'));
+            var candidates = [];
+
+            fields.forEach(function (field) {
+                if (!field || field.disabled) return;
+
+                var tag = (field.tagName || '').toLowerCase();
+                var type = tag === 'input' ? String(field.type || '').toLowerCase() : '';
+                if (tag === 'input' && type === 'hidden') return;
+
+                var rawName = String(field.getAttribute('name') || '').trim();
+                var normalizedName = rawName.toLowerCase();
+                if (normalizedName && ignoredNamesMap[normalizedName]) return;
+
+                candidates.push({
+                    field: field,
+                    normalizedName: normalizedName
+                });
+            });
+
+            var priority = candidates.filter(function (item) {
+                return item.normalizedName === 'name' || item.normalizedName === 'phone';
+            });
+
+            var evaluated = priority.length > 0 ? priority : candidates;
+            var checked = evaluated.length;
+            var filled = 0;
+
+            evaluated.forEach(function (item) {
+                if (fieldHasValue(item.field)) {
+                    filled += 1;
+                }
+            });
+
+            return {
+                checked: checked,
+                filled: filled,
+                hasUserData: filled > 0
+            };
+        }
+
+        document.addEventListener('click', function (ev) {
+            interactionCount += 1;
+            if (interactionCount >= 2) {
+                markEngaged('interactions');
+            }
+
+            var link = findLinkElement(ev.target);
+            if (!link) return;
+
+            var targetUrl = resolveLinkTargetUrl(link);
+            if (!targetUrl) return;
+
+            sendEvent({
+                event_type: 'link_click',
+                target_url: getSafeText(targetUrl, 2000),
+                element_id: getSafeText(link.id || '', 191) || null,
+                element_name: getElementName(link, 'link'),
+                element_classes: getElementClasses(link)
+            });
+        }, true);
+
+        document.addEventListener('keydown', function () {
+            interactionCount += 1;
+            if (interactionCount >= 2) {
+                markEngaged('interactions');
+            }
+        }, true);
+
+        document.addEventListener('touchstart', function () {
+            interactionCount += 1;
+            if (interactionCount >= 2) {
+                markEngaged('interactions');
+            }
+        }, true);
+
+        document.addEventListener('submit', function (ev) {
+            var form = ev.target;
+            if (!form || !form.tagName || form.tagName.toLowerCase() !== 'form') {
+                return;
+            }
+
+            var metrics = getFormMetrics(form);
+            var action = '';
+            try {
+                action = form.getAttribute('action')
+                    ? new URL(form.getAttribute('action'), window.location.href).toString()
+                    : window.location.href;
+            } catch (e) {
+                action = form.getAttribute('action') || window.location.href;
+            }
+
+            sendEvent({
+                event_type: 'form_submit',
+                target_url: getSafeText(action, 2000),
+                element_id: getSafeText(form.id || '', 191) || null,
+                element_name: getElementName(form, 'form'),
+                element_classes: getElementClasses(form),
+                form_fields_checked: metrics.checked,
+                form_fields_filled: metrics.filled,
+                form_has_user_data: metrics.hasUserData
+            });
+        }, true);
+
+        window.addEventListener('scroll', function () {
+            if (scrollTriggered || engagedSent) return;
+
+            var percent = getScrollPercent();
+            if (percent >= 30) {
+                scrollTriggered = true;
+                markEngaged('scroll_30');
+            }
+        }, { passive: true });
+
+        engagedTimer = setTimeout(function () {
+            markEngaged('time_10s');
+        }, 10000);
+    }
+
+    sendPayload(endpoint, payload);
 })();
