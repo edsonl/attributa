@@ -50,6 +50,11 @@ class ConversionGoal extends Model
         return $this->hasMany(ConversionGoalLog::class, 'goal_id');
     }
 
+    public function csvSnapshot()
+    {
+        return $this->hasOne(ConversionGoalCsvSnapshot::class, 'goal_id');
+    }
+
     protected static function booted(): void
     {
         static::saving(function (ConversionGoal $conversionGoal) {

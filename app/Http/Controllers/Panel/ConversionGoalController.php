@@ -9,6 +9,7 @@ use App\Models\ConversionGoal;
 use Illuminate\Support\Carbon;
 use App\Models\Timezone;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ConversionGoalController extends Controller
@@ -84,6 +85,7 @@ class ConversionGoalController extends Controller
             'goal_code' => $data['goal_code'],
             'timezone_id' => $data['timezone_id'],
             'active' => $data['active'],
+            'csv_fake_line_enabled' => false,
         ]);
 
         return redirect()
@@ -168,21 +170,96 @@ class ConversionGoalController extends Controller
         ]);
     }
 
-    public function updateCsvFakeLine(Request $request, ConversionGoal $conversionGoal)
+    public function regeneratePassword(ConversionGoal $conversionGoal)
     {
         abort_unless((int) $conversionGoal->user_id === (int) auth()->id(), 403);
 
-        $data = $request->validate([
-            'csv_fake_line_enabled' => ['required', 'boolean'],
-        ]);
-
+        $newPassword = Str::random(25);
         $conversionGoal->update([
-            'csv_fake_line_enabled' => (bool) $data['csv_fake_line_enabled'],
+            'googleads_password' => $newPassword,
         ]);
 
         return response()->json([
-            'message' => 'Configuração de integração atualizada com sucesso.',
-            'csv_fake_line_enabled' => (bool) $conversionGoal->csv_fake_line_enabled,
+            'message' => 'Senha de integração atualizada com sucesso.',
+            'googleads_password' => $newPassword,
+        ]);
+    }
+
+    public function snapshot(ConversionGoal $conversionGoal)
+    {
+        abort_unless((int) $conversionGoal->user_id === (int) auth()->id(), 403);
+
+        $snapshot = $conversionGoal->csvSnapshot()->first();
+        $header = $snapshot?->snapshot_json['header'] ?? [];
+        $rows = $snapshot?->snapshot_json['rows'] ?? [];
+
+        if (is_array($header)) {
+            $normalized = $this->removeUserAgentFromSnapshot($header, is_array($rows) ? $rows : []);
+            $header = $normalized['header'];
+            $rows = $normalized['rows'];
+        }
+
+        return response()->json([
+            'goal_id' => $conversionGoal->id,
+            'goal_code' => $conversionGoal->goal_code,
+            'has_snapshot' => $snapshot !== null,
+            'rows_count' => (int) ($snapshot?->rows_count ?? 0),
+            'header' => is_array($header) ? array_values($header) : [],
+            'rows' => is_array($rows) ? array_values($rows) : [],
+            'updated_at' => $snapshot?->updated_at,
+            'updated_at_formatted' => $snapshot?->updated_at
+                ? Carbon::parse($snapshot->updated_at, 'UTC')->setTimezone('America/Sao_Paulo')->format('d/m/Y H:i:s')
+                : null,
+        ]);
+    }
+
+    public function snapshotCsv(ConversionGoal $conversionGoal)
+    {
+        abort_unless((int) $conversionGoal->user_id === (int) auth()->id(), 403);
+
+        $snapshot = $conversionGoal->csvSnapshot()->first();
+        if (!$snapshot) {
+            return response()->json([
+                'message' => 'Nenhum snapshot disponível para download.',
+            ], 404);
+        }
+
+        $header = $snapshot->snapshot_json['header'] ?? [];
+        $rows = $snapshot->snapshot_json['rows'] ?? [];
+
+        if (is_array($header)) {
+            $normalized = $this->removeUserAgentFromSnapshot($header, is_array($rows) ? $rows : []);
+            $header = $normalized['header'];
+            $rows = $normalized['rows'];
+        }
+
+        if (!is_array($header) || count($header) === 0) {
+            return response()->json([
+                'message' => 'Snapshot inválido: cabeçalho não encontrado.',
+            ], 422);
+        }
+
+        $output = fopen('php://temp', 'r+');
+        fputcsv($output, array_values($header));
+
+        if (is_array($rows)) {
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    fputcsv($output, array_values($row));
+                }
+            }
+        }
+
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+
+        $filename = 'snapshot_' . $conversionGoal->goal_code . '_' . now()->format('Ymd_His') . '.csv';
+
+        return response((string) $csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
         ]);
     }
 
@@ -205,6 +282,39 @@ class ConversionGoalController extends Controller
                 'label' => $timezone->label ?: $timezone->identifier,
                 'utc_offset' => $timezone->utc_offset,
             ]);
+    }
+
+    protected function removeUserAgentFromSnapshot(array $header, array $rows): array
+    {
+        $userAgentIndex = null;
+        foreach ($header as $index => $column) {
+            if (mb_strtolower(trim((string) $column)) === 'user agent') {
+                $userAgentIndex = $index;
+                break;
+            }
+        }
+
+        if ($userAgentIndex === null) {
+            return [
+                'header' => array_values($header),
+                'rows' => array_values($rows),
+            ];
+        }
+
+        unset($header[$userAgentIndex]);
+        $normalizedRows = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            unset($row[$userAgentIndex]);
+            $normalizedRows[] = array_values($row);
+        }
+
+        return [
+            'header' => array_values($header),
+            'rows' => $normalizedRows,
+        ];
     }
 
     protected function defaultTimezoneId(): ?int

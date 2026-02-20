@@ -183,10 +183,14 @@ Route::middleware(['auth', 'verified'])
             Route::resource('campaigns', CampaignController::class);
             Route::get('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'logs'])
                 ->name('conversion-goals.logs');
+            Route::get('conversion-goals/{conversion_goal}/snapshot', [ConversionGoalController::class, 'snapshot'])
+                ->name('conversion-goals.snapshot');
+            Route::get('conversion-goals/{conversion_goal}/snapshot/csv', [ConversionGoalController::class, 'snapshotCsv'])
+                ->name('conversion-goals.snapshot-csv');
             Route::delete('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'destroyLogs'])
                 ->name('conversion-goals.logs.destroy');
-            Route::patch('conversion-goals/{conversion_goal}/csv-fake-line', [ConversionGoalController::class, 'updateCsvFakeLine'])
-                ->name('conversion-goals.csv-fake-line');
+            Route::patch('conversion-goals/{conversion_goal}/regenerate-password', [ConversionGoalController::class, 'regeneratePassword'])
+                ->name('conversion-goals.regenerate-password');
             Route::resource('conversion-goals', ConversionGoalController::class)->except(['show']);
 
             //CRUD Usuários

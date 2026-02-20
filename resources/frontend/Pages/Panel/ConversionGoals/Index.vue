@@ -25,7 +25,16 @@ const search = ref(props.filters?.search ?? '')
 const $q = useQuasar()
 const integrationDialog = ref(false)
 const integrationPayload = ref(null)
-const integrationModeSaving = ref(false)
+const integrationPasswordSaving = ref(false)
+const snapshotDialog = ref(false)
+const snapshotLoading = ref(false)
+const snapshotGoalCode = ref('')
+const snapshotGoalKey = ref(null)
+const snapshotRowsCount = ref(0)
+const snapshotUpdatedAt = ref(null)
+const snapshotRows = ref([])
+const snapshotColumns = ref([])
+const snapshotDownloading = ref(false)
 const logsDialog = ref(false)
 const logsLoading = ref(false)
 const logsGoalCode = ref('')
@@ -128,6 +137,12 @@ const columns = [
         align: 'center',
     },
     {
+        name: 'snapshot',
+        label: 'Snapshot CSV',
+        field: 'snapshot',
+        align: 'center',
+    },
+    {
         name: 'actions',
         label: 'Acoes',
         field: 'actions',
@@ -220,36 +235,52 @@ function openIntegration(item) {
         url: item.integration_url,
         username: `googleads-${item.user_slug_id}`,
         password: item.googleads_password,
-        csv_fake_line_enabled: Boolean(item.csv_fake_line_enabled),
     }
 
     integrationDialog.value = true
 }
 
-async function saveCsvFakeLineSetting() {
-    if (!integrationPayload.value?.id || integrationModeSaving.value) {
+async function regenerateIntegrationPassword() {
+    if (!integrationPayload.value?.id || integrationPasswordSaving.value) {
         return
     }
 
-    integrationModeSaving.value = true
-    try {
-        await axios.patch(
-            route('panel.conversion-goals.csv-fake-line', integrationPayload.value.id),
-            { csv_fake_line_enabled: Boolean(integrationPayload.value.csv_fake_line_enabled) }
-        )
+    $q.dialog({
+        title: 'Gerar nova senha?',
+        message: 'Ao gerar uma nova senha, a conexão atual no Google Ads deixará de autenticar imediatamente até você atualizar a senha na configuração da fonte de dados.',
+        cancel: {
+            label: 'Cancelar',
+            flat: true,
+        },
+        ok: {
+            label: 'Gerar nova senha',
+            color: 'warning',
+            unelevated: true,
+        },
+        persistent: true,
+    }).onOk(async () => {
+        integrationPasswordSaving.value = true
+        try {
+            const response = await axios.patch(
+                route('panel.conversion-goals.regenerate-password', integrationPayload.value.id)
+            )
 
-        $q.notify({
-            type: 'positive',
-            message: 'Configuração de integração salva.',
+            integrationPayload.value.password = response.data?.googleads_password ?? ''
+
+            $q.notify({
+                type: 'warning',
+                message: 'Nova senha gerada. Atualize a senha no Google Ads para restabelecer a conexão.',
+                timeout: 5500,
+            })
+        } catch {
+            $q.notify({
+                type: 'negative',
+                message: 'Não foi possível gerar uma nova senha agora.',
+            })
+        } finally {
+            integrationPasswordSaving.value = false
+        }
         })
-    } catch {
-        $q.notify({
-            type: 'negative',
-            message: 'Não foi possível salvar a configuração de integração.',
-        })
-    } finally {
-        integrationModeSaving.value = false
-    }
 }
 
 async function copyValue(value, label) {
@@ -275,6 +306,129 @@ async function copyValue(value, label) {
             message: `Falha ao copiar ${label.toLowerCase()}.`,
         })
     }
+}
+
+function buildSnapshotTable(header, rows) {
+    if (!Array.isArray(header) || header.length === 0) {
+        return {
+            columns: [],
+            rows: [],
+        }
+    }
+
+    const columns = header.map((label, index) => ({
+        name: `c${index}`,
+        label: String(label ?? ''),
+        field: `c${index}`,
+        align: 'left',
+        sortable: false,
+    }))
+
+    const mappedRows = Array.isArray(rows)
+        ? rows.map((row, rowIndex) => {
+            const obj = { __index: rowIndex + 1 }
+
+            columns.forEach((col, colIndex) => {
+                obj[col.field] = Array.isArray(row) ? (row[colIndex] ?? '') : ''
+            })
+
+            return obj
+        })
+        : []
+
+    return {
+        columns,
+        rows: mappedRows,
+    }
+}
+
+async function fetchSnapshot(goalId) {
+    if (!goalId) {
+        return
+    }
+
+    snapshotLoading.value = true
+    try {
+        const response = await axios.get(route('panel.conversion-goals.snapshot', goalId))
+        snapshotRowsCount.value = Number(response.data?.rows_count ?? 0)
+        snapshotUpdatedAt.value = response.data?.updated_at_formatted ?? null
+
+        const table = buildSnapshotTable(response.data?.header ?? [], response.data?.rows ?? [])
+        snapshotColumns.value = table.columns
+        snapshotRows.value = table.rows
+    } finally {
+        snapshotLoading.value = false
+    }
+}
+
+function parseFilenameFromDisposition(header) {
+    const value = String(header ?? '')
+    if (value === '') {
+        return null
+    }
+
+    const utf8 = value.match(/filename\*=UTF-8''([^;]+)/i)
+    if (utf8?.[1]) {
+        return decodeURIComponent(utf8[1].trim())
+    }
+
+    const basic = value.match(/filename=\"?([^\";]+)\"?/i)
+    return basic?.[1]?.trim() ?? null
+}
+
+async function downloadSnapshotCsv() {
+    if (!snapshotGoalKey.value || snapshotDownloading.value) {
+        return
+    }
+
+    snapshotDownloading.value = true
+    try {
+        const response = await axios.get(route('panel.conversion-goals.snapshot-csv', snapshotGoalKey.value), {
+            responseType: 'blob',
+        })
+
+        const contentType = String(response.headers['content-type'] ?? '')
+        if (contentType.includes('application/json')) {
+            $q.notify({
+                type: 'warning',
+                message: 'Nenhum snapshot disponível para download.',
+            })
+            return
+        }
+
+        const filename =
+            parseFilenameFromDisposition(response.headers['content-disposition']) ||
+            `snapshot_${snapshotGoalCode.value || 'conversion_goal'}.csv`
+
+        const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' })
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Não foi possível baixar o CSV do snapshot.',
+        })
+    } finally {
+        snapshotDownloading.value = false
+    }
+}
+
+async function openSnapshot(goal) {
+    snapshotGoalKey.value = goalRouteKey(goal)
+    snapshotGoalCode.value = goal.goal_code
+    snapshotRowsCount.value = 0
+    snapshotUpdatedAt.value = null
+    snapshotColumns.value = []
+    snapshotRows.value = []
+    snapshotDialog.value = true
+
+    await fetchSnapshot(snapshotGoalKey.value)
 }
 
 function logsCardStyle() {
@@ -562,6 +716,20 @@ function logStatusTitle(status) {
                             />
                         </q-td>
                     </template>
+
+                    <template #body-cell-snapshot="props">
+                        <q-td :props="props" class="tw-text-center">
+                            <q-btn
+                                flat
+                                dense
+                                size="sm"
+                                icon="table_view"
+                                label="Snapshot"
+                                color="indigo"
+                                @click="openSnapshot(props.row)"
+                            />
+                        </q-td>
+                    </template>
                 </q-table>
             </q-card-section>
         </q-card>
@@ -610,31 +778,20 @@ function logStatusTitle(status) {
                         dense
                     >
                         <template #append>
+                            <q-btn
+                                flat
+                                dense
+                                icon="key"
+                                :loading="integrationPasswordSaving"
+                                @click.stop.prevent="regenerateIntegrationPassword"
+                            />
                             <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(integrationPayload?.password, 'Senha')" />
                         </template>
                     </q-input>
 
-                    <div v-if="integrationPayload" class="tw-rounded-md tw-border tw-border-slate-200 tw-bg-slate-50 tw-p-3 tw-space-y-2">
-                        <q-toggle
-                            v-model="integrationPayload.csv_fake_line_enabled"
-                            label="Gerar linha fake no CSV para integração"
-                            :true-value="true"
-                            :false-value="false"
-                        />
-                        <div class="tw-text-xs tw-text-slate-600">
-                            Use este modo apenas para facilitar o mapeamento inicial no Google Ads quando não houver conversões.
-                            Recomenda-se desativar após concluir a integração.
-                        </div>
-                        <div class="tw-flex tw-justify-end">
-                            <q-btn
-                                color="primary"
-                                unelevated
-                                dense
-                                label="Salvar configuração"
-                                :loading="integrationModeSaving"
-                                @click="saveCsvFakeLineSetting"
-                            />
-                        </div>
+                    <div class="tw-rounded-md tw-border tw-border-amber-200 tw-bg-amber-50 tw-p-3 tw-text-xs tw-text-amber-900">
+                        Se você gerar nova senha, atualize a credencial no Google Ads imediatamente.
+                        Enquanto a senha antiga estiver configurada lá, o Google não conseguirá autenticar e a importação falhará.
                     </div>
                 </q-card-section>
 
@@ -707,6 +864,62 @@ function logStatusTitle(status) {
                             </q-td>
                         </template>
                     </q-table>
+                </q-card-section>
+            </q-card>
+        </q-dialog>
+
+        <q-dialog v-model="snapshotDialog" :maximized="$q.screen.lt.sm">
+            <q-card :style="logsCardStyle()">
+                <q-card-section class="tw-flex tw-items-center tw-justify-between">
+                    <div class="tw-flex tw-items-center tw-gap-3">
+                        <div class="tw-text-base tw-font-semibold">
+                            Snapshot CSV da Meta {{ snapshotGoalCode || '-' }}
+                        </div>
+                        <span class="tw-inline-flex tw-items-center tw-rounded-full tw-bg-slate-100 tw-px-3 tw-py-1 tw-text-xs tw-font-medium tw-text-slate-600">
+                            Última exportação: {{ snapshotRowsCount }} conversão(ões)
+                        </span>
+                        <span
+                            v-if="snapshotRowsCount > 100"
+                            class="tw-inline-flex tw-items-center tw-rounded-full tw-bg-amber-100 tw-px-3 tw-py-1 tw-text-xs tw-font-medium tw-text-amber-900"
+                        >
+                            Visualizando apenas as 100 primeiras linhas do CSV da última exportação.
+                        </span>
+                        <span v-if="snapshotUpdatedAt" class="tw-inline-flex tw-items-center tw-rounded-full tw-bg-slate-100 tw-px-3 tw-py-1 tw-text-xs tw-font-medium tw-text-slate-600">
+                            Atualizado em {{ snapshotUpdatedAt }}
+                        </span>
+                    </div>
+                    <div class="tw-flex tw-items-center tw-gap-2">
+                        <q-btn
+                            round
+                            dense
+                            unelevated
+                            color="grey-3"
+                            text-color="positive"
+                            icon="download"
+                            :loading="snapshotDownloading"
+                            @click="downloadSnapshotCsv"
+                        />
+                        <q-btn flat round dense icon="close" v-close-popup />
+                    </div>
+                </q-card-section>
+
+                <q-separator />
+
+                <q-card-section class="tw-p-0" style="height: calc(100% - 72px);">
+                    <q-table
+                        flat
+                        :rows="snapshotRows"
+                        :columns="snapshotColumns"
+                        row-key="__index"
+                        :loading="snapshotLoading"
+                        :rows-per-page-options="[10, 15, 25, 50, 100]"
+                        :no-data-label="qTableLangPt.noData"
+                        :no-results-label="qTableLangPt.noResults"
+                        :loading-label="qTableLangPt.loading"
+                        :rows-per-page-label="qTableLangPt.recordsPerPage"
+                        :all-rows-label="qTableLangPt.allRows"
+                        :pagination-label="qTableLangPt.pagination"
+                    />
                 </q-card-section>
             </q-card>
         </q-dialog>

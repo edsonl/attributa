@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConversionGoal;
 use App\Models\ConversionGoalLog;
+use App\Models\ConversionGoalCsvSnapshot;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use App\Models\AdsConversion;
@@ -21,6 +22,7 @@ class GoogleAdsConversionsController extends Controller
             ->with('timezone:id,identifier')
             ->where('user_slug_id', $userSlugId)
             ->where('goal_code', $normalizedGoalCode)
+            ->where('active', true)
             ->first();
 
         if (!$goal) {
@@ -156,10 +158,7 @@ class GoogleAdsConversionsController extends Controller
 
     protected function buildCsvAndMark($conversions, string $timezoneIdentifier, ?ConversionGoal $goal = null)
     {
-        $output = fopen('php://temp', 'r+');
-
-        // Cabeçalho sempre presente, mesmo sem linhas de conversão.
-        fputcsv($output, [
+        $header = [
             'Google Click ID',
             'GBRAID',
             'WBRAID',
@@ -168,9 +167,10 @@ class GoogleAdsConversionsController extends Controller
             'Conversion Value',
             'Currency Code',
             'Order ID',
-            'User Agent',
             'IP Address',
-        ]);
+        ];
+
+        $rows = [];
 
         foreach ($conversions as $c) {
             // A data é salva em UTC no banco e aqui é convertida para coincidir
@@ -179,49 +179,49 @@ class GoogleAdsConversionsController extends Controller
                 ->setTimezone($timezoneIdentifier)
                 ->format('Y-m-d H:i:sP');
 
-            fputcsv($output, [
+            $rows[] = [
                 $c->gclid,
                 $c->gbraid,
                 $c->wbraid,
                 $c->conversion_name,
                 $eventTime,
                 number_format((float) $c->conversion_value, 2, '.', ''),
-                $c->currency_code,
+                $c->currency_code ?: 'USD',
                 $c->pageview_id ? ('PV-' . $c->pageview_id) : ('CV-' . $c->id),
-                $c->user_agent,
                 $c->ip_address,
-            ]);
+            ];
         }
 
-        if ($goal && (bool) $goal->csv_fake_line_enabled && $conversions->isEmpty()) {
-            $fakeEventTime = now('UTC')
-                ->setTimezone($timezoneIdentifier)
-                ->format('Y-m-d H:i:sP');
+        if ($conversions->isEmpty()) {
+            $snapshot = $goal ? $this->getSnapshot($goal) : null;
 
-            fputcsv($output, [
-                'TEST-GCLID-' . Str::upper(Str::random(10)),
-                '',
-                '',
-                $goal->goal_code ?: 'TEST_CONVERSION',
-                $fakeEventTime,
-                '1.00',
-                'USD',
-                'TEST-' . now()->format('YmdHis'),
-                'Mozilla/5.0 (Integration Test)',
-                '127.0.0.1',
-            ]);
+            if ($snapshot !== null) {
+                $header = $snapshot['header'];
+                $rows[] = $snapshot['first_row'];
 
-            $this->writeGoalLog(
-                $goal,
-                'Linha fake adicionada ao CSV para suporte à integração/mapeamento.',
-                'info'
-            );
+                if ($goal) {
+                    $this->writeGoalLog(
+                        $goal,
+                        'Sem novas conversões; CSV retornado com snapshot válido.',
+                        'info'
+                    );
+                }
+            } else {
+                $rows[] = $this->buildFakeRow($goal, $timezoneIdentifier);
+
+                if ($goal) {
+                    $this->writeGoalLog(
+                        $goal,
+                        'Sem snapshot disponível; linha fake adicionada para manter integração ativa.',
+                        'warning'
+                    );
+                }
+            }
+        } elseif ($goal) {
+            $this->storeSnapshot($goal, $header, $rows, count($rows));
         }
 
-        rewind($output);
-        $csv = stream_get_contents($output);
-        fclose($output);
-
+        $csv = $this->buildCsv($header, $rows);
         $ids = $conversions->pluck('id')->toArray();
 
         if ($goal) {
@@ -254,9 +254,91 @@ class GoogleAdsConversionsController extends Controller
         }
 
         return response($csv, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="google_ads_conversions.csv"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
         ]);
+    }
+
+    protected function buildCsv(array $header, array $rows): string
+    {
+        $output = fopen('php://temp', 'r+');
+        fputcsv($output, $header);
+
+        foreach ($rows as $row) {
+            fputcsv($output, $row);
+        }
+
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+
+        return (string) $csv;
+    }
+
+    protected function buildFakeRow(?ConversionGoal $goal, string $timezoneIdentifier): array
+    {
+        $fakeEventTime = now('UTC')
+            ->setTimezone($timezoneIdentifier)
+            ->format('Y-m-d H:i:sP');
+
+        return [
+            'TEST-GCLID-' . Str::upper(Str::random(10)),
+            '',
+            '',
+            $goal?->goal_code ?: 'TEST_CONVERSION',
+            $fakeEventTime,
+            '1.00',
+            'USD',
+            'TEST-' . now()->format('YmdHis'),
+            '127.0.0.1',
+        ];
+    }
+
+    protected function storeSnapshot(ConversionGoal $goal, array $header, array $rows, int $rowsCount): void
+    {
+        $snapshotRows = array_slice($rows, 0, 100);
+
+        ConversionGoalCsvSnapshot::query()->updateOrCreate(
+            ['goal_id' => $goal->id],
+            [
+                'rows_count' => $rowsCount,
+                'snapshot_json' => [
+                    'header' => $header,
+                    'rows' => $snapshotRows,
+                ],
+            ]
+        );
+
+        $this->writeGoalLog(
+            $goal,
+            'Snapshot CSV atualizado (header + até 100 linhas).',
+            'info'
+        );
+    }
+
+    protected function getSnapshot(ConversionGoal $goal): ?array
+    {
+        $snapshot = ConversionGoalCsvSnapshot::query()
+            ->where('goal_id', $goal->id)
+            ->first();
+
+        $header = $snapshot?->snapshot_json['header'] ?? null;
+        $rows = $snapshot?->snapshot_json['rows'] ?? null;
+
+        $firstRow = null;
+        if (is_array($rows) && isset($rows[0]) && is_array($rows[0]) && count($rows[0]) > 0) {
+            $firstRow = $rows[0];
+        }
+
+        if (!is_array($header) || count($header) === 0 || !is_array($firstRow) || count($firstRow) === 0) {
+            return null;
+        }
+
+        return [
+            'header' => $header,
+            'first_row' => $firstRow,
+        ];
     }
 
     protected function writeGoalLog(ConversionGoal $goal, string $message, string $status = 'info'): void
