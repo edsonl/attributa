@@ -369,7 +369,7 @@
 
             if (navigator.sendBeacon) {
                 try {
-                    var blob = new Blob([data], { type: 'application/json' });
+                    var blob = new Blob([data], { type: 'text/plain;charset=UTF-8' });
                     var sent = navigator.sendBeacon(eventEndpoint, blob);
                     if (sent) return;
                 } catch (e) {}
@@ -379,7 +379,8 @@
                 try {
                     fetch(eventEndpoint, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
                         body: data,
                         keepalive: true
                     }).catch(function () {});

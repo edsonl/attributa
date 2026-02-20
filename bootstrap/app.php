@@ -36,6 +36,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'tracking/collect',
             'tracking/collect/*',
+            'tracking/event',
+            'tracking/event/*',
+            'api/tracking/collect',
+            'api/tracking/collect/*',
+            'api/tracking/event',
+            'api/tracking/event/*',
         ]);
 
         $middleware->web(append: [

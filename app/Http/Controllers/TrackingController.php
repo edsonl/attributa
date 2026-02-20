@@ -348,6 +348,18 @@ class TrackingController extends Controller
     {
         $log = Log::channel('tracking_collect');
 
+        // Aceita payload JSON mesmo quando o navegador envia como text/plain
+        // (ex.: sendBeacon/fetch no-cors para evitar preflight CORS).
+        if (empty($request->all())) {
+            $rawBody = trim((string) $request->getContent());
+            if ($rawBody !== '') {
+                $decodedBody = json_decode($rawBody, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decodedBody)) {
+                    $request->merge($decodedBody);
+                }
+            }
+        }
+
         $data = $request->validate([
             'user_code' => 'required|string|max:32',
             'campaign_code' => 'required|string|max:32',
