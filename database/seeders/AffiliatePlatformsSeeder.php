@@ -17,14 +17,14 @@ class AffiliatePlatformsSeeder extends Seeder
             'dr_cash' => [
                 'name' => 'Dr Cash',
                 'tracking_param_mapping' => [
-                    'sub1' => 'subid1',
-                    'sub2' => 'subid2',
-                    'sub3' => 'subid3',
-                    'sub4' => 'subid4',
-                    'sub5' => 'subid5',
+                    'sub1' => 'sub1',
+                    'sub2' => 'sub2',
+                    'sub3' => 'sub3',
+                    'sub4' => 'sub4',
+                    'sub5' => 'sub5',
                 ],
                 'conversion_param_mapping' => [
-                    'conversion_value' => 'amount',
+                    'conversion_value' => 'payment',
                     'currency_code' => 'currency',
                 ],
                 'postback_additional_params' => [

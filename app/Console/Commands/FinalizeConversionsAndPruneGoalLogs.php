@@ -26,9 +26,9 @@ class FinalizeConversionsAndPruneGoalLogs extends Command
             ])
             ->where('google_uploaded_at', '<=', $processingCutoff)
             ->update([
-                'google_upload_status' => AdsConversion::STATUS_EXPORTED,
-                'google_uploaded_at' => now(),
+                'google_upload_status' => AdsConversion::STATUS_EXPORTED
             ]);
+            //'google_uploaded_at' => now(),
 
         $retentionDays = (int) config('app.conversion_goal_logs_retention_days', 10);
         $cutoff = now()->subDays($retentionDays);

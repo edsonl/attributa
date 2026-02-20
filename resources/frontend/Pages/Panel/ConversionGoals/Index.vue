@@ -35,6 +35,7 @@ const snapshotUpdatedAt = ref(null)
 const snapshotRows = ref([])
 const snapshotColumns = ref([])
 const snapshotDownloading = ref(false)
+const snapshotExpandedCells = ref({})
 const logsDialog = ref(false)
 const logsLoading = ref(false)
 const logsGoalCode = ref('')
@@ -51,6 +52,7 @@ const logsColumns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', align: 'left', sortable: true },
     { name: 'message', label: 'Mensagem', field: 'message', align: 'left', sortable: false },
 ]
+const SNAPSHOT_TRUNCATE_LIMIT = 30
 
 const pagination = ref({
     page: props.conversionGoals?.current_page ?? 1,
@@ -342,6 +344,50 @@ function buildSnapshotTable(header, rows) {
     }
 }
 
+function normalizeSnapshotColumnLabel(value) {
+    return String(value ?? '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+}
+
+function isSnapshotTrackedIdColumn(col) {
+    const normalized = normalizeSnapshotColumnLabel(col?.label ?? col?.name ?? '')
+    return normalized === 'GOOGLECLICKID' || normalized === 'GCLID' || normalized === 'GBRAID'
+}
+
+function snapshotRawValue(value) {
+    return String(value ?? '')
+}
+
+function snapshotDisplayValue(value) {
+    const text = snapshotRawValue(value)
+    return text === '' ? '-' : text
+}
+
+function shouldUseSnapshotTruncate(col, value) {
+    if (!isSnapshotTrackedIdColumn(col)) {
+        return false
+    }
+
+    return snapshotRawValue(value).length > SNAPSHOT_TRUNCATE_LIMIT
+}
+
+function snapshotCellKey(row, col) {
+    return `${row?.__index ?? 'row'}:${col?.name ?? ''}`
+}
+
+function isSnapshotCellExpanded(row, col) {
+    return Boolean(snapshotExpandedCells.value[snapshotCellKey(row, col)])
+}
+
+function toggleSnapshotCell(row, col) {
+    const key = snapshotCellKey(row, col)
+    snapshotExpandedCells.value = {
+        ...snapshotExpandedCells.value,
+        [key]: !snapshotExpandedCells.value[key],
+    }
+}
+
 async function fetchSnapshot(goalId) {
     if (!goalId) {
         return
@@ -426,6 +472,7 @@ async function openSnapshot(goal) {
     snapshotUpdatedAt.value = null
     snapshotColumns.value = []
     snapshotRows.value = []
+    snapshotExpandedCells.value = {}
     snapshotDialog.value = true
 
     await fetchSnapshot(snapshotGoalKey.value)
@@ -919,9 +966,72 @@ function logStatusTitle(status) {
                         :rows-per-page-label="qTableLangPt.recordsPerPage"
                         :all-rows-label="qTableLangPt.allRows"
                         :pagination-label="qTableLangPt.pagination"
-                    />
+                    >
+                        <template #body-cell="props">
+                            <q-td :props="props">
+                                <template v-if="shouldUseSnapshotTruncate(props.col, props.value)">
+                                    <div
+                                        class="snapshot-id-cell"
+                                        :class="{ 'is-expanded': isSnapshotCellExpanded(props.row, props.col) }"
+                                    >
+                                        <span class="snapshot-id-value-wrap">
+                                            <span class="snapshot-id-value">{{ snapshotDisplayValue(props.value) }}</span>
+                                        </span>
+                                        <q-btn
+                                            flat
+                                            round
+                                            dense
+                                            size="sm"
+                                            :icon="isSnapshotCellExpanded(props.row, props.col) ? 'visibility_off' : 'visibility'"
+                                            :title="isSnapshotCellExpanded(props.row, props.col) ? 'Ocultar valor completo' : 'Visualizar valor completo'"
+                                            @click.stop="toggleSnapshotCell(props.row, props.col)"
+                                        />
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    {{ snapshotDisplayValue(props.value) }}
+                                </template>
+                            </q-td>
+                        </template>
+                    </q-table>
                 </q-card-section>
             </q-card>
         </q-dialog>
     </div>
 </template>
+
+<style scoped>
+.snapshot-id-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.snapshot-id-value-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.snapshot-id-value {
+    display: inline-block;
+    max-width: 150px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.snapshot-id-cell:not(.is-expanded) .snapshot-id-value-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 24px;
+    height: 100%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #fff 78%);
+    pointer-events: none;
+}
+
+.snapshot-id-cell.is-expanded .snapshot-id-value {
+    max-width: none;
+}
+</style>
