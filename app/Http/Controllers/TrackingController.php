@@ -201,7 +201,7 @@ class TrackingController extends Controller
         // GCLID é crítico para atribuição no Google Ads.
         // Se vier fora do padrão esperado, salva como null para evitar lixo no banco.
         $gclid = isset($data['gclid']) ? trim((string) $data['gclid']) : null;
-        if ($gclid === '') {
+        if ($gclid === null || $gclid === '') {
             $gclid = null;
         } elseif (mb_strlen($gclid) > 150) {
             $gclidAlertLog->warning('GCLID acima do limite recebido no collect; valor truncado para persistencia.', [
