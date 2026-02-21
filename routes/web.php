@@ -8,6 +8,7 @@ use App\Http\Controllers\Panel\CampaignController;
 use App\Http\Controllers\Panel\ClientController;
 use App\Http\Controllers\Panel\CompanyController;
 use App\Http\Controllers\Panel\ConversionsController;
+use App\Http\Controllers\Panel\ClickhouseActivityController;
 use App\Http\Controllers\Panel\ConversionGoalController;
 use App\Http\Controllers\Panel\CountryController;
 use App\Http\Controllers\Panel\CampaignStatusController;
@@ -158,6 +159,14 @@ Route::middleware(['auth', 'verified'])
                     // Exclusão de conversão
                     Route::delete('/{conversion}', [ConversionsController::class, 'destroy'])->name('destroy');
             });
+
+            Route::prefix('estatisticas')
+                ->name('estatisticas.')
+                ->group(function () {
+                    Route::get('/', [ClickhouseActivityController::class, 'index'])->name('index');
+                    Route::get('/data', [ClickhouseActivityController::class, 'data'])->name('data');
+                    Route::get('/campaigns', [ClickhouseActivityController::class, 'campaigns'])->name('campaigns');
+                });
 
 
             Route::prefix('configuracoes')->middleware(['auth'])->group(function () {

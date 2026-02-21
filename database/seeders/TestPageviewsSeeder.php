@@ -55,7 +55,6 @@ class TestPageviewsSeeder extends Seeder
         // Recria um conjunto limpo e previsível de visitas da campanha de teste.
         Pageview::query()
             ->where('campaign_id', $campaign->id)
-            ->where('campaign_code', $campaign->code)
             ->delete();
 
         $locations = [
@@ -279,7 +278,6 @@ class TestPageviewsSeeder extends Seeder
             $rows[] = [
                 'user_id' => 1,
                 'campaign_id' => $campaign->id,
-                'campaign_code' => $campaign->code,
                 'url' => $query !== '' ? "{$urlBase}?{$query}" : $urlBase,
                 'landing_url' => $urlBase,
                 'referrer' => $scenario['referrer'] ?? null,
@@ -334,7 +332,6 @@ class TestPageviewsSeeder extends Seeder
 
         $seededPageviews = Pageview::query()
             ->where('campaign_id', $campaign->id)
-            ->where('campaign_code', $campaign->code)
             ->orderBy('id')
             ->get(['id', 'user_id', 'campaign_id', 'conversion', 'created_at']);
 

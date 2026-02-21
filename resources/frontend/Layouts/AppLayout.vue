@@ -277,6 +277,7 @@ function go (name) { router.visit(route(name)) }
 // Links
 const links = [
     { label: 'Atividade', icon: 'insights', route: 'panel.atividade.pageviews'},
+    { label: 'Estatísticas', icon: 'query_stats', route: 'panel.estatisticas.index'},
     { label: 'Conversões', icon: 'paid', route: 'panel.conversoes.index'},
     { label: 'Campanhas',  icon: 'ads_click',  route: 'panel.campaigns.index' ,svg:''},
     { label: 'Metas de conversao',  icon: 'flag',  route: 'panel.conversion-goals.index' ,svg:''},

@@ -16,7 +16,6 @@ class Pageview extends Model
 
         // Originais
         'campaign_id',
-        'campaign_code',
         'url',
         'landing_url',
         'referrer',

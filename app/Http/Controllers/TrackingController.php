@@ -9,6 +9,7 @@ use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
 use App\Models\PageviewEvent;
 use App\Services\HashidService;
+use App\Services\ClickhousePageviewWriter;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +23,21 @@ class TrackingController extends Controller
     protected array $deviceCategoryIdBySlug = [];
     protected array $browserIdBySlug = [];
 
+    /**
+     * Recebe e persiste o pageview inicial de tracking enviado pelo snippet.
+     *
+     * Fluxo geral:
+     * 1) valida estrutura do payload (identificadores, contexto da navegação e parâmetros de campanha);
+     * 2) valida os códigos hashid de usuário/campanha e confere consistência com a campanha no banco;
+     * 3) aplica validações de segurança antes de gravar (assinatura, replay e origem autorizada);
+     * 4) normaliza/sanitiza campos e registra o pageview para uso posterior em eventos e conversões.
+     *
+     * Autenticação/segurança aplicada no collect:
+     * - assinatura HMAC (`auth_sig`) baseada em `user_code`, `campaign_code`, `auth_ts` e `auth_nonce`;
+     * - janela de validade curta via `auth_ts` para rejeitar assinaturas expiradas;
+     * - proteção anti-replay com cache do `auth_nonce` (nonce único por janela de tempo);
+     * - validação de origem da requisição comparando a origem enviada com a origem cadastrada na campanha.
+     */
     public function collect(Request $request)
     {
         $log = Log::channel('tracking_collect');
@@ -281,8 +297,6 @@ class TrackingController extends Controller
         $pageview = Pageview::create([
             'user_id'      => $campaign->user_id,
             'campaign_id'   => $campaign->id,
-            // Usa o código canônico da campanha encontrada no banco.
-            'campaign_code' => $campaign->code,
             'url'           => $url,
             'landing_url'   => $landingUrl,
             'referrer'      => $data['referrer'] ?? null,
@@ -330,6 +344,18 @@ class TrackingController extends Controller
             'ip' => $request->ip(),
         ]);
 
+        if ((bool) config('clickhouse.active', false)) {
+            try {
+                app(ClickhousePageviewWriter::class)->insert($pageview);
+            } catch (\Throwable $e) {
+                $log->warning('Falha ao gravar pageview no ClickHouse (dual-write).', [
+                    'pageview_id' => $pageview->id,
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Retorna hashid da pageview para compor subids/código composto de callback.
         $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
 
@@ -344,6 +370,20 @@ class TrackingController extends Controller
 
     }
 
+    /**
+     * Recebe e persiste eventos de interação vinculados a uma pageview já coletada.
+     *
+     * Fluxo geral:
+     * 1) aceita payload do navegador (incluindo envio como text/plain via sendBeacon/no-cors) e valida campos;
+     * 2) normaliza dados do evento (tipo, alvo e metadados de formulário);
+     * 3) autentica o vínculo entre usuário, campanha e pageview antes de gravar;
+     * 4) registra o evento apenas quando existir pageview compatível com os identificadores informados.
+     *
+     * Autenticação/segurança aplicada no event:
+     * - assinatura HMAC (`event_sig`) calculada a partir de `user_code`, `campaign_code` e `pageview_code`;
+     * - comparação segura de assinatura para evitar adulteração do vínculo do evento;
+     * - validação de integridade no banco para garantir que a pageview pertence à campanha/usuário informados.
+     */
     public function event(Request $request)
     {
         $log = Log::channel('tracking_collect');
@@ -458,7 +498,6 @@ class TrackingController extends Controller
             ->where('id', $pageviewIdFromCode)
             ->where('user_id', $campaign->user_id)
             ->where('campaign_id', $campaign->id)
-            ->where('campaign_code', $campaign->code)
             ->first();
 
         if (!$pageview) {

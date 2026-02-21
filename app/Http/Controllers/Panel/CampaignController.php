@@ -13,8 +13,11 @@ use App\Models\CampaignStatus;
 use App\Models\ConversionGoal;
 use App\Models\GoogleAdsAccount;
 use App\Models\Pageview;
+use App\Services\ClickhouseDimensionCacheService;
+use App\Services\ClickhousePageviewDeleter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -145,7 +148,7 @@ class CampaignController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreCampaignRequest $request)
+    public function store(StoreCampaignRequest $request, ClickhouseDimensionCacheService $dimensionCache)
     {
         $data = $request->validated();
         $googleAdsChannelId = $this->requireGoogleAdsChannelId();
@@ -164,6 +167,10 @@ class CampaignController extends Controller
 
         if (!empty($data['countries'])) {
             $campaign->countries()->sync($data['countries']);
+        }
+
+        if ((bool) config('clickhouse.active', false)) {
+            $dimensionCache->refreshCampaignMapForUser((int) $campaign->user_id);
         }
 
         return redirect()
@@ -213,7 +220,11 @@ class CampaignController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateCampaignRequest $request, Campaign $campaign)
+    public function update(
+        UpdateCampaignRequest $request,
+        Campaign $campaign,
+        ClickhouseDimensionCacheService $dimensionCache
+    )
     {
         $data = $request->validated();
         $googleAdsChannelId = $this->requireGoogleAdsChannelId();
@@ -231,6 +242,10 @@ class CampaignController extends Controller
 
         $campaign->countries()->sync($data['countries'] ?? []);
 
+        if ((bool) config('clickhouse.active', false)) {
+            $dimensionCache->refreshCampaignMapForUser((int) $campaign->user_id);
+        }
+
         return redirect()
             ->route('panel.campaigns.index')
             ->with('success', 'Campanha atualizada com sucesso.');
@@ -239,8 +254,11 @@ class CampaignController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Campaign $campaign)
+    public function destroy(Campaign $campaign, ClickhouseDimensionCacheService $dimensionCache)
     {
+        $campaignId = (int) $campaign->id;
+        $userId = (int) $campaign->user_id;
+
         DB::transaction(function () use ($campaign) {
             Pageview::query()
                 ->where('campaign_id', (int) $campaign->id)
@@ -249,6 +267,20 @@ class CampaignController extends Controller
 
             $campaign->delete();
         });
+
+        if ((bool) config('clickhouse.active', false)) {
+            $dimensionCache->refreshCampaignMapForUser($userId);
+
+            try {
+                app(ClickhousePageviewDeleter::class)->deleteByCampaign($userId, $campaignId);
+            } catch (\Throwable $e) {
+                Log::channel('tracking_collect')->warning('Falha ao excluir pageviews da campanha no ClickHouse.', [
+                    'campaign_id' => $campaignId,
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return redirect()
             ->route('panel.campaigns.index')

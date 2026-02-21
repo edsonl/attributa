@@ -43,7 +43,6 @@ class ConversionCallbackPlatformControllerTest extends TestCase
         $pageview = Pageview::create([
             'user_id' => $user->id,
             'campaign_id' => $campaign->id,
-            'campaign_code' => $campaign->code,
             'url' => 'https://example.com',
             'conversion' => true,
         ]);
@@ -64,4 +63,3 @@ class ConversionCallbackPlatformControllerTest extends TestCase
         $this->assertDatabaseCount((new AdsConversion())->getTable(), 0);
     }
 }
-

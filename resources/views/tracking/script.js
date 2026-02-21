@@ -526,6 +526,10 @@
             var targetUrl = resolveLinkTargetUrl(link);
             if (!targetUrl) return;
 
+            if (!engagedSent) {
+                markEngaged('link_click');
+            }
+
             sendEvent({
                 event_type: 'link_click',
                 target_url: getSafeText(targetUrl, 2000),
@@ -553,6 +557,10 @@
             var form = ev.target;
             if (!form || !form.tagName || form.tagName.toLowerCase() !== 'form') {
                 return;
+            }
+
+            if (!engagedSent) {
+                markEngaged('form_submit');
             }
 
             var metrics = getFormMetrics(form);

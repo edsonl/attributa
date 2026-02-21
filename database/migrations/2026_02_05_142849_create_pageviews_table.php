@@ -40,9 +40,6 @@ return new class extends Migration {
                 ->constrained('ip_categories')
                 ->nullOnDelete();
 
-            // vínculo com a campanha (via hashid code)
-            $table->string('campaign_code', 32)->index();
-
             // dados da visita
             $table->text('url');
             $table->text('landing_url')->nullable();
@@ -115,7 +112,6 @@ return new class extends Migration {
 
             // índice composto para análises futuras
             $table->index('user_id');
-            $table->index(['campaign_code', 'created_at']);
             $table->index('traffic_source_category_id');
             $table->index('device_category_id');
             $table->index('browser_id');

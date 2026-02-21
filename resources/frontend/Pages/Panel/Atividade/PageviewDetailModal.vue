@@ -358,7 +358,7 @@ async function copyValue(value) {
 <template>
     <q-dialog v-model="detailDialog" transition-show="scale" transition-hide="scale">
         <q-card class="pageview-detail-card">
-            <q-card-section class="tw-flex tw-justify-end">
+            <q-card-section class="tw-flex tw-justify-end detail-close-section">
                 <q-btn icon="close" flat round dense @click="detailDialog = false" />
             </q-card-section>
 
@@ -366,7 +366,7 @@ async function copyValue(value) {
 
             <q-card-section
                 v-if="!loading"
-                class="tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2"
+                class="tw-grid tw-gap-6 tw-grid-cols-1 xl:tw-grid-cols-2 detail-content-section"
             >
                 <section class="detail-section first-row-section">
                     <div class="section-card">
@@ -685,6 +685,15 @@ async function copyValue(value) {
 .pageview-detail-card {
     width: 100vw;
     max-width: 100vw;
+}
+
+.detail-close-section {
+    padding-top: 0.35rem;
+    padding-bottom: 0.1rem;
+}
+
+.detail-content-section {
+    padding-top: 0.35rem;
 }
 
 @media (min-width: 1024px) {
