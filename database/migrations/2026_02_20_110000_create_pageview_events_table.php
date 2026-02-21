@@ -45,7 +45,7 @@ return new class extends Migration {
             $table->boolean('form_has_user_data')->nullable();
 
             // Timestamp do cliente em milissegundos (epoch ms) - precisa de BIGINT.
-            $table->bigInteger('event_ts_ms', false, true)->nullable();
+            $table->bigInteger('event_ts_ms')->nullable();
 
             $table->timestamps();
 
