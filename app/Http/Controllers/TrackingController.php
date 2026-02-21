@@ -292,6 +292,7 @@ class TrackingController extends Controller
         $deviceCategoryId = $this->resolveDeviceCategoryId('unknown');
         $browserId = $this->resolveBrowserId('unknown');
         $trafficSourceReason = mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 191);
+        $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
 
         // Persistência final com payload já saneado.
         $pageview = Pageview::create([
@@ -314,7 +315,7 @@ class TrackingController extends Controller
             'gbraid'        => $data['gbraid'] ?? null,
             'user_agent'    => $userAgent,
             'ip'            => $request->ip(),
-            'timestamp_ms'  => $data['timestamp'] ?? null,
+            'timestamp_ms'  => $timestampMs,
             'conversion'    => 0,
             'traffic_source_category_id' => $trafficSourceCategoryId,
             'traffic_source_reason' => $trafficSourceReason === '' ? null : $trafficSourceReason,
@@ -520,7 +521,7 @@ class TrackingController extends Controller
             'form_has_user_data' => array_key_exists('form_has_user_data', $data)
                 ? (bool) $data['form_has_user_data']
                 : null,
-            'event_ts_ms' => $data['event_ts'] ?? null,
+            'event_ts_ms' => $this->normalizeTimestampMs($data['event_ts'] ?? null),
         ]);
 
         return response()->json([
@@ -730,5 +731,23 @@ class TrackingController extends Controller
     protected function trackingNonceCacheKey(string $nonce): string
     {
         return 'tracking:nonce:' . $nonce;
+    }
+
+    protected function normalizeTimestampMs(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (!is_numeric($value)) {
+            return null;
+        }
+
+        $normalized = (int) $value;
+        if ($normalized < 0) {
+            return null;
+        }
+
+        return $normalized;
     }
 }
