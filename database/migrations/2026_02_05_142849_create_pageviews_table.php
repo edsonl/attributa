@@ -102,8 +102,8 @@ return new class extends Migration {
             // Timezone detectado
             $table->string('timezone')->nullable();
 
-            // Timestamp original da visita em milissegundos
-            $table->unsignedBigInteger('timestamp_ms')->nullable();
+            // Timestamp original da visita em milissegundos (epoch ms) - precisa de BIGINT.
+            $table->bigInteger('timestamp_ms', false, true)->nullable();
             // Flag indicando se a visita converteu
             $table->boolean('conversion')->default(false);
 
