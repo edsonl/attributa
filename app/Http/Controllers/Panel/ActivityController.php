@@ -304,11 +304,11 @@ class ActivityController extends Controller
                 'is_proxy'      => $ipLookup->is_proxy ?? null,
                 'is_vpn'        => $ipLookup->is_vpn ?? null,
                 'is_tor'        => $ipLookup->is_tor ?? null,
-                'is_datacenter' => $ipLookup->is_datacenter ?? null,
-                'is_bot'        => $ipLookup->is_bot ?? null,
+                'is_datacenter' => $ipLookup->is_datacenter ?? (($pageview->ipCategory?->slug ?? null) === 'datacenter'),
+                'is_bot'        => $ipLookup->is_bot ?? in_array((string) ($pageview->ipCategory?->slug ?? ''), ['bot', 'googlebot'], true),
             ],
             'fraud_score'   => $ipLookup->fraud_score ?? null,
-            'ip_category'   => $ipLookup?->ipCategory,
+            'ip_category'   => $ipLookup?->ipCategory ?? $pageview->ipCategory,
             'last_checked'  => $ipLookup?->last_checked_at,
             'last_checked_formatted' => optional($ipLookup?->last_checked_at)
                 ? Carbon::parse($ipLookup?->last_checked_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')

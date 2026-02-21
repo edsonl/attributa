@@ -34,6 +34,11 @@ class IpClassifierService
             return $this->storeGooglebot($ip);
         }
 
+        // 2.1️⃣ Bot genérico por user-agent (não Googlebot validado)
+        if ($this->isGenericBotUserAgent($userAgent)) {
+            return $this->storeGenericBot($ip);
+        }
+
         // 3️⃣ Consulta API
         return $this->queryApiAndStore($ip);
     }
@@ -166,19 +171,78 @@ class IpClassifierService
      */
     protected function isGooglebot(string $ip, ?string $userAgent): bool
     {
-        if (!$userAgent || stripos($userAgent, 'Googlebot') === false) {
+        $ua = strtolower(trim((string) $userAgent));
+        if ($ua === '') {
             return false;
         }
 
-        $host = gethostbyaddr($ip);
+        $isGoogleCrawlerUa = str_contains($ua, 'googlebot')
+            || str_contains($ua, 'google-inspectiontool')
+            || str_contains($ua, 'adsbot-google');
 
-        if (!$host || !preg_match('/\.google(bot)?\.com$/', $host)) {
+        if (!$isGoogleCrawlerUa) {
             return false;
         }
 
-        $forward = gethostbyname($host);
+        $host = strtolower((string) gethostbyaddr($ip));
+        if ($host === '' || $host === $ip) {
+            return false;
+        }
 
-        return $forward === $ip;
+        $isAllowedGoogleHost = preg_match('/\.(googlebot\.com|google\.com|googleusercontent\.com)$/', $host) === 1;
+        if (!$isAllowedGoogleHost) {
+            return false;
+        }
+
+        $forwardIps = [];
+        $forwardV4 = gethostbynamel($host) ?: [];
+        foreach ($forwardV4 as $value) {
+            $candidate = trim((string) $value);
+            if ($candidate !== '') {
+                $forwardIps[] = $candidate;
+            }
+        }
+
+        $forwardV6 = dns_get_record($host, DNS_AAAA) ?: [];
+        foreach ($forwardV6 as $record) {
+            $candidate = trim((string) ($record['ipv6'] ?? ''));
+            if ($candidate !== '') {
+                $forwardIps[] = $candidate;
+            }
+        }
+
+        $forwardIps = array_values(array_unique($forwardIps));
+
+        return in_array($ip, $forwardIps, true);
+    }
+
+    protected function isGenericBotUserAgent(?string $userAgent): bool
+    {
+        $ua = strtolower(trim((string) $userAgent));
+        if ($ua === '') {
+            return false;
+        }
+
+        $keywords = [
+            'bot',
+            'crawler',
+            'spider',
+            'slurp',
+            'bingpreview',
+            'facebookexternalhit',
+            'python-requests',
+            'curl/',
+            'wget',
+            'headless',
+        ];
+
+        foreach ($keywords as $keyword) {
+            if (str_contains($ua, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -187,6 +251,25 @@ class IpClassifierService
     protected function storeGooglebot(string $ip): array
     {
         $category = IpCategory::where('slug', 'googlebot')->first();
+
+        $cache = IpLookupCache::create([
+            'ip' => $ip,
+            'ip_category_id' => $category?->id,
+            'is_bot' => true,
+            'is_proxy' => false,
+            'is_vpn' => false,
+            'is_tor' => false,
+            'is_datacenter' => false,
+            'fraud_score' => null,
+            'last_checked_at' => now(),
+        ]);
+
+        return $this->formatCacheResult($cache);
+    }
+
+    protected function storeGenericBot(string $ip): array
+    {
+        $category = IpCategory::where('slug', 'bot')->first();
 
         $cache = IpLookupCache::create([
             'ip' => $ip,

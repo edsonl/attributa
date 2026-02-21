@@ -26,7 +26,14 @@ class ProcessIpClassificationJob
         $clickhouseUpdater = app(ClickhousePageviewUpdater::class);
         $clickhouseActive = (bool) config('clickhouse.active', false);
 
-        Pageview::whereNull('ip_category_id')
+        Pageview::query()
+            ->where(function ($query) {
+                $query->whereNull('ip_category_id')
+                    ->orWhereNull('device_category_id')
+                    ->orWhereNull('browser_id')
+                    ->orWhereNull('device_type')
+                    ->orWhereNull('browser_name');
+            })
             ->limit(50)
             ->get()
             ->each(function ($pageview) use ($classifier, $deviceClassifier, $clickhouseUpdater, $clickhouseActive) {
