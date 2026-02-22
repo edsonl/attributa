@@ -7,12 +7,10 @@ use Illuminate\Http\Request;
 use App\Models\Pageview;
 use App\Models\Campaign;
 use App\Models\IpLookupCache;
-use App\Services\ClickhousePageviewDeleter;
 use App\Services\HashidService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class ActivityController extends Controller
@@ -167,19 +165,7 @@ class ActivityController extends Controller
             ]);
         }
 
-        $pageviewId = (int) $pageview->id;
         $pageview->delete();
-
-        if ((bool) config('clickhouse.active', false)) {
-            try {
-                app(ClickhousePageviewDeleter::class)->deleteByPageviewId($pageviewId);
-            } catch (\Throwable $e) {
-                Log::channel('tracking_collect')->warning('Falha ao excluir pageview no ClickHouse.', [
-                    'pageview_id' => $pageviewId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
 
         return response()->json([
             'message' => 'Pageview excluído com sucesso.',
@@ -207,20 +193,7 @@ class ActivityController extends Controller
             ->whereIn('id', $data['ids']);
         $totalSelected = count($data['ids']);
         $convertedCount = (clone $query)->where('conversion', 1)->count();
-        $idsToDelete = (clone $query)->where('conversion', 0)->pluck('id')->all();
         $deleted = (clone $query)->where('conversion', 0)->delete();
-
-        if ($deleted > 0 && (bool) config('clickhouse.active', false)) {
-            try {
-                app(ClickhousePageviewDeleter::class)->deleteByPageviewIds($idsToDelete);
-            } catch (\Throwable $e) {
-                Log::channel('tracking_collect')->warning('Falha ao excluir pageviews em lote no ClickHouse.', [
-                    'user_id' => $userId,
-                    'ids_count' => count($idsToDelete),
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
 
         return response()->json([
             'message' => $convertedCount > 0

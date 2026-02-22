@@ -6,7 +6,6 @@ use App\Models\AdsConversion;
 use App\Models\AffiliatePlatform;
 use App\Models\Campaign;
 use App\Models\Pageview;
-use App\Services\ClickhousePageviewUpdater;
 use App\Services\HashidService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -135,19 +134,6 @@ class ConversionCallbackPlatformController extends Controller
         }
 
         $pageview->update(['conversion' => 1]);
-
-        if ((bool) config('clickhouse.active', false)) {
-            try {
-                app(ClickhousePageviewUpdater::class)->markConversion((int) $pageview->id);
-            } catch (\Throwable $e) {
-                $log->warning('Falha ao marcar conversão da pageview no ClickHouse.', [
-                    'platform_slug' => $platformSlug,
-                    'pageview_id' => (int) $pageview->id,
-                    'campaign_id' => (int) $campaign->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
 
         $existingConversion = AdsConversion::query()
             ->where('pageview_id', $pageview->id)

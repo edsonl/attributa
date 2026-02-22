@@ -9,7 +9,6 @@ use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
 use App\Models\PageviewEvent;
 use App\Services\HashidService;
-use App\Services\ClickhousePageviewWriter;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -344,18 +343,6 @@ class TrackingController extends Controller
             'request_origin' => $requestOrigin,
             'ip' => $request->ip(),
         ]);
-
-        if ((bool) config('clickhouse.active', false)) {
-            try {
-                app(ClickhousePageviewWriter::class)->insert($pageview);
-            } catch (\Throwable $e) {
-                $log->warning('Falha ao gravar pageview no ClickHouse (dual-write).', [
-                    'pageview_id' => $pageview->id,
-                    'campaign_id' => $campaign->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
 
         // Retorna hashid da pageview para compor subids/código composto de callback.
         $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);

@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Pageview;
-use App\Services\ClickhousePageviewUpdater;
 use App\Services\DeviceClassificationService;
 use App\Services\IpClassifierService;
 use Illuminate\Bus\Queueable;
@@ -11,7 +10,6 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 class ProcessIpClassificationJob
 {
@@ -23,8 +21,6 @@ class ProcessIpClassificationJob
     {
         $classifier = app(IpClassifierService::class);
         $deviceClassifier = app(DeviceClassificationService::class);
-        $clickhouseUpdater = app(ClickhousePageviewUpdater::class);
-        $clickhouseActive = (bool) config('clickhouse.active', false);
 
         Pageview::query()
             ->where(function ($query) {
@@ -36,7 +32,7 @@ class ProcessIpClassificationJob
             })
             ->limit(50)
             ->get()
-            ->each(function ($pageview) use ($classifier, $deviceClassifier, $clickhouseUpdater, $clickhouseActive) {
+            ->each(function ($pageview) use ($classifier, $deviceClassifier) {
 
                 $result = $classifier->classify(
                     $pageview->ip,
@@ -65,20 +61,6 @@ class ProcessIpClassificationJob
                 ];
 
                 $pageview->update($updatePayload);
-
-                if ($clickhouseActive) {
-                    try {
-                        $clickhouseUpdater->updateById((int) $pageview->id, $updatePayload);
-                    } catch (\Throwable $e) {
-                        Log::channel('tracking_collect')->warning(
-                            'Falha ao atualizar enriquecimento da pageview no ClickHouse.',
-                            [
-                                'pageview_id' => (int) $pageview->id,
-                                'error' => $e->getMessage(),
-                            ]
-                        );
-                    }
-                }
             });
     }
 
