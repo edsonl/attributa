@@ -340,11 +340,11 @@ class ActivityController extends Controller
                     'status' => (int) $visitorRow->hits > 1 ? 'recorrente' : 'novo',
                     'first_seen_at' => $visitorRow->first_seen_at,
                     'first_seen_at_formatted' => optional($visitorRow->first_seen_at)
-                        ? Carbon::parse($visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        ? Carbon::createFromTimestampMs((int) $visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                         : null,
                     'last_seen_at' => $visitorRow->last_seen_at,
                     'last_seen_at_formatted' => optional($visitorRow->last_seen_at)
-                        ? Carbon::parse($visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        ? Carbon::createFromTimestampMs((int) $visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                         : null,
                 ];
             }

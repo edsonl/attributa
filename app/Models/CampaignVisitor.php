@@ -18,8 +18,8 @@ class CampaignVisitor extends Model
     protected $casts = [
         'visitor_id' => 'integer',
         'hits' => 'integer',
-        'first_seen_at' => 'datetime',
-        'last_seen_at' => 'datetime',
+        'first_seen_at' => 'integer',
+        'last_seen_at' => 'integer',
     ];
 
     public function campaign(): BelongsTo

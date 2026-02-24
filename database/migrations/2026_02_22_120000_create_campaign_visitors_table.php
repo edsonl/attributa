@@ -17,10 +17,10 @@ return new class extends Migration {
                 ->constrained('campaigns')
                 ->cascadeOnDelete();
             // Mesmo visitor_id pode aparecer em campanhas diferentes.
-            $table->unsignedBigInteger('visitor_id');
-            $table->dateTime('first_seen_at')->nullable();
-            $table->dateTime('last_seen_at')->nullable();
-            $table->unsignedBigInteger('hits')->default(1);
+            $table->bigInteger('visitor_id');
+            $table->bigInteger('first_seen_at')->nullable();
+            $table->bigInteger('last_seen_at')->nullable();
+            $table->bigInteger('hits')->default(1);
             $table->timestamps();
 
             $table->unique(['campaign_id', 'visitor_id']);

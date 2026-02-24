@@ -373,6 +373,7 @@ class TrackingController extends Controller
             }
 
             $now = now();
+            $nowMs = $now->valueOf();
             // Atualiza agregação de visitantes únicos por campanha:
             // - primeira ocorrência cria linha com hits=1
             // - recorrência atualiza last_seen_at e incrementa hits
@@ -387,8 +388,8 @@ class TrackingController extends Controller
                 [
                     (int) $campaign->id,
                     (int) $visitorId,
-                    $now,
-                    $now,
+                    $nowMs,
+                    $nowMs,
                     $now,
                     $now,
                 ]
