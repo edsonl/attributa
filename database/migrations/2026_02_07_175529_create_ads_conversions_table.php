@@ -28,6 +28,10 @@ return new class extends Migration {
                 ->nullable()
                 ->constrained('campaigns')
                 ->nullOnDelete();
+            $table->foreignId('lead_id')
+                ->nullable()
+                ->constrained('leads')
+                ->nullOnDelete();
             $table->foreignId('pageview_id')
                 ->nullable()
                 ->constrained('pageviews')
@@ -75,6 +79,7 @@ return new class extends Migration {
             $table->index('user_id');
             $table->index('conversion_name');
             $table->index('campaign_id');
+            $table->index('lead_id');
             $table->index('gclid');
             $table->index('gbraid');
             $table->index('wbraid');

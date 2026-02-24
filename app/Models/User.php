@@ -20,6 +20,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'notification_email',
         'password',
     ];
 
@@ -50,6 +51,16 @@ class User extends Authenticatable
     {
         $url = url(route('password.reset', ['token' => $token, 'email' => $this->email], false));
         $this->notify(new \Illuminate\Auth\Notifications\ResetPassword($token));
+    }
+
+    public function notificationPreferences()
+    {
+        return $this->hasMany(UserNotificationPreference::class);
+    }
+
+    public function appNotifications()
+    {
+        return $this->hasMany(Notification::class);
     }
 
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Panel;
 
+use App\Models\Lead;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -46,18 +47,34 @@ class AffiliatePlatformRequest extends FormRequest
 
         $additionalParams = array_values(array_unique($additionalParams));
 
-        $rawConversionMapping = $this->input('conversion_param_mapping', []);
-        if (!is_array($rawConversionMapping)) {
-            $rawConversionMapping = [];
+        $rawLeadMapping = $this->input('lead_param_mapping', []);
+        if (!is_array($rawLeadMapping)) {
+            $rawLeadMapping = [];
         }
 
-        $conversionMapping = [];
-        foreach (['conversion_value', 'currency_code'] as $key) {
-            $param = trim((string) ($rawConversionMapping[$key] ?? ''));
+        $leadMapping = [];
+        $acceptedKeys = ['payout_amount', 'currency_code', 'lead_status', 'platform_lead_id', 'occurred_at', 'offer_id'];
+        foreach ($acceptedKeys as $key) {
+            $param = trim((string) ($rawLeadMapping[$key] ?? ''));
             if ($param === '') {
                 continue;
             }
-            $conversionMapping[$key] = $param;
+            $leadMapping[$key] = $param;
+        }
+
+        $rawLeadStatusMapping = $this->input('lead_status_mapping', []);
+        if (!is_array($rawLeadStatusMapping)) {
+            $rawLeadStatusMapping = [];
+        }
+
+        $leadStatusMapping = [];
+        foreach ($rawLeadStatusMapping as $rawStatus => $canonicalStatus) {
+            $rawKey = strtolower(trim((string) $rawStatus));
+            $canonical = strtolower(trim((string) $canonicalStatus));
+            if ($rawKey === '' || $canonical === '') {
+                continue;
+            }
+            $leadStatusMapping[$rawKey] = $canonical;
         }
 
         $this->merge([
@@ -66,7 +83,8 @@ class AffiliatePlatformRequest extends FormRequest
             'active' => filter_var($this->input('active', true), FILTER_VALIDATE_BOOLEAN),
             'integration_type' => strtolower(trim((string) $this->input('integration_type', 'postback_get'))),
             'tracking_param_mapping' => $mapping,
-            'conversion_param_mapping' => $conversionMapping,
+            'lead_param_mapping' => $leadMapping,
+            'lead_status_mapping' => $leadStatusMapping,
             'postback_additional_params' => $additionalParams,
         ]);
     }
@@ -87,9 +105,15 @@ class AffiliatePlatformRequest extends FormRequest
             'active' => ['boolean'],
             'integration_type' => ['required', 'string', Rule::in(['postback_get'])],
             'tracking_param_mapping' => ['nullable', 'array'],
-            'conversion_param_mapping' => ['nullable', 'array'],
-            'conversion_param_mapping.conversion_value' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
-            'conversion_param_mapping.currency_code' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping' => ['nullable', 'array'],
+            'lead_param_mapping.payout_amount' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping.currency_code' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping.lead_status' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping.platform_lead_id' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping.occurred_at' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_param_mapping.offer_id' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
+            'lead_status_mapping' => ['nullable', 'array'],
+            'lead_status_mapping.*' => ['nullable', 'string', Rule::in(Lead::ALLOWED_STATUSES)],
             'postback_additional_params' => ['nullable', 'array'],
             'postback_additional_params.*' => ['string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
         ];

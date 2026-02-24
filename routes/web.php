@@ -17,6 +17,9 @@ use App\Http\Controllers\Panel\DeviceCategoryController;
 use App\Http\Controllers\Panel\TrafficSourceCategoryController;
 use App\Http\Controllers\Panel\GoogleAdsAccountController;
 use App\Http\Controllers\Panel\GoogleAuthController;
+use App\Http\Controllers\Panel\LeadsController;
+use App\Http\Controllers\Panel\NotificationController;
+use App\Http\Controllers\Panel\NotificationCatalogController;
 use App\Http\Controllers\Panel\TaskController;
 use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
@@ -159,6 +162,15 @@ Route::middleware(['auth', 'verified'])
                     Route::delete('/{conversion}', [ConversionsController::class, 'destroy'])->name('destroy');
             });
 
+            Route::prefix('leads')
+                ->name('leads.')
+                ->group(function () {
+                    Route::get('/', [LeadsController::class, 'index'])->name('index');
+                    Route::get('/data', [LeadsController::class, 'data'])->name('data');
+                    Route::get('/campaigns', [LeadsController::class, 'campaigns'])->name('campaigns');
+                    Route::get('/platforms', [LeadsController::class, 'platforms'])->name('platforms');
+                });
+
             Route::prefix('configuracoes')->middleware(['auth'])->group(function () {
                 Route::get('contas-anuncios', [GoogleAdsAccountController::class, 'index'])
                     ->name('ads-accounts.index');
@@ -257,6 +269,29 @@ Route::middleware(['auth', 'verified'])
                     Route::post('/', [AffiliatePlatformController::class, 'store'])->name('store');
                     Route::put('/{affiliate_platform}', [AffiliatePlatformController::class, 'update'])->name('update');
                     Route::delete('/{affiliate_platform}', [AffiliatePlatformController::class, 'destroy'])->name('destroy');
+                });
+
+            Route::prefix('notification-catalog')
+                ->name('notification-catalog.')
+                ->group(function () {
+                    Route::get('/', [NotificationCatalogController::class, 'index'])->name('index');
+                    Route::get('/data', [NotificationCatalogController::class, 'data'])->name('data');
+                    Route::post('/categories', [NotificationCatalogController::class, 'storeCategory'])->name('categories.store');
+                    Route::put('/categories/{category}', [NotificationCatalogController::class, 'updateCategory'])->name('categories.update');
+                    Route::delete('/categories/{category}', [NotificationCatalogController::class, 'destroyCategory'])->name('categories.destroy');
+                    Route::post('/types', [NotificationCatalogController::class, 'storeType'])->name('types.store');
+                    Route::put('/types/{type}', [NotificationCatalogController::class, 'updateType'])->name('types.update');
+                    Route::delete('/types/{type}', [NotificationCatalogController::class, 'destroyType'])->name('types.destroy');
+                });
+
+            Route::prefix('notifications')
+                ->name('notifications.')
+                ->group(function () {
+                    Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
+                    Route::get('/data', [NotificationController::class, 'data'])->name('data');
+                    Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
+                    Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
+                    Route::post('/read-all', [NotificationController::class, 'mark-all-as-read'])->name('mark-all-as-read');
                 });
 
 

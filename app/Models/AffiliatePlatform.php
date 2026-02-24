@@ -15,14 +15,16 @@ class AffiliatePlatform extends Model
         'active',
         'integration_type',
         'tracking_param_mapping',
-        'conversion_param_mapping',
+        'lead_param_mapping',
+        'lead_status_mapping',
         'postback_additional_params',
     ];
 
     protected $casts = [
         'active' => 'boolean',
         'tracking_param_mapping' => 'array',
-        'conversion_param_mapping' => 'array',
+        'lead_param_mapping' => 'array',
+        'lead_status_mapping' => 'array',
         'postback_additional_params' => 'array',
     ];
 

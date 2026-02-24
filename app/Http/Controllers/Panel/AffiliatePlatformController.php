@@ -17,7 +17,7 @@ class AffiliatePlatformController extends Controller
         return inertia('Panel/AffiliatePlatforms/Index')
             ->with('title', 'Plataformas de Afiliado')
             ->with('integration', [
-                'callback_base_url' => rtrim(config('app.url'), '/') . '/api/callback-platform',
+                'callback_base_url' => rtrim(config('app.url'), '/') . '/api/get/platform-lead',
                 'user_code' => $userCode,
             ]);
     }
@@ -96,11 +96,24 @@ class AffiliatePlatformController extends Controller
     protected function transform(AffiliatePlatform $affiliatePlatform): array
     {
         $mapping = $affiliatePlatform->tracking_param_mapping ?: [];
-        $rawConversionMapping = $affiliatePlatform->conversion_param_mapping ?: [];
-        $conversionMapping = [
-            'conversion_value' => trim((string) ($rawConversionMapping['conversion_value'] ?? '')),
-            'currency_code' => trim((string) ($rawConversionMapping['currency_code'] ?? '')),
+        $rawLeadMapping = $affiliatePlatform->lead_param_mapping ?: [];
+        $leadMapping = [
+            'payout_amount' => trim((string) ($rawLeadMapping['payout_amount'] ?? '')),
+            'currency_code' => trim((string) ($rawLeadMapping['currency_code'] ?? '')),
+            'lead_status' => trim((string) ($rawLeadMapping['lead_status'] ?? '')),
+            'platform_lead_id' => trim((string) ($rawLeadMapping['platform_lead_id'] ?? '')),
+            'occurred_at' => trim((string) ($rawLeadMapping['occurred_at'] ?? '')),
+            'offer_id' => trim((string) ($rawLeadMapping['offer_id'] ?? '')),
         ];
+        $leadStatusMapping = [];
+        foreach (($affiliatePlatform->lead_status_mapping ?: []) as $raw => $canonical) {
+            $rawKey = strtolower(trim((string) $raw));
+            $canonicalValue = strtolower(trim((string) $canonical));
+            if ($rawKey === '' || $canonicalValue === '') {
+                continue;
+            }
+            $leadStatusMapping[$rawKey] = $canonicalValue;
+        }
         $additionalParams = $affiliatePlatform->postback_additional_params ?: [];
         $pairs = [];
         foreach ($mapping as $source => $target) {
@@ -119,7 +132,8 @@ class AffiliatePlatformController extends Controller
             'integration_type' => $affiliatePlatform->integration_type,
             'integration_type_label' => $affiliatePlatform->integration_type === 'postback_get' ? 'Postback GET' : $affiliatePlatform->integration_type,
             'tracking_param_mapping' => $mapping,
-            'conversion_param_mapping' => $conversionMapping,
+            'lead_param_mapping' => $leadMapping,
+            'lead_status_mapping' => $leadStatusMapping,
             'postback_additional_params' => $additionalParams,
             'mapping_preview' => empty($pairs) ? '-' : implode(', ', $pairs),
             'callback_url' => $callbackUrl,
@@ -132,7 +146,7 @@ class AffiliatePlatformController extends Controller
     {
         $base = rtrim(config('app.url'), '/');
         $slug = trim((string) $affiliatePlatform->slug);
-        $baseUrl = $base . '/api/callback-platform/' . rawurlencode($slug) . '/' . rawurlencode($userCode);
+        $baseUrl = $base . '/api/get/platform-lead/' . rawurlencode($slug) . '/' . rawurlencode($userCode);
 
         $mapping = $affiliatePlatform->tracking_param_mapping ?: [];
         $trackingTargets = array_values(array_filter(array_map(
@@ -145,13 +159,17 @@ class AffiliatePlatformController extends Controller
             $affiliatePlatform->postback_additional_params ?: []
         )));
 
-        $rawConversionMapping = $affiliatePlatform->conversion_param_mapping ?: [];
-        $conversionParams = array_values(array_filter([
-            trim((string) ($rawConversionMapping['conversion_value'] ?? '')),
-            trim((string) ($rawConversionMapping['currency_code'] ?? '')),
+        $rawLeadMapping = $affiliatePlatform->lead_param_mapping ?: [];
+        $leadParams = array_values(array_filter([
+            trim((string) ($rawLeadMapping['payout_amount'] ?? '')),
+            trim((string) ($rawLeadMapping['currency_code'] ?? '')),
+            trim((string) ($rawLeadMapping['lead_status'] ?? '')),
+            trim((string) ($rawLeadMapping['platform_lead_id'] ?? '')),
+            trim((string) ($rawLeadMapping['occurred_at'] ?? '')),
+            trim((string) ($rawLeadMapping['offer_id'] ?? '')),
         ]));
 
-        $params = array_values(array_unique(array_merge($trackingTargets, $conversionParams, $additionalParams)));
+        $params = array_values(array_unique(array_merge($trackingTargets, $leadParams, $additionalParams)));
         if (empty($params)) {
             return $baseUrl;
         }

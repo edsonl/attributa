@@ -55,6 +55,7 @@ class AdsConversion extends Model
         'created_by',
         'is_manual',
         'campaign_id',
+        'lead_id',
         'pageview_id',
         'gclid',
         'gbraid',
@@ -144,6 +145,11 @@ class AdsConversion extends Model
     public function campaign()
     {
         return $this->belongsTo(Campaign::class);
+    }
+
+    public function lead()
+    {
+        return $this->belongsTo(Lead::class);
     }
 
     public function pageview()

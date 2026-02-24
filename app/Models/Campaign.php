@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Traits\HasHashid;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Campaign extends Model
@@ -72,6 +73,16 @@ class Campaign extends Model
             'campaign_id',
             'country_id'
         );
+    }
+
+    public function pageviews(): HasMany
+    {
+        return $this->hasMany(Pageview::class);
+    }
+
+    public function visitors(): HasMany
+    {
+        return $this->hasMany(CampaignVisitor::class);
     }
 
     protected static function booted()

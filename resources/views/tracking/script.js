@@ -114,6 +114,7 @@
     var payload = {
         user_code: USER_CODE,
         campaign_code: CAMPAIGN_CODE,
+        visitor_code: getCookie('at_visitor_code'),
         auth_ts: AUTH_TS,
         auth_nonce: AUTH_NONCE,
         auth_sig: AUTH_SIG,
@@ -166,7 +167,11 @@
                     })
                     .then(function (json) {
                         var pageviewCode = json && json.pageview_code;
+                        var visitorCode = json && json.visitor_code;
                         var eventSig = json && json.event_sig;
+                        if (visitorCode) {
+                            setCookie('at_visitor_code', visitorCode, 365);
+                        }
                         if (pageviewCode) {
                             setCookie('at_pageview_code', pageviewCode, 90);
                             if (eventSig) {
@@ -192,7 +197,11 @@
                         try {
                             var json = JSON.parse(xhr.responseText);
                             var pageviewCode = json && json.pageview_code;
+                            var visitorCode = json && json.visitor_code;
                             var eventSig = json && json.event_sig;
+                            if (visitorCode) {
+                                setCookie('at_visitor_code', visitorCode, 365);
+                            }
                             if (pageviewCode) {
                                 setCookie('at_pageview_code', pageviewCode, 90);
                                 if (eventSig) {
@@ -397,11 +406,15 @@
                 engagedTimer = null;
             }
 
+            // Guarda o motivo canônico do engajamento em campo curto para análise posterior.
+            // Exemplos: scroll_30, time_10s, link_click, form_submit, interactions.
+            var normalizedReason = getSafeText(reason, 64) || 'unknown';
+
             sendEvent({
                 event_type: 'page_engaged',
                 target_url: getSafeText(window.location.href, 2000),
-                element_name: getSafeText('Page engaged (' + reason + ')', 191),
-                element_id: null,
+                element_name: getSafeText('Page engaged', 191),
+                element_id: getSafeText('engagement_reason:' + normalizedReason, 191),
                 element_classes: null
             });
         }

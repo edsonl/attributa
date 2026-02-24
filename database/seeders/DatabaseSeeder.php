@@ -22,9 +22,13 @@ class DatabaseSeeder extends Seeder
             ChannelsSeeder::class,
             CountriesSeeder::class,
             TimezonesSeeder::class,
+            NotificationCatalogSeeder::class,
             DevUserSeeder::class,
+            DevUserNotificationPreferencesSeeder::class,
             TestCampaignSeeder::class,
             TestPageviewsSeeder::class,
+            TestLeadsSeeder::class,
+            TestNotificationsSeeder::class,
             TestAdsConversionsSeeder::class,
             TestConversionGoalLogsSeeder::class,
         ]);

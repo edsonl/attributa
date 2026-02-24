@@ -71,6 +71,13 @@ const columns = [
         sortable: true,
     },
     {
+        name: 'views',
+        label: 'Visitas/Únicas',
+        field: row => Number(row.pageviews_count ?? 0),
+        align: 'center',
+        sortable: true,
+    },
+    {
         name: 'countries',
         label: 'Países',
         field: 'countries',
@@ -373,6 +380,22 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
                     :pagination-label="qTableLangPt.pagination"
                     @request="onRequest"
                 >
+                    <template #body-cell-views="props">
+                        <q-td :props="props" class="tw-text-center">
+                            <q-badge
+                                color="blue-grey-1"
+                                text-color="blue-grey-10"
+                                rounded
+                                class="views-badge"
+                            >
+                                {{ Number(props.row.pageviews_count ?? 0).toLocaleString('pt-BR') }}/{{ Number(props.row.visitors_count ?? 0).toLocaleString('pt-BR') }}
+                                <q-tooltip>
+                                    {{ Number(props.row.pageviews_count ?? 0).toLocaleString('pt-BR') }} pageviews / {{ Number(props.row.visitors_count ?? 0).toLocaleString('pt-BR') }} visitas únicas
+                                </q-tooltip>
+                            </q-badge>
+                        </q-td>
+                    </template>
+
                     <!-- Países -->
                     <template #body-cell-countries="props">
                         <q-td :props="props">
@@ -595,5 +618,12 @@ async function updateCampaignStatus(campaign, campaignStatusId) {
     height: 8px;
     border-radius: 9999px;
     display: inline-block;
+}
+
+.views-badge {
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
 }
 </style>

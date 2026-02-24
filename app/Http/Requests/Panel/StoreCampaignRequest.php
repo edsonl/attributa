@@ -32,7 +32,7 @@ class StoreCampaignRequest extends FormRequest
             'name' => [
                 'required',
                 'string',
-                'max:191',
+                'max:74',
             ],
 
             'product_url' => [
@@ -103,7 +103,7 @@ class StoreCampaignRequest extends FormRequest
     {
         return [
             'name.required' => 'O nome da campanha é obrigatório.',
-            'name.max' => 'O nome da campanha não pode ter mais de 191 caracteres.',
+            'name.max' => 'O nome da campanha não pode ter mais de 74 caracteres.',
             'product_url.required' => 'A URL do produto é obrigatória.',
             'product_url.max' => 'A URL do produto não pode ter mais de 255 caracteres.',
 

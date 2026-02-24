@@ -13,6 +13,7 @@ class Pageview extends Model
 {
     protected $fillable = [
         'user_id',
+        'visitor_id',
 
         // Originais
         'campaign_id',
@@ -68,6 +69,7 @@ class Pageview extends Model
     ];
 
     protected $casts = [
+        'visitor_id' => 'integer',
         'timestamp_ms' => 'integer',
         'latitude' => 'float',
         'longitude' => 'float',

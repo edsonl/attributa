@@ -45,6 +45,7 @@ class HandleInertiaRequests extends Middleware
                         'id' => $request->user()->id,
                         'name' => $request->user()->name,
                         'email' => $request->user()->email,
+                        'notification_email' => $request->user()->notification_email,
                         'initials' => $this->getUserInitials($request->user()->name),
                     ]
                     : null,

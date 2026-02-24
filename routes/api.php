@@ -3,6 +3,7 @@
 use App\Http\Controllers\GoogleAdsConversionsController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\ConversionCallbackPlatformController;
+use App\Http\Controllers\LeadCallbackPlatformController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ConversionCallbackController;
@@ -30,3 +31,8 @@ Route::get(
     '/callback-platform/{platformSlug}/{userCode}',
     [ConversionCallbackPlatformController::class, 'handle']
 )->name('api.callback-platform.handle');
+
+Route::get(
+    '/get/platform-lead/{platformSlug}/{userCode}',
+    [LeadCallbackPlatformController::class, 'handle']
+)->name('api.get.platform-lead.handle');

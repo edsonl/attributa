@@ -36,6 +36,15 @@ let searchTimeout = null
 const integrationTypeOptions = [
     { label: 'Postback GET', value: 'postback_get' },
 ]
+const leadStatusOptions = [
+    { label: 'processing', value: 'processing' },
+    { label: 'rejected', value: 'rejected' },
+    { label: 'trash', value: 'trash' },
+    { label: 'approved', value: 'approved' },
+    { label: 'cancelled', value: 'cancelled' },
+    { label: 'refunded', value: 'refunded' },
+    { label: 'chargeback', value: 'chargeback' },
+]
 
 const defaultForm = () => ({
     id: null,
@@ -43,14 +52,20 @@ const defaultForm = () => ({
     slug: '',
     active: true,
     integration_type: 'postback_get',
-    conversion_param_mapping: {
-        conversion_value: '',
+    lead_param_mapping: {
+        payout_amount: '',
         currency_code: '',
+        lead_status: '',
+        platform_lead_id: '',
+        occurred_at: '',
+        offer_id: '',
     },
+    lead_status_mapping: {},
 })
 
 const form = ref(defaultForm())
 const mappingRows = ref([{ source: '', target: '' }])
+const leadStatusMappingRows = ref([{ raw_status: '', internal_status: 'processing' }])
 const additionalParams = ref([])
 const additionalParamInput = ref('')
 const isEditing = computed(() => Boolean(form.value.id))
@@ -76,12 +91,16 @@ const callbackPreviewUrl = computed(() => {
     const mappingTargets = mappingRows.value
         .map(item => String(item.target || '').trim())
         .filter(Boolean)
-    const conversionMappedParams = [
-        String(form.value?.conversion_param_mapping?.conversion_value || '').trim(),
-        String(form.value?.conversion_param_mapping?.currency_code || '').trim(),
+    const leadMappedParams = [
+        String(form.value?.lead_param_mapping?.payout_amount || '').trim(),
+        String(form.value?.lead_param_mapping?.currency_code || '').trim(),
+        String(form.value?.lead_param_mapping?.lead_status || '').trim(),
+        String(form.value?.lead_param_mapping?.platform_lead_id || '').trim(),
+        String(form.value?.lead_param_mapping?.occurred_at || '').trim(),
+        String(form.value?.lead_param_mapping?.offer_id || '').trim(),
     ].filter(Boolean)
 
-    const params = [...new Set([...mappingTargets, ...conversionMappedParams, ...additionalParams.value])]
+    const params = [...new Set([...mappingTargets, ...leadMappedParams, ...additionalParams.value])]
     if (params.length === 0) return endpoint
 
     const query = params.map(param => `${encodeURIComponent(param)}={${param}}`).join('&')
@@ -146,6 +165,7 @@ function triggerSearch(immediate = false) {
 function openCreate() {
     form.value = defaultForm()
     mappingRows.value = [{ source: '', target: '' }]
+    leadStatusMappingRows.value = [{ raw_status: '', internal_status: 'processing' }]
     additionalParams.value = []
     additionalParamInput.value = ''
     errors.value = {}
@@ -159,10 +179,15 @@ function openEdit(row) {
         slug: row.slug,
         active: row.active,
         integration_type: row.integration_type || 'postback_get',
-        conversion_param_mapping: {
-            conversion_value: String(row.conversion_param_mapping?.conversion_value || ''),
-            currency_code: String(row.conversion_param_mapping?.currency_code || ''),
+        lead_param_mapping: {
+            payout_amount: String(row.lead_param_mapping?.payout_amount || ''),
+            currency_code: String(row.lead_param_mapping?.currency_code || ''),
+            lead_status: String(row.lead_param_mapping?.lead_status || ''),
+            platform_lead_id: String(row.lead_param_mapping?.platform_lead_id || ''),
+            occurred_at: String(row.lead_param_mapping?.occurred_at || ''),
+            offer_id: String(row.lead_param_mapping?.offer_id || ''),
         },
+        lead_status_mapping: row.lead_status_mapping || {},
     }
 
     const pairs = Object.entries(row.tracking_param_mapping || {})
@@ -176,6 +201,14 @@ function openEdit(row) {
         .filter(Boolean)
 
     mappingRows.value = pairs.length > 0 ? pairs : [{ source: '', target: '' }]
+    const statusPairs = Object.entries(row.lead_status_mapping || {})
+        .map(([rawStatus, internalStatus]) => ({
+            raw_status: String(rawStatus || ''),
+            internal_status: String(internalStatus || 'processing'),
+        }))
+    leadStatusMappingRows.value = statusPairs.length > 0
+        ? statusPairs
+        : [{ raw_status: '', internal_status: 'processing' }]
     additionalParams.value = [...new Set(additionalParamsFromRow)]
     additionalParamInput.value = ''
     errors.value = {}
@@ -186,6 +219,7 @@ function closeDialog() {
     dialogVisible.value = false
     form.value = defaultForm()
     mappingRows.value = [{ source: '', target: '' }]
+    leadStatusMappingRows.value = [{ raw_status: '', internal_status: 'processing' }]
     additionalParams.value = []
     additionalParamInput.value = ''
     errors.value = {}
@@ -201,6 +235,18 @@ function removeMappingRow(index) {
         return
     }
     mappingRows.value.splice(index, 1)
+}
+
+function addLeadStatusMappingRow() {
+    leadStatusMappingRows.value.push({ raw_status: '', internal_status: 'processing' })
+}
+
+function removeLeadStatusMappingRow(index) {
+    if (leadStatusMappingRows.value.length === 1) {
+        leadStatusMappingRows.value[0] = { raw_status: '', internal_status: 'processing' }
+        return
+    }
+    leadStatusMappingRows.value.splice(index, 1)
 }
 
 function addAdditionalParamChip() {
@@ -234,18 +280,45 @@ function buildAdditionalParamsPayload() {
     return [...new Set(names)]
 }
 
-function buildConversionParamMappingPayload() {
-    const conversionValue = String(form.value?.conversion_param_mapping?.conversion_value || '').trim()
-    const currencyCode = String(form.value?.conversion_param_mapping?.currency_code || '').trim()
+function buildLeadParamMappingPayload() {
+    const payoutAmount = String(form.value?.lead_param_mapping?.payout_amount || '').trim()
+    const currencyCode = String(form.value?.lead_param_mapping?.currency_code || '').trim()
+    const leadStatus = String(form.value?.lead_param_mapping?.lead_status || '').trim()
+    const platformLeadId = String(form.value?.lead_param_mapping?.platform_lead_id || '').trim()
+    const occurredAt = String(form.value?.lead_param_mapping?.occurred_at || '').trim()
+    const offerId = String(form.value?.lead_param_mapping?.offer_id || '').trim()
 
     const mapping = {}
-    if (conversionValue) {
-        mapping.conversion_value = conversionValue
+    if (payoutAmount) {
+        mapping.payout_amount = payoutAmount
     }
     if (currencyCode) {
         mapping.currency_code = currencyCode
     }
+    if (leadStatus) {
+        mapping.lead_status = leadStatus
+    }
+    if (platformLeadId) {
+        mapping.platform_lead_id = platformLeadId
+    }
+    if (occurredAt) {
+        mapping.occurred_at = occurredAt
+    }
+    if (offerId) {
+        mapping.offer_id = offerId
+    }
 
+    return mapping
+}
+
+function buildLeadStatusMappingPayload() {
+    const mapping = {}
+    for (const row of leadStatusMappingRows.value) {
+        const rawStatus = String(row.raw_status || '').trim().toLowerCase()
+        const internalStatus = String(row.internal_status || '').trim().toLowerCase()
+        if (!rawStatus || !internalStatus) continue
+        mapping[rawStatus] = internalStatus
+    }
     return mapping
 }
 
@@ -272,7 +345,8 @@ async function saveRow() {
     const payload = {
         ...form.value,
         tracking_param_mapping: buildMappingPayload(),
-        conversion_param_mapping: buildConversionParamMappingPayload(),
+        lead_param_mapping: buildLeadParamMappingPayload(),
+        lead_status_mapping: buildLeadStatusMappingPayload(),
         postback_additional_params: buildAdditionalParamsPayload(),
     }
 
@@ -285,6 +359,7 @@ async function saveRow() {
         dialogVisible.value = false
         form.value = defaultForm()
         mappingRows.value = [{ source: '', target: '' }]
+        leadStatusMappingRows.value = [{ raw_status: '', internal_status: 'processing' }]
         additionalParams.value = []
         additionalParamInput.value = ''
         $q.notify({ type: 'positive', message: 'Dados salvos com sucesso!' })
@@ -440,13 +515,13 @@ onMounted(() => {
 
                 <q-input
                     :model-value="callbackPreviewUrl"
-                    label="URL de Postback (dinâmica)"
+                    label="URL de Callback Lead (dinâmica)"
                     dense
                     outlined
                     readonly
                 >
                     <template #append>
-                        <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(callbackPreviewUrl, 'URL de Postback')" />
+                        <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(callbackPreviewUrl, 'URL de Callback Lead')" />
                     </template>
                 </q-input>
 
@@ -490,72 +565,155 @@ onMounted(() => {
 
                     <div class="tw-space-y-4">
                         <div class="tw-space-y-2">
-                            <div class="tw-text-sm tw-font-medium">Mapeamento da conversão (postback -> conversão)</div>
+                            <div class="tw-text-sm tw-font-medium">Mapeamento do lead (postback -> leads)</div>
                             <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-2">
                                 <q-input
-                                    v-model="form.conversion_param_mapping.conversion_value"
-                                    label="conversion_value"
+                                    v-model="form.lead_param_mapping.payout_amount"
+                                    label="payout_amount"
                                     dense
                                     outlined
-                                    placeholder="ex: amount"
-                                    :error="Boolean(errors['conversion_param_mapping.conversion_value'])"
-                                    :error-message="errors['conversion_param_mapping.conversion_value']?.[0]"
+                                    placeholder="ex: payment"
+                                    :error="Boolean(errors['lead_param_mapping.payout_amount'])"
+                                    :error-message="errors['lead_param_mapping.payout_amount']?.[0]"
                                 />
                                 <q-input
-                                    v-model="form.conversion_param_mapping.currency_code"
+                                    v-model="form.lead_param_mapping.currency_code"
                                     label="currency_code"
                                     dense
                                     outlined
                                     placeholder="ex: cy"
-                                    :error="Boolean(errors['conversion_param_mapping.currency_code'])"
-                                    :error-message="errors['conversion_param_mapping.currency_code']?.[0]"
+                                    :error="Boolean(errors['lead_param_mapping.currency_code'])"
+                                    :error-message="errors['lead_param_mapping.currency_code']?.[0]"
+                                />
+                                <q-input
+                                    v-model="form.lead_param_mapping.lead_status"
+                                    label="lead_status"
+                                    dense
+                                    outlined
+                                    placeholder="ex: status"
+                                    :error="Boolean(errors['lead_param_mapping.lead_status'])"
+                                    :error-message="errors['lead_param_mapping.lead_status']?.[0]"
+                                />
+                                <q-input
+                                    v-model="form.lead_param_mapping.platform_lead_id"
+                                    label="platform_lead_id"
+                                    dense
+                                    outlined
+                                    placeholder="ex: uuid"
+                                    :error="Boolean(errors['lead_param_mapping.platform_lead_id'])"
+                                    :error-message="errors['lead_param_mapping.platform_lead_id']?.[0]"
+                                />
+                                <q-input
+                                    v-model="form.lead_param_mapping.occurred_at"
+                                    label="occurred_at"
+                                    dense
+                                    outlined
+                                    placeholder="ex: date"
+                                    :error="Boolean(errors['lead_param_mapping.occurred_at'])"
+                                    :error-message="errors['lead_param_mapping.occurred_at']?.[0]"
+                                />
+                                <q-input
+                                    v-model="form.lead_param_mapping.offer_id"
+                                    label="offer_id"
+                                    dense
+                                    outlined
+                                    placeholder="ex: offer"
+                                    :error="Boolean(errors['lead_param_mapping.offer_id'])"
+                                    :error-message="errors['lead_param_mapping.offer_id']?.[0]"
                                 />
                             </div>
                             <div class="tw-text-xs tw-text-slate-500">
-                                Dica: estes campos são da tabela ads_conversions. Defina o parâmetro de retorno da plataforma para cada um (Dr Cash: conversion_value = amount, currency_code = cy).
+                                Dica: estes campos são da tabela leads. Exemplo Dr Cash: payout_amount = payment, currency_code = currency, lead_status = status, platform_lead_id = uuid, occurred_at = date, offer_id = offer.
                             </div>
                         </div>
+
                     </div>
                 </div>
 
-                <div class="tw-space-y-2">
-                    <div class="tw-text-sm tw-font-medium">Parâmetros adicionais do postback</div>
-                    <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[1fr_auto] tw-gap-2 tw-items-center">
-                        <q-input
-                            v-model="additionalParamInput"
-                            label="Parâmetro"
-                            dense
-                            outlined
-                            placeholder="ex: orderid"
-                            @keyup.enter="addAdditionalParamChip"
-                        />
-                        <q-btn
-                            dense
-                            unelevated
-                            round
-                            color="positive"
-                            text-color="white"
-                            icon="add"
-                            @click="addAdditionalParamChip"
-                        >
-                            <q-tooltip>Adicionar parâmetro adicional</q-tooltip>
-                        </q-btn>
+                <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-2 tw-gap-4">
+                    <div class="tw-space-y-2">
+                        <div class="tw-flex tw-items-center tw-justify-between">
+                            <div class="tw-text-sm tw-font-medium">Mapeamento de status do lead (status recebido da plataforma -> status interno)</div>
+                            <q-btn
+                                dense
+                                unelevated
+                                round
+                                color="positive"
+                                text-color="white"
+                                icon="add"
+                                @click="addLeadStatusMappingRow"
+                            >
+                                <q-tooltip>Adicionar novo de/para de status</q-tooltip>
+                            </q-btn>
+                        </div>
+                        <div class="tw-space-y-2">
+                            <div v-for="(item, index) in leadStatusMappingRows" :key="`lead-status-${index}`" class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[1fr_24px_1fr_auto] tw-gap-2 tw-items-center">
+                                <q-input
+                                    v-model="item.raw_status"
+                                    label="status da plataforma"
+                                    dense
+                                    outlined
+                                    placeholder="ex: trash"
+                                />
+                                <div class="tw-text-center tw-text-slate-500">-></div>
+                                <q-select
+                                    v-model="item.internal_status"
+                                    :options="leadStatusOptions"
+                                    option-label="label"
+                                    option-value="value"
+                                    emit-value
+                                    map-options
+                                    label="status interno"
+                                    dense
+                                    outlined
+                                />
+                                <q-btn dense flat size="sm" icon="delete" class="qtable-delete-btn" @click="removeLeadStatusMappingRow(index)" />
+                            </div>
+                        </div>
+                        <div class="tw-text-xs tw-text-slate-500">
+                            Exemplo: approved -> approved, rejected -> rejected, trash -> trash, hold -> processing, canceled -> cancelled, refunded -> refunded.
+                        </div>
                     </div>
-                    <div class="tw-flex tw-flex-wrap tw-gap-2 tw-min-h-[28px]">
-                        <q-chip
-                            v-for="param in additionalParams"
-                            :key="`additional-${param}`"
-                            removable
-                            dense
-                            color="blue-1"
-                            text-color="primary"
-                            @remove="removeAdditionalParamChip(param)"
-                        >
-                            {{ param }}
-                        </q-chip>
-                    </div>
-                    <div class="tw-text-xs tw-text-slate-500">
-                        Exemplo Dr Cash: orderid, product, amount, cy, status.
+
+                    <div class="tw-space-y-2">
+                        <div class="tw-text-sm tw-font-medium">Parâmetros adicionais do postback</div>
+                        <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[1fr_auto] tw-gap-2 tw-items-center">
+                            <q-input
+                                v-model="additionalParamInput"
+                                label="Parâmetro"
+                                dense
+                                outlined
+                                placeholder="ex: orderid"
+                                @keyup.enter="addAdditionalParamChip"
+                            />
+                            <q-btn
+                                dense
+                                unelevated
+                                round
+                                color="positive"
+                                text-color="white"
+                                icon="add"
+                                @click="addAdditionalParamChip"
+                            >
+                                <q-tooltip>Adicionar parâmetro adicional</q-tooltip>
+                            </q-btn>
+                        </div>
+                        <div class="tw-flex tw-flex-wrap tw-gap-2 tw-min-h-[28px]">
+                            <q-chip
+                                v-for="param in additionalParams"
+                                :key="`additional-${param}`"
+                                removable
+                                dense
+                                color="blue-1"
+                                text-color="primary"
+                                @remove="removeAdditionalParamChip(param)"
+                            >
+                                {{ param }}
+                            </q-chip>
+                        </div>
+                        <div class="tw-text-xs tw-text-slate-500">
+                            Exemplo Dr Cash: orderid, product, amount, cy, status.
+                        </div>
                     </div>
                 </div>
             </q-card-section>
@@ -580,13 +738,13 @@ onMounted(() => {
             <q-card-section class="tw-space-y-4">
                 <q-input
                     :model-value="integrationPayload?.callback_url ?? ''"
-                    label="URL de Postback"
+                    label="URL de Callback Lead"
                     readonly
                     outlined
                     dense
                 >
                     <template #append>
-                        <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(integrationPayload?.callback_url, 'URL de Postback')" />
+                        <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(integrationPayload?.callback_url, 'URL de Callback Lead')" />
                     </template>
                 </q-input>
 
@@ -616,10 +774,24 @@ onMounted(() => {
 
                 <q-input
                     :model-value="[
-                        integrationPayload?.conversion_param_mapping?.conversion_value ? `valor: ${integrationPayload.conversion_param_mapping.conversion_value}` : null,
-                        integrationPayload?.conversion_param_mapping?.currency_code ? `moeda: ${integrationPayload.conversion_param_mapping.currency_code}` : null,
+                        integrationPayload?.lead_param_mapping?.payout_amount ? `payout: ${integrationPayload.lead_param_mapping.payout_amount}` : null,
+                        integrationPayload?.lead_param_mapping?.currency_code ? `moeda: ${integrationPayload.lead_param_mapping.currency_code}` : null,
+                        integrationPayload?.lead_param_mapping?.lead_status ? `status: ${integrationPayload.lead_param_mapping.lead_status}` : null,
+                        integrationPayload?.lead_param_mapping?.platform_lead_id ? `id externo: ${integrationPayload.lead_param_mapping.platform_lead_id}` : null,
+                        integrationPayload?.lead_param_mapping?.occurred_at ? `data: ${integrationPayload.lead_param_mapping.occurred_at}` : null,
+                        integrationPayload?.lead_param_mapping?.offer_id ? `offer: ${integrationPayload.lead_param_mapping.offer_id}` : null,
                     ].filter(Boolean).join(' | ') || '-'"
-                    label="Mapeamento de conversão"
+                    label="Mapeamento de lead"
+                    readonly
+                    outlined
+                    dense
+                />
+
+                <q-input
+                    :model-value="Object.entries(integrationPayload?.lead_status_mapping || {})
+                        .map(([from, to]) => `${from} -> ${to}`)
+                        .join(' | ') || '-'"
+                    label="Mapeamento de status"
                     readonly
                     outlined
                     dense

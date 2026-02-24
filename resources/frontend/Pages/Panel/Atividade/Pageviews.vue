@@ -20,6 +20,7 @@ const pagination = ref({
 
 const campaignId = ref(null)
 const campaigns = ref([])
+const campaignOptions = ref([])
 const dateRange = ref({ from: '', to: '' })
 const tempDateRange = ref({ from: '', to: '' })
 const datePopupOpen = ref(false)
@@ -35,6 +36,7 @@ const detailDialog = ref(false)
 const detailLoading = ref(false)
 const detailPayload = ref(null)
 const selected = ref([])
+const expandedCampaignRows = ref({})
 const hasSelection = computed(() => selected.value.length > 0)
 const dateRangeLabel = computed(() => {
     const from = String(dateRange.value?.from || '')
@@ -50,17 +52,42 @@ const assetBaseUrl = (
 const columns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', sortable: true, align: 'left' },
     { name: 'ip', label: 'Classificação / IP', field: 'ip', sortable: true, align: 'left' },
-    { name: 'campaign_name', label: 'Campanha', field: 'campaign_name', sortable: true, align: 'left' },
-    { name: 'traffic_source', label: 'Origem do Tráfego', field: 'traffic_source_name', sortable: true, align: 'left' },
-    { name: 'device_browser', label: 'Dispositivo/Navegador', field: row => resolveDeviceBrowser(row), sortable: true, align: 'left' },
     { name: 'country_code', label: 'País', field: 'country_code', sortable: true, align: 'left' },
     { name: 'region_name', label: 'Região', field: 'region_name', sortable: true, align: 'left' },
     { name: 'city', label: 'Cidade', field: 'city', sortable: true, align: 'left' },
+    { name: 'campaign_name', label: 'Campanha', field: 'campaign_name', sortable: true, align: 'left' },
+    { name: 'visitor', label: 'Visitante', field: 'visitor_status', sortable: true, align: 'center' },
+    { name: 'traffic_source', label: 'Origem do Tráfego', field: 'traffic_source_name', sortable: true, align: 'left' },
+    { name: 'device_browser', label: 'Dispositivo/Navegador', field: row => resolveDeviceBrowser(row), sortable: true, align: 'left' },
     { name: 'gclid', label: 'GCLID', field: 'has_gclid', sortable: true, align: 'left' },
     { name: 'conversion', label: 'Conversão', field: 'conversion', sortable: true, align: 'left' },
     { name: 'details', label: 'Detalhes', field: 'id', align: 'center' },
     { name: 'actions', label: 'Ações', field: 'id', align: 'right' },
 ]
+const defaultHiddenColumns = ['region_name', 'city']
+const visibleColumns = ref(
+    columns
+        .map(column => column.name)
+        .filter(name => !defaultHiddenColumns.includes(name))
+)
+
+function isColumnVisible(name) {
+    return visibleColumns.value.includes(name)
+}
+
+function setColumnVisibility(name, value) {
+    const columnSet = new Set(visibleColumns.value)
+
+    if (value) {
+        columnSet.add(name)
+    } else {
+        columnSet.delete(name)
+    }
+
+    visibleColumns.value = columns
+        .map(column => column.name)
+        .filter(columnName => columnSet.has(columnName))
+}
 /*
 function formatDateBR(value) {
     if (!value) return '-'
@@ -142,6 +169,49 @@ function shouldShowDeviceIcon(row) {
     return resolveDeviceBrowserMeta(row).deviceLabel !== '-'
 }
 
+function resolveVisitorStatus(row) {
+    return String(row?.visitor_status || '').toLowerCase() === 'recorrente' ? 'recorrente' : 'novo'
+}
+
+function visitorBadgeLabel(row) {
+    return resolveVisitorStatus(row) === 'recorrente' ? 'Recorrente' : 'Novo'
+}
+
+function visitorBadgeColor(row) {
+    return resolveVisitorStatus(row) === 'recorrente' ? 'indigo-1' : 'teal-1'
+}
+
+function visitorBadgeTextColor(row) {
+    return resolveVisitorStatus(row) === 'recorrente' ? 'indigo-10' : 'teal-10'
+}
+
+function visitorTooltip(row) {
+    const hits = Math.max(Number(row?.visitor_hits ?? 1), 1).toLocaleString('pt-BR')
+    const status = resolveVisitorStatus(row) === 'recorrente' ? 'visitas recorrentes' : 'primeira visita'
+    return `${hits} pageviews deste visitante nesta campanha (${status}).`
+}
+
+function canPreviewFullCampaignName(value) {
+    const text = String(value || '').trim()
+    return text !== '' && text !== '-' && text.length > 24
+}
+
+function isCampaignNameExpanded(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return false
+    return Boolean(expandedCampaignRows.value[key])
+}
+
+function toggleCampaignName(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return
+
+    expandedCampaignRows.value = {
+        ...expandedCampaignRows.value,
+        [key]: !Boolean(expandedCampaignRows.value[key]),
+    }
+}
+
 async function copyText(value, label = 'Valor') {
     if (!value) return
 
@@ -156,6 +226,22 @@ async function copyText(value, label = 'Valor') {
 function fetchCampaigns() {
     axios.get(route('panel.atividade.campaigns')).then(res => {
         campaigns.value = res.data
+        campaignOptions.value = res.data
+    })
+}
+
+function onCampaignFilter(val, update) {
+    update(() => {
+        const needle = String(val || '').trim().toLowerCase()
+        if (needle === '') {
+            campaignOptions.value = campaigns.value
+            return
+        }
+
+        campaignOptions.value = campaigns.value.filter((campaign) => {
+            const name = String(campaign?.name || '').toLowerCase()
+            return name.includes(needle)
+        })
     })
 }
 
@@ -214,6 +300,13 @@ function applyPresetRange(preset) {
 function applyTodayRange() {
     const today = toIsoDate(new Date())
     tempDateRange.value = { from: today, to: today }
+}
+
+function applyYesterdayRange() {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const iso = toIsoDate(yesterday)
+    tempDateRange.value = { from: iso, to: iso }
 }
 
 function openDatePopup() {
@@ -467,16 +560,22 @@ onMounted(() => {
                 <q-select
                     ref="tableRef"
                     v-model="campaignId"
-                    :options="campaigns"
+                    :options="campaignOptions"
                     option-label="name"
                     option-value="id"
                     emit-value
                     map-options
+                    use-input
+                    fill-input
+                    hide-selected
+                    input-debounce="0"
                     clearable
                     dense
                     outlined
+                    hide-bottom-space
                     class="filter-field campaign-filter-field"
                     label="Filtrar por campanha"
+                    @filter="onCampaignFilter"
                 />
             </div>
             <div class="col-12 col-sm-6 col-md-2 q-mb-sm q-mb-md-0">
@@ -507,6 +606,7 @@ onMounted(() => {
                         <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[150px_1fr] tw-gap-3 tw-p-3">
                             <div class="tw-flex tw-flex-col tw-gap-2">
                                 <q-btn flat no-caps dense label="Hoje" @click="applyTodayRange" />
+                                <q-btn flat no-caps dense label="Ontem" @click="applyYesterdayRange" />
                                 <q-btn flat no-caps dense label="Últimos 7 dias" @click="applyPresetRange('last_7')" />
                                 <q-btn flat no-caps dense label="Últimos 31 dias" @click="applyPresetRange('last_31')" />
                                 <q-btn flat no-caps dense label="Mês atual" @click="applyPresetRange('month_current')" />
@@ -526,6 +626,38 @@ onMounted(() => {
                         </div>
                     </q-popup-proxy>
                 </q-input>
+            </div>
+            <div class="col-auto q-mb-sm q-mb-md-0">
+                <q-btn
+                    dense
+                    flat
+                    round
+                    icon="view_column"
+                    color="grey-7"
+                    aria-label="Organizar colunas"
+                >
+                    <q-tooltip>Organizar colunas</q-tooltip>
+                    <q-menu anchor="bottom right" self="top right">
+                        <q-list dense style="min-width: 220px">
+                            <q-item
+                                v-for="column in columns"
+                                :key="column.name"
+                                clickable
+                                @click="setColumnVisibility(column.name, !isColumnVisible(column.name))"
+                            >
+                                <q-item-section avatar>
+                                    <q-checkbox
+                                        dense
+                                        :model-value="isColumnVisible(column.name)"
+                                        @click.stop
+                                        @update:model-value="value => setColumnVisibility(column.name, value)"
+                                    />
+                                </q-item-section>
+                                <q-item-section>{{ column.label }}</q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-menu>
+                </q-btn>
             </div>
             <div class="col-12 col-md q-mt-sm q-mt-md-0 tw-flex md:tw-justify-end">
                 <q-btn
@@ -548,6 +680,7 @@ onMounted(() => {
         <q-table
             :rows="rows"
             :columns="columns"
+            :visible-columns="visibleColumns"
             row-key="id"
             :loading="loading"
             v-model:pagination="pagination"
@@ -595,7 +728,46 @@ onMounted(() => {
 
             <template #body-cell-campaign_name="props">
                 <q-td :props="props">
-                    {{ props.value || '-' }}
+                    <div class="tw-flex tw-items-center tw-gap-1">
+                        <div
+                            class="campaign-name-truncate"
+                            :class="{
+                                'campaign-name-truncate--fade': canPreviewFullCampaignName(props.value) && !isCampaignNameExpanded(props.row),
+                                'campaign-name-truncate--expanded': isCampaignNameExpanded(props.row),
+                            }"
+                        >
+                            {{ props.value || '-' }}
+                        </div>
+                        <q-btn
+                            v-if="canPreviewFullCampaignName(props.value)"
+                            dense
+                            flat
+                            round
+                            size="sm"
+                            :icon="isCampaignNameExpanded(props.row) ? 'visibility_off' : 'visibility'"
+                            color="grey-6"
+                            class="campaign-name-eye-btn"
+                            @click="toggleCampaignName(props.row)"
+                        >
+                            <q-tooltip>{{ isCampaignNameExpanded(props.row) ? 'Recolher nome' : 'Ver nome completo' }}</q-tooltip>
+                        </q-btn>
+                    </div>
+                </q-td>
+            </template>
+
+            <template #body-cell-visitor="props">
+                <q-td :props="props" class="tw-text-center">
+                    <q-badge
+                        rounded
+                        :color="visitorBadgeColor(props.row)"
+                        :text-color="visitorBadgeTextColor(props.row)"
+                        class="visitor-badge"
+                    >
+                        {{ visitorBadgeLabel(props.row) }}
+                        <q-tooltip>
+                            {{ visitorTooltip(props.row) }}
+                        </q-tooltip>
+                    </q-badge>
                 </q-td>
             </template>
 
@@ -758,12 +930,24 @@ onMounted(() => {
     line-height: 1.2;
 }
 
+.campaign-filter-field :deep(.q-field__control) {
+    min-height: 44px !important;
+    height: 44px !important;
+}
+
 .country-flag {
     width: 20px;
     height: 13px;
     border-radius: 2px;
     object-fit: cover;
     border: 1px solid #e5e7eb;
+}
+
+.visitor-badge {
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
 }
 
 .period-date-picker :deep(.q-date__today) {
@@ -775,5 +959,36 @@ onMounted(() => {
 .period-date-picker :deep(.q-date__today.bg-primary) {
     box-shadow: inset 0 0 0 2px #ffffff;
     background: var(--q-primary);
+}
+
+.campaign-name-truncate {
+    position: relative;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.campaign-name-truncate--expanded {
+    max-width: 340px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+}
+
+.campaign-name-truncate--fade::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 26px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 78%);
+}
+
+.campaign-name-eye-btn {
+    opacity: 0.9;
 }
 </style>

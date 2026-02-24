@@ -31,8 +31,11 @@ return new class extends Migration
             // Mapeamento dos parâmetros de tracking (origem -> destino)
             $table->json('tracking_param_mapping')->nullable()->comment('Mapeamento de tracking: origem => retorno');
 
-            // Mapeamento dos parâmetros usados para salvar a conversão (ex: valor e moeda)
-            $table->json('conversion_param_mapping')->nullable()->comment('Mapeamento fixo de conversão: conversion_value/currency_code => parâmetro de retorno');
+            // Mapeamento dos parâmetros usados para salvar o lead
+            $table->json('lead_param_mapping')->nullable()->comment('Mapeamento de lead: payout_amount/currency_code/lead_status/platform_lead_id/occurred_at => parâmetro de retorno');
+
+            // Mapeamento de status bruto da plataforma para status canonico interno
+            $table->json('lead_status_mapping')->nullable()->comment('Mapeamento de status: raw => processing/rejected/trash/approved/cancelled/refunded/chargeback');
 
             // Parâmetros adicionais que a plataforma envia no postback
             $table->json('postback_additional_params')->nullable()->comment('Parâmetros adicionais esperados no postback');
@@ -53,6 +56,13 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Ambiente local pode ter tabelas legadas (leads/ads_conversions)
+        // ainda não controladas pela tabela migrations.
+        // Garantimos rollback seguro removendo dependentes antes da plataforma.
+        Schema::disableForeignKeyConstraints();
+        Schema::dropIfExists('ads_conversions');
+        Schema::dropIfExists('leads');
         Schema::dropIfExists('affiliate_platforms');
+        Schema::enableForeignKeyConstraints();
     }
 };

@@ -36,6 +36,7 @@ class CampaignController extends Controller
             'id' => 'campaigns.id',
             'code' => 'campaigns.code',
             'name' => 'campaigns.name',
+            'views' => 'pageviews_count',
             'status' => 'campaigns.campaign_status_id',
             'created_at' => 'campaigns.created_at',
         ];
@@ -47,7 +48,7 @@ class CampaignController extends Controller
             'channel',
             'conversionGoal',
         ])
-            ->withCount('countries')
+            ->withCount(['countries', 'pageviews', 'visitors'])
             ->where('user_id', $userId);
 
         if ($search !== '') {

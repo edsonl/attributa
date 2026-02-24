@@ -3,7 +3,7 @@ import { computed, ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { Head } from '@inertiajs/vue3'
 import { useQuasar } from 'quasar'
-import ConversionPageviewDetailModal from './ConversionPageviewDetailModal.vue'
+import PageviewDetailModal from '../Atividade/PageviewDetailModal.vue'
 
 const rows = ref([])
 const loading = ref(false)
@@ -28,11 +28,13 @@ const tempDateRange = ref({ from: '', to: '' })
 const datePopupOpen = ref(false)
 const filtersReady = ref(false)
 const campaigns = ref([])
+const campaignOptions = ref([])
 const timezones = ref([])
 const timezoneOptions = ref([])
 const detailDialog = ref(false)
 const detailLoading = ref(false)
 const detailPayload = ref(null)
+const expandedCampaignRows = ref({})
 const manualDialog = ref(false)
 const manualSaving = ref(false)
 const manualErrors = ref({})
@@ -142,6 +144,27 @@ function statusBadgeLabel(value) {
     return value || '-'
 }
 
+function canPreviewFullCampaignName(value) {
+    const text = String(value || '').trim()
+    return text !== '' && text !== '-' && text.length > 24
+}
+
+function isCampaignNameExpanded(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return false
+    return Boolean(expandedCampaignRows.value[key])
+}
+
+function toggleCampaignName(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return
+
+    expandedCampaignRows.value = {
+        ...expandedCampaignRows.value,
+        [key]: !Boolean(expandedCampaignRows.value[key]),
+    }
+}
+
 function onTypeFilterToggle(type, value) {
     const nextManual = type === 'manual' ? Boolean(value) : listFilters.value.include_manual
     const nextAutomatic = type === 'automatic' ? Boolean(value) : listFilters.value.include_automatic
@@ -209,6 +232,13 @@ function applyPresetRange(preset) {
 function applyTodayRange() {
     const today = toIsoDate(new Date())
     tempDateRange.value = { from: today, to: today }
+}
+
+function applyYesterdayRange() {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const iso = toIsoDate(yesterday)
+    tempDateRange.value = { from: iso, to: iso }
 }
 
 function openDatePopup() {
@@ -294,6 +324,22 @@ async function openPageviewDetails(pageviewId) {
 function fetchCampaigns() {
     axios.get(route('panel.conversoes.campaigns')).then(res => {
         campaigns.value = res.data
+        campaignOptions.value = res.data
+    })
+}
+
+function onCampaignFilter(val, update) {
+    update(() => {
+        const needle = String(val || '').trim().toLowerCase()
+        if (needle === '') {
+            campaignOptions.value = campaigns.value
+            return
+        }
+
+        campaignOptions.value = campaigns.value.filter((campaign) => {
+            const name = String(campaign?.name || '').toLowerCase()
+            return name.includes(needle)
+        })
     })
 }
 
@@ -649,16 +695,22 @@ onMounted(() => {
                 <q-select
                     ref="tableRef"
                     v-model="campaignId"
-                    :options="campaigns"
+                    :options="campaignOptions"
                     option-label="name"
                     option-value="id"
                     emit-value
                     map-options
+                    use-input
+                    fill-input
+                    hide-selected
+                    input-debounce="0"
                     clearable
                     dense
                     outlined
+                    hide-bottom-space
                     class="filter-field campaign-filter-field"
                     label="Filtrar por campanha"
+                    @filter="onCampaignFilter"
                 />
             </div>
             <div class="tw-w-full sm:tw-w-[320px] md:tw-w-[300px]">
@@ -689,6 +741,7 @@ onMounted(() => {
                         <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[150px_1fr] tw-gap-3 tw-p-3">
                             <div class="tw-flex tw-flex-col tw-gap-2">
                                 <q-btn flat no-caps dense label="Hoje" @click="applyTodayRange" />
+                                <q-btn flat no-caps dense label="Ontem" @click="applyYesterdayRange" />
                                 <q-btn flat no-caps dense label="Últimos 7 dias" @click="applyPresetRange('last_7')" />
                                 <q-btn flat no-caps dense label="Últimos 31 dias" @click="applyPresetRange('last_31')" />
                                 <q-btn flat no-caps dense label="Mês atual" @click="applyPresetRange('month_current')" />
@@ -773,25 +826,51 @@ onMounted(() => {
                 </q-td>
             </template>
 
+            <template #body-cell-campaign_name="props">
+                <q-td :props="props">
+                    <div class="tw-flex tw-items-center tw-gap-1">
+                        <div
+                            class="campaign-name-truncate"
+                            :class="{
+                                'campaign-name-truncate--fade': canPreviewFullCampaignName(props.value) && !isCampaignNameExpanded(props.row),
+                                'campaign-name-truncate--expanded': isCampaignNameExpanded(props.row),
+                            }"
+                        >
+                            {{ props.value || '-' }}
+                        </div>
+                        <q-btn
+                            v-if="canPreviewFullCampaignName(props.value)"
+                            dense
+                            flat
+                            round
+                            size="sm"
+                            :icon="isCampaignNameExpanded(props.row) ? 'visibility_off' : 'visibility'"
+                            color="grey-6"
+                            class="campaign-name-eye-btn"
+                            @click="toggleCampaignName(props.row)"
+                        >
+                            <q-tooltip>{{ isCampaignNameExpanded(props.row) ? 'Recolher nome' : 'Ver nome completo' }}</q-tooltip>
+                        </q-btn>
+                    </div>
+                </q-td>
+            </template>
+
             <template #body-cell-conversion_value="props">
                 <q-td :props="props">{{ formatUSD(props.value) }}</q-td>
             </template>
 
             <template #body-cell-pageview_id="props">
                 <q-td :props="props">
-                    <div class="tw-flex tw-items-center tw-gap-1">
-                        <span>{{ props.value ?? '-' }}</span>
-                        <q-btn
-                            v-if="props.value"
-                            dense
-                            flat
-                            round
-                            size="sm"
-                            icon="manage_search"
-                            color="primary"
-                            @click="openPageviewDetails(props.value)"
-                        />
-                    </div>
+                    <q-btn
+                        v-if="props.value"
+                        dense
+                        flat
+                        round
+                        size="sm"
+                        icon="manage_search"
+                        color="primary"
+                        @click="openPageviewDetails(props.value)"
+                    />
                 </q-td>
             </template>
 
@@ -1089,7 +1168,7 @@ onMounted(() => {
         </q-card>
     </q-dialog>
 
-    <ConversionPageviewDetailModal
+    <PageviewDetailModal
         v-model="detailDialog"
         :loading="detailLoading"
         :payload="detailPayload"
@@ -1104,8 +1183,12 @@ onMounted(() => {
 
 .campaign-filter-field :deep(.q-field__native) {
     align-items: center;
-    line-height: 1.35;
-    padding-top: 2px !important;
+    line-height: 1.2;
+}
+
+.campaign-filter-field :deep(.q-field__control) {
+    min-height: 44px !important;
+    height: 44px !important;
 }
 
 .period-date-picker :deep(.q-date__today) {
@@ -1117,5 +1200,36 @@ onMounted(() => {
 .period-date-picker :deep(.q-date__today.bg-primary) {
     box-shadow: inset 0 0 0 2px #ffffff;
     background: var(--q-primary);
+}
+
+.campaign-name-truncate {
+    position: relative;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.campaign-name-truncate--expanded {
+    max-width: 340px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+}
+
+.campaign-name-truncate--fade::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 26px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 78%);
+}
+
+.campaign-name-eye-btn {
+    opacity: 0.9;
 }
 </style>

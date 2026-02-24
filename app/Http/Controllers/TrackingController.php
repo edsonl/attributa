@@ -12,6 +12,7 @@ use App\Services\HashidService;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -46,6 +47,7 @@ class TrackingController extends Controller
         $data = $request->validate([
             'user_code'    => 'required|string|max:32',
             'campaign_code' => 'required|string|max:32',
+            'visitor_code' => 'nullable|string|max:32',
             'auth_ts'      => 'required|integer',
             'auth_nonce'   => 'required|string|min:16|max:64|regex:/^[A-Za-z0-9]+$/',
             'auth_sig'     => 'required|string|size:64|regex:/^[a-f0-9]+$/',
@@ -76,6 +78,7 @@ class TrackingController extends Controller
         ]);
         
         // Decodifica hashids enviados no front para validar formato antes de consultar o banco.
+        // Se qualquer token for inválido, bloqueia cedo para evitar lookup desnecessário.
         $userIdFromCode = app(HashidService::class)->decode((string) $data['user_code']);
         $campaignIdFromCode = app(HashidService::class)->decode((string) $data['campaign_code']);
 
@@ -96,6 +99,7 @@ class TrackingController extends Controller
         }
 
         // Anti-tampering: valida assinatura com janela de tempo curta.
+        // Sem isso, um payload antigo poderia ser reaproveitado por terceiros.
         if (!$this->isTrackingTimestampValid((int) $data['auth_ts'])) {
             $log->warning('Tracking collect rejeitado: assinatura expirada.', [
                 'auth_ts' => (int) $data['auth_ts'],
@@ -107,6 +111,7 @@ class TrackingController extends Controller
             ], 422);
         }
 
+        // Assinatura HMAC do collect. Qualquer alteração em campos assinados invalida o request.
         $expectedSig = $this->buildTrackingSignature(
             (string) $data['user_code'],
             (string) $data['campaign_code'],
@@ -128,6 +133,7 @@ class TrackingController extends Controller
         }
 
         // Anti-replay: o mesmo nonce não pode ser aceito duas vezes na janela de validade.
+        // Usa cache distribuído para funcionar mesmo com múltiplas instâncias.
         $nonceTtlSeconds = (int) config('app.tracking_nonce_ttl_seconds', 300);
         $nonceAdded = Cache::add(
             $this->trackingNonceCacheKey((string) $data['auth_nonce']),
@@ -147,6 +153,7 @@ class TrackingController extends Controller
         }
 
         // Obtém campanha apenas quando os tokens são consistentes com banco.
+        // Aqui também valida vínculo forte user_id + campaign_id + campaign_code.
         $campaign = Campaign::query()
             ->where('id', $campaignIdFromCode)
             ->where('user_id', $userIdFromCode)
@@ -169,6 +176,7 @@ class TrackingController extends Controller
         }
 
         // Segurança de origem: coleta apenas da origem cadastrada na campanha.
+        // Evita que um snippet copiado seja usado em domínio não autorizado.
         $allowedOrigin = Campaign::normalizeProductUrl($campaign->product_url);
         if (!$allowedOrigin) {
             $log->warning('Tracking collect rejeitado: campanha sem origem configurada.', [
@@ -199,6 +207,7 @@ class TrackingController extends Controller
 
         // GCLID é crítico para atribuição no Google Ads.
         // Se vier fora do padrão esperado, salva como null para evitar lixo no banco.
+        $rawGclidInput = array_key_exists('gclid', $data) ? (string) $data['gclid'] : null;
         $gclid = isset($data['gclid']) ? trim((string) $data['gclid']) : null;
         if ($gclid === null || $gclid === '') {
             $gclid = null;
@@ -209,6 +218,7 @@ class TrackingController extends Controller
                 'stored_length' => 150,
                 'gclid_prefix' => mb_substr($gclid, 0, 24),
                 'gclid_suffix' => mb_substr($gclid, -12),
+                'gclid_raw_input' => $rawGclidInput,
                 'ip' => $request->ip(),
                 'origin' => $request->headers->get('Origin'),
                 'referer' => $request->headers->get('Referer'),
@@ -227,6 +237,7 @@ class TrackingController extends Controller
                     'received_length' => mb_strlen($gclid),
                     'gclid_prefix' => mb_substr($gclid, 0, 24),
                     'gclid_suffix' => mb_substr($gclid, -12),
+                    'gclid_raw_input' => $rawGclidInput,
                     'ip' => $request->ip(),
                     'origin' => $request->headers->get('Origin'),
                     'referer' => $request->headers->get('Referer'),
@@ -292,52 +303,103 @@ class TrackingController extends Controller
         $browserId = $this->resolveBrowserId('unknown');
         $trafficSourceReason = mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 191);
         $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
+        $visitorId = $this->resolveVisitorIdFromCode($data['visitor_code'] ?? null);
 
-        // Persistência final com payload já saneado.
-        $pageview = Pageview::create([
-            'user_id'      => $campaign->user_id,
-            'campaign_id'   => $campaign->id,
-            'url'           => $url,
-            'landing_url'   => $landingUrl,
-            'referrer'      => $data['referrer'] ?? null,
-            'gclid'         => $gclid,
-            'gad_campaignid'=> $data['gad_campaignid'] ?? null,
-            'utm_source'    => $data['utm_source'] ?? null,
-            'utm_medium'    => $data['utm_medium'] ?? null,
-            'utm_campaign'  => $data['utm_campaign'] ?? null,
-            'utm_term'      => $data['utm_term'] ?? null,
-            'utm_content'   => $data['utm_content'] ?? null,
-            'fbclid'        => $data['fbclid'] ?? null,
-            'ttclid'        => $data['ttclid'] ?? null,
-            'msclkid'       => $data['msclkid'] ?? null,
-            'wbraid'        => $data['wbraid'] ?? null,
-            'gbraid'        => $data['gbraid'] ?? null,
-            'user_agent'    => $userAgent,
-            'ip'            => $request->ip(),
-            'timestamp_ms'  => $timestampMs,
-            'conversion'    => 0,
-            'traffic_source_category_id' => $trafficSourceCategoryId,
-            'traffic_source_reason' => $trafficSourceReason === '' ? null : $trafficSourceReason,
-            'device_category_id' => $deviceCategoryId,
-            'browser_id' => $browserId,
-            'device_type' => null,
-            'device_brand' => null,
-            'device_model' => null,
-            'os_name' => null,
-            'os_version' => null,
-            'browser_name' => null,
-            'browser_version' => null,
-            'screen_width' => $data['screen_width'] ?? null,
-            'screen_height' => $data['screen_height'] ?? null,
-            'viewport_width' => $data['viewport_width'] ?? null,
-            'viewport_height' => $data['viewport_height'] ?? null,
-            'device_pixel_ratio' => isset($data['device_pixel_ratio']) ? (float) $data['device_pixel_ratio'] : null,
-            'platform' => $data['platform'] ?? null,
-            'language' => $data['language'] ?? null,
-        ]);
+        // Transação para manter consistência entre pageview e agregação do visitante por campanha.
+        [$pageview, $visitorId] = DB::transaction(function () use (
+            $campaign,
+            $visitorId,
+            $url,
+            $landingUrl,
+            $data,
+            $gclid,
+            $userAgent,
+            $request,
+            $timestampMs,
+            $trafficSourceCategoryId,
+            $trafficSourceReason,
+            $deviceCategoryId,
+            $browserId
+        ) {
+            // Persistencia principal da pageview.
+            $pageview = Pageview::create([
+                'user_id'      => $campaign->user_id,
+                'campaign_id'   => $campaign->id,
+                'visitor_id'    => $visitorId,
+                'url'           => $url,
+                'landing_url'   => $landingUrl,
+                'referrer'      => $data['referrer'] ?? null,
+                'gclid'         => $gclid,
+                'gad_campaignid'=> $data['gad_campaignid'] ?? null,
+                'utm_source'    => $data['utm_source'] ?? null,
+                'utm_medium'    => $data['utm_medium'] ?? null,
+                'utm_campaign'  => $data['utm_campaign'] ?? null,
+                'utm_term'      => $data['utm_term'] ?? null,
+                'utm_content'   => $data['utm_content'] ?? null,
+                'fbclid'        => $data['fbclid'] ?? null,
+                'ttclid'        => $data['ttclid'] ?? null,
+                'msclkid'       => $data['msclkid'] ?? null,
+                'wbraid'        => $data['wbraid'] ?? null,
+                'gbraid'        => $data['gbraid'] ?? null,
+                'user_agent'    => $userAgent,
+                'ip'            => $request->ip(),
+                'timestamp_ms'  => $timestampMs,
+                'conversion'    => 0,
+                'traffic_source_category_id' => $trafficSourceCategoryId,
+                'traffic_source_reason' => $trafficSourceReason === '' ? null : $trafficSourceReason,
+                'device_category_id' => $deviceCategoryId,
+                'browser_id' => $browserId,
+                'device_type' => null,
+                'device_brand' => null,
+                'device_model' => null,
+                'os_name' => null,
+                'os_version' => null,
+                'browser_name' => null,
+                'browser_version' => null,
+                'screen_width' => $data['screen_width'] ?? null,
+                'screen_height' => $data['screen_height'] ?? null,
+                'viewport_width' => $data['viewport_width'] ?? null,
+                'viewport_height' => $data['viewport_height'] ?? null,
+                'device_pixel_ratio' => isset($data['device_pixel_ratio']) ? (float) $data['device_pixel_ratio'] : null,
+                'platform' => $data['platform'] ?? null,
+                'language' => $data['language'] ?? null,
+            ]);
+
+            // Quando o front ainda nao tem visitor_code, fixa um id estavel para reutilizar nas proximas visitas.
+            if (!$visitorId) {
+                $visitorId = (int) $pageview->id;
+                $pageview->visitor_id = $visitorId;
+                $pageview->save();
+            }
+
+            $now = now();
+            // Atualiza agregação de visitantes únicos por campanha:
+            // - primeira ocorrência cria linha com hits=1
+            // - recorrência atualiza last_seen_at e incrementa hits
+            DB::statement(
+                'INSERT INTO campaign_visitors
+                    (campaign_id, visitor_id, first_seen_at, last_seen_at, hits, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, 1, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    last_seen_at = VALUES(last_seen_at),
+                    hits = hits + 1,
+                    updated_at = VALUES(updated_at)',
+                [
+                    (int) $campaign->id,
+                    (int) $visitorId,
+                    $now,
+                    $now,
+                    $now,
+                    $now,
+                ]
+            );
+
+            return [$pageview, (int) $visitorId];
+        });
 
         $log->info('Tracking collect salvo com sucesso.', [
             'pageview_id' => $pageview->id,
+            'visitor_id' => $visitorId,
             'campaign_id' => $campaign->id,
             'campaign_code' => $campaign->code,
             'request_origin' => $requestOrigin,
@@ -349,6 +411,7 @@ class TrackingController extends Controller
 
         return response()->json([
             'pageview_code' => $pageviewCode,
+            'visitor_code' => app(HashidService::class)->encode((int) $visitorId),
             'event_sig' => $this->buildEventSignature(
                 (string) $data['user_code'],
                 (string) $data['campaign_code'],
@@ -736,5 +799,20 @@ class TrackingController extends Controller
         }
 
         return $normalized;
+    }
+
+    protected function resolveVisitorIdFromCode(mixed $value): ?int
+    {
+        $visitorCode = trim((string) $value);
+        if ($visitorCode === '') {
+            return null;
+        }
+
+        $decoded = app(HashidService::class)->decode($visitorCode);
+        if (!$decoded || $decoded < 1) {
+            return null;
+        }
+
+        return (int) $decoded;
     }
 }

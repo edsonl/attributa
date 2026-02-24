@@ -40,6 +40,7 @@ const props = defineProps({
 })
 
 const isEdit = computed(() => !!props.campaign)
+const CAMPAIGN_NAME_MAX_LENGTH = 74
 
 /**
  * ===== FORM =====
@@ -117,6 +118,7 @@ const form = useForm({
         : [],
     commission_value: props.campaign?.commission_value ?? null,
 })
+const campaignNameLength = computed(() => String(form.name || '').length)
 
 watch(affiliateOptions, (options) => {
     form.affiliate_platform_id = normalizeSelectValue(form.affiliate_platform_id, options)
@@ -326,6 +328,9 @@ function copyTrackingScript() {
             <q-input
                 v-model="form.name"
                 label="Nome da campanha"
+                :maxlength="CAMPAIGN_NAME_MAX_LENGTH"
+                :hint="`${campaignNameLength}/${CAMPAIGN_NAME_MAX_LENGTH} caracteres`"
+                counter
                 outlined
                 dense
                 :error="Boolean(form.errors.name)"

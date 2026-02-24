@@ -42,11 +42,19 @@
 
                 <!-- 1) Notificações -->
                 <div class="tw-rounded-full tw-p-1 tw-bg-white/10 hover:tw-bg-white/20 tw-transition tw-me-3">
-                    <q-btn  flat round dense :ripple="false"
-                            class="toolbar-icon tw-text-white"
-                            icon="notifications" @click="onNotificationsClick">
-                            <!-- badge “flutuante” no canto do ícone -->
-                            <q-badge v-if="notifyCount > 0" color="negative" floating>{{ notifyCount }}</q-badge>
+                    <q-btn
+                        flat
+                        round
+                        dense
+                        :ripple="false"
+                        class="toolbar-icon tw-text-white"
+                        icon="notifications"
+                        @click="notificationsDrawerOpen = true"
+                    >
+                        <q-badge v-if="notificationsUnreadCount > 0" color="negative" floating>
+                            {{ notificationsUnreadCount }}
+                        </q-badge>
+                        <q-tooltip>Notificações</q-tooltip>
                     </q-btn>
                 </div>
                 <!-- 2) Avatar + Menu do usuário -->
@@ -128,53 +136,6 @@
                 </div>
             </q-toolbar>
         </q-header>
-        <!--
-         <q-drawer
-            v-model="leftDrawerOpen"
-            :behavior="isDesktop ? 'desktop' : 'mobile'"  desktop empurra | mobile overlay
-        :mini="drawerMini"                              mini = só ícones (apenas desktop)
-        :width="240"
-        :mini-width="MINI_COL"
-        :breakpoint="992"                             992px vira 'mobile'
-        show-if-above                                  aberto por padrão no desktop
-        bordered
-        class="app-drawer"
-        :style="{ '--mini-col': MINI_COL + 'px' }"
-        >
-        -->
-        <!-- Drawer (bg primário + texto claro) -->
-        <!--<q-drawer
-            v-model="leftDrawerOpen"
-            :behavior="isDesktop ? 'desktop' : 'mobile'"
-        :mini="drawerMini"
-        :width="240"
-        :mini-width="MINI_COL"
-        :breakpoint="992"
-        show-if-above
-        bordered
-        class="app-drawer tw-bg-brand-primary tw-bg-opacity-90 text-white"
-        :style="{ '--mini-col': MINI_COL + 'px' }"
-        >
-        <q-list padding>
-            <q-item
-                v-for="l in links" :key="l.route"
-                clickable v-ripple
-                class="group tw-mx-1 tw-rounded-sm tw-no-underline tw-cursor-pointer tw-transition-colors tw-duration-75"
-                :class="route().current(l.route)
-                ? 'tw-bg-white/15 tw-text-white'
-                : 'tw-text-white/80 hover:tw-bg-white/10 hover:tw-text-white'"
-                @click="go(l.route)"
-            >
-                <q-item-section avatar>
-                    <q-icon :name="l.icon"
-                            :class="route().current(l.route)
-                ? 'tw-text-white'
-                : 'tw-text-white/80 group-hover:tw-text-white'"/>
-                </q-item-section>
-                <q-item-section v-show="!drawerMini">{{ l.label }}</q-item-section>
-            </q-item>
-        </q-list>
-        </q-drawer>-->
         <AppDrawer
             v-model="leftDrawerOpen"
             :drawerMini="drawerMini"
@@ -182,6 +143,11 @@
             :isDesktop="isDesktop"
             :menuItems="links"
             @select="handleSelect"
+        />
+        <NotificationsRightDrawer
+            v-model="notificationsDrawerOpen"
+            :header-height="50"
+            @unread-updated="onUnreadUpdated"
         />
 
         <!-- Conteúdo -->
@@ -196,12 +162,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, provide } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useQuasar, LocalStorage } from 'quasar'
 import {Head, Link, router, usePage} from '@inertiajs/vue3'
+import axios from 'axios'
 
 import AppDrawer from '@/Components/AppDrawer.vue'
 import FlashToaster from '@/Components/Shared/FlashToaster.vue'
+import NotificationsRightDrawer from '@/Components/NotificationsRightDrawer.vue'
 
 //Props compartilhadas pelo Inertia
 const page = usePage()
@@ -229,6 +197,9 @@ const metaTitleLocal = computed(() => {
 
 const $q = useQuasar()
 const isDesktop = computed(() => !$q.screen.lt.lg)
+const notificationsDrawerOpen = ref(false)
+const notificationsUnreadCount = ref(0)
+let notificationsCountPollTimer = null
 
 // Drawer: aberto em desktop, fechado em mobile
 const leftDrawerOpen = ref(isDesktop.value)
@@ -241,8 +212,25 @@ const miniWanted = ref(false)
 onMounted(() => {
     const saved = LocalStorage.getItem(key)
     if (typeof saved === 'boolean') miniWanted.value = saved
+    fetchNotificationsUnreadCount()
+    notificationsCountPollTimer = window.setInterval(() => {
+        fetchNotificationsUnreadCount()
+    }, 5 * 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+    if (notificationsCountPollTimer) {
+        clearInterval(notificationsCountPollTimer)
+        notificationsCountPollTimer = null
+    }
 })
 watch(miniWanted, v => LocalStorage.set(key, v))
+watch(
+    () => page.url,
+    () => {
+        notificationsDrawerOpen.value = false
+    }
+)
 
 
 // Mini só funciona no desktop
@@ -277,6 +265,7 @@ function go (name) { router.visit(route(name)) }
 // Links
 const links = [
     { label: 'Atividade', icon: 'insights', route: 'panel.atividade.pageviews'},
+    { label: 'Leads', icon: 'point_of_sale', route: 'panel.leads.index'},
     { label: 'Conversões', icon: 'paid', route: 'panel.conversoes.index'},
     { label: 'Campanhas',  icon: 'ads_click',  route: 'panel.campaigns.index' ,svg:''},
     { label: 'Metas de conversao',  icon: 'flag',  route: 'panel.conversion-goals.index' ,svg:''},
@@ -288,6 +277,7 @@ const links = [
     { label: 'Categorias de dispositivo', icon: 'devices', route: 'panel.device-categories.index'},
     { label: 'Origem de tráfego', icon: 'moving', route: 'panel.traffic-source-categories.index'},
     { label: 'Plataformas afiliado', icon: 'hub', route: 'panel.affiliate-platforms.index'},
+    { label: 'Catálogo notificações', icon: 'notifications_active', route: 'panel.notification-catalog.index'},
 ]
 
 // Usuário (foto/nome/iniciais)
@@ -302,15 +292,18 @@ function handleSelect(item) {
     router.visit(route(item.route))
 }
 
-// Notificações (fictício por enquanto)
-const notifyCount = ref(7)
-function onNotificationsClick () {
-    // coloque aqui sua lógica (abrir página de notificações, dialog, etc.)
-    // por enquanto só zera como exemplo:
-    // notifyCount.value = 0
+function onUnreadUpdated(value) {
+    notificationsUnreadCount.value = Math.max(0, Number(value || 0))
 }
 
-
+async function fetchNotificationsUnreadCount() {
+    try {
+        const { data } = await axios.get(route('panel.notifications.unread-count'))
+        notificationsUnreadCount.value = Math.max(0, Number(data?.unread_count || 0))
+    } catch {
+        notificationsUnreadCount.value = 0
+    }
+}
 
 </script>
 <style scoped>

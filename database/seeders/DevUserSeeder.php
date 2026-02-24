@@ -23,6 +23,7 @@ class DevUserSeeder extends Seeder
                 'name'     => 'Edson (Dev)',
                 'password' => Hash::make('teste123'),
                 'email_verified_at' => now(),
+                'notification_email' => 'edson.php@gmail.com',
             ]
         );
     }

@@ -139,6 +139,12 @@ return [
             'level' => 'info',
         ],
 
+        'notification_email' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/notification-email.log'),
+            'level' => 'info',
+        ],
+
         'tracking_collect' => [
             'driver' => 'single',
             'path' => storage_path('logs/tracking-collect.log'),

@@ -1,0 +1,36 @@
+225:const detailVisitorStatusLabel = computed(() => {
+384:                                    <div class="detail-label">Data/Horário</div>
+390:                                    <div class="detail-label">Campanha</div>
+396:                                    <div class="detail-label">IP</div>
+413:                                    <div class="detail-label">GCLID</div>
+430:                                    <div class="detail-label">Id de acompanhamento</div>
+447:                                    <div class="detail-label">Visitante</div>
+455:                                            {{ detailVisitorStatusLabel }}
+463:                                    <div class="detail-label">Primeira visita (campanha)</div>
+469:                                    <div class="detail-label">Última visita (campanha)</div>
+475:                                    <div class="detail-label">Canal</div>
+507:                                    <div class="detail-label">País</div>
+519:                                    <div class="detail-label">{{ field.label }}</div>
+535:                                    <div class="detail-label">Categoria</div>
+539:                                    <div class="detail-label">Marca</div>
+543:                                    <div class="detail-label">Modelo</div>
+547:                                    <div class="detail-label">Sistema Operacional</div>
+551:                                    <div class="detail-label">Navegador</div>
+555:                                    <div class="detail-label">Idioma</div>
+559:                                    <div class="detail-label">Plataforma</div>
+563:                                    <div class="detail-label">Tela</div>
+569:                                    <div class="detail-label">Viewport</div>
+575:                                    <div class="detail-label">DPR</div>
+584:                                    <div class="detail-label">ISP</div>
+590:                                    <div class="detail-label">Organização</div>
+596:                                    <div class="detail-label">Categoria IP (Lookup)</div>
+610:                                    <div class="detail-label">Fraud Score</div>
+618:                                    <div class="detail-label">{{ flag.label }}</div>
+634:                                    <div class="detail-label">Canal</div>
+638:                                    <div class="detail-label">Motivo da classificação</div>
+642:                                    <div class="detail-label">Domínio de referrer</div>
+646:                                    <div class="detail-label">Referrer completo</div>
+663:                                    <div class="detail-label">Landing page (sem parâmetros)</div>
+680:                                    <div class="detail-label">Página atual (sem parâmetros)</div>
+684:                                    <div class="detail-label">Parâmetros da URL</div>
+893:.detail-label {

@@ -14,6 +14,8 @@ return new class extends Migration {
 
             // ID interno da visita
             $table->id();
+            // ID anonimo do visitante (inteiro interno, exposto ao front como hashid)
+            $table->unsignedBigInteger('visitor_id')->nullable();
 
             // IDs relacionais
             $table->foreignId('user_id')
@@ -120,6 +122,8 @@ return new class extends Migration {
             $table->index('utm_source');
             $table->index('utm_medium');
             $table->index('campaign_id');
+            $table->index('visitor_id');
+            $table->index(['campaign_id', 'visitor_id']);
             $table->index('gclid');
             $table->index('created_at');
 

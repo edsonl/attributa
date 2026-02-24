@@ -13,8 +13,6 @@ const GEO_FIELDS = [
     { label: 'Código', key: 'country_code' },
     { label: 'Região', key: 'region_name' },
     { label: 'Cidade', key: 'city' },
-    { label: 'Latitude', key: 'latitude' },
-    { label: 'Longitude', key: 'longitude' },
     { label: 'Timezone', key: 'timezone' },
 ]
 
@@ -54,6 +52,7 @@ const detailDialog = computed({
 })
 
 const detailPageview = computed(() => props.payload?.pageview ?? {})
+const detailVisitor = computed(() => props.payload?.visitor ?? null)
 const detailUrl = computed(() => props.payload?.url ?? { full: null, origin: null, path: null, query_params: {} })
 const detailGeo = computed(() => props.payload?.geo ?? {})
 const detailNetwork = computed(() => props.payload?.network ?? {})
@@ -83,6 +82,13 @@ const detailReferrerHost = computed(() => extractHost(detailReferrer.value))
 const detailResolvedGclid = computed(() => resolveGclid())
 const detailComposedCode = computed(() => props.payload?.composed_code ?? null)
 const detailEvents = computed(() => (Array.isArray(props.payload?.events) ? props.payload.events : []))
+const detailFlowStepsPayload = computed(() => (Array.isArray(props.payload?.flow_steps) ? props.payload.flow_steps : []))
+const detailLatLong = computed(() => {
+    const lat = detailGeo.value?.latitude
+    const lng = detailGeo.value?.longitude
+    if (lat === null || lat === undefined || lng === null || lng === undefined) return '-'
+    return `${lat}, ${lng}`
+})
 
 const detailUrlParams = computed(() => {
     const params = detailUrl.value?.query_params ?? {}
@@ -113,6 +119,10 @@ const detailFlowEventSummary = computed(() => {
 })
 
 const visitFlowSteps = computed(() => {
+    if (detailFlowStepsPayload.value.length > 0) {
+        return detailFlowStepsPayload.value
+    }
+
     const engaged = detailFlowEventSummary.value.page_engaged
     const formSubmit = detailFlowEventSummary.value.form_submit
     const linkClick = detailFlowEventSummary.value.link_click
@@ -121,8 +131,9 @@ const visitFlowSteps = computed(() => {
 
     const pageViewCaption = detailPageview.value?.created_at_formatted || 'Não identificado'
 
+    const engagedReason = engaged.first ? formatEngagementReason(engaged.first) : ''
     const engagedCaption = engaged.first
-        ? `${engaged.first.created_at_formatted || '-'}${engaged.count > 1 ? ` (+${engaged.count - 1})` : ''}`
+        ? `${engaged.first.created_at_formatted || '-'}${engaged.count > 1 ? ` (+${engaged.count - 1})` : ''}${engagedReason ? ` • ${engagedReason}` : ''}`
         : 'Sem engajamento detectado'
 
     const interactionBaseCaption = interactionBase.first
@@ -148,6 +159,7 @@ const visitFlowSteps = computed(() => {
             icon: 'visibility',
             done: true,
             color: 'primary',
+            tooltip: `Registro inicial da visita.\nCapturado em ${pageViewCaption}.`,
         },
         {
             name: 2,
@@ -156,6 +168,9 @@ const visitFlowSteps = computed(() => {
             icon: 'insights',
             done: Boolean(engaged.first),
             color: Boolean(engaged.first) ? 'primary' : 'grey-6',
+            tooltip: Boolean(engaged.first)
+                ? 'Usuário atingiu critério de engajamento nesta visita.'
+                : 'Nenhum evento de engajamento foi detectado nesta visita.',
         },
         {
             name: 3,
@@ -164,6 +179,13 @@ const visitFlowSteps = computed(() => {
             icon: interactionUsesForm ? 'fact_check' : 'ads_click',
             done: Boolean(interactionBase.first),
             color: Boolean(interactionBase.first) ? 'primary' : 'grey-6',
+            tooltip: Boolean(interactionBase.first)
+                ? (interactionUsesForm
+                    ? 'Visitante enviou formulário na página.'
+                    : 'Visitante clicou em link rastreado.')
+                : (interactionUsesForm
+                    ? 'Nenhum envio de formulário foi detectado nesta visita.'
+                    : 'Nenhum clique em link rastreado foi detectado nesta visita.'),
         },
         {
             name: 4,
@@ -172,6 +194,9 @@ const visitFlowSteps = computed(() => {
             icon: conversionDone ? 'task_alt' : 'radio_button_unchecked',
             done: conversionDone,
             color: conversionDone ? 'positive' : 'grey-6',
+            tooltip: conversionDone
+                ? `Visita marcada como conversão.\nData/hora de referência: ${detailPageview.value?.created_at_formatted || '-'}.`
+                : 'Até o momento, esta visita não foi marcada como conversão.',
         },
     ]
 })
@@ -220,6 +245,14 @@ const detailOsSummary = computed(() => {
     if (normalizedName !== '-') return normalizedName
     return '-'
 })
+
+const detailVisitorStatusLabel = computed(() => {
+    return String(detailVisitor.value?.status || '').toLowerCase() === 'recorrente'
+        ? 'Recorrente'
+        : 'Novo'
+})
+const detailVisitorHits = computed(() => Math.max(Number(detailVisitor.value?.hits ?? 1), 1))
+const detailVisitorHitsLabel = computed(() => (detailVisitorHits.value === 1 ? 'visita' : 'visitas'))
 
 function stripQueryString(value) {
     if (!value) return '-'
@@ -343,6 +376,29 @@ function formatTrafficReason(value) {
     return raw
 }
 
+function formatEngagementReason(event) {
+    const rawElementId = String(event?.element_id || '').trim().toLowerCase()
+    let reason = ''
+
+    if (rawElementId.startsWith('engagement_reason:')) {
+        reason = rawElementId.slice('engagement_reason:'.length)
+    } else {
+        const rawName = String(event?.element_name || '').trim()
+        const match = /^page engaged\s*\((.+)\)$/i.exec(rawName)
+        reason = match?.[1] ? String(match[1]).trim().toLowerCase() : ''
+    }
+
+    const labels = {
+        scroll_30: 'Scroll 30%',
+        time_10s: 'Tempo 10s',
+        link_click: 'Clique em link',
+        form_submit: 'Envio de formulário',
+        interactions: '2+ interações',
+    }
+
+    return labels[reason] || (reason ? `Engajamento: ${reason}` : '')
+}
+
 async function copyValue(value) {
     const text = formatValue(value)
 
@@ -372,79 +428,6 @@ async function copyValue(value) {
                     <div class="section-card">
                         <div class="section-card__header">VISITA</div>
                         <div class="section-card__body">
-                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
-                                <div>
-                                    <div class="detail-label">Data/Horário</div>
-                                    <div class="detail-value">
-                                        {{ detailPageview.created_at_formatted }}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="detail-label">Campanha</div>
-                                    <div class="detail-value">
-                                        {{ detailCampaignName }}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="detail-label">IP</div>
-                                    <div class="value-with-copy value-with-copy--inline">
-                                        <div class="detail-value">{{ detailPageview.ip || '-' }}</div>
-                                        <q-btn
-                                            v-if="hasText(detailPageview.ip)"
-                                            dense
-                                            flat
-                                            round
-                                            size="sm"
-                                            icon="content_copy"
-                                            @click="copyValue(detailPageview.ip)"
-                                        >
-                                            <q-tooltip>Copiar IP</q-tooltip>
-                                        </q-btn>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="detail-label">GCLID</div>
-                                    <div class="value-with-copy value-with-copy--inline">
-                                        <div class="truncated-preview">{{ previewValue(detailResolvedGclid) }}</div>
-                                        <q-btn
-                                            v-if="hasText(detailResolvedGclid)"
-                                            dense
-                                            flat
-                                            round
-                                            size="sm"
-                                            icon="content_copy"
-                                            @click="copyValue(detailResolvedGclid)"
-                                        >
-                                            <q-tooltip>Copiar GCLID</q-tooltip>
-                                        </q-btn>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="detail-label">Id de acompanhamento</div>
-                                    <div class="value-with-copy value-with-copy--inline">
-                                        <div class="truncated-preview">{{ previewValue(detailComposedCode) }}</div>
-                                        <q-btn
-                                            v-if="hasText(detailComposedCode)"
-                                            dense
-                                            flat
-                                            round
-                                            size="sm"
-                                            icon="content_copy"
-                                            @click="copyValue(detailComposedCode)"
-                                        >
-                                            <q-tooltip>Copiar código composto</q-tooltip>
-                                        </q-btn>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div class="detail-label">Canal</div>
-                                    <div class="detail-value">
-                                        {{ detailTrafficCategoryName }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="subsection-separator" />
                             <q-stepper
                                 flat
                                 animated
@@ -464,6 +447,121 @@ async function copyValue(value) {
                                     :color="step.color"
                                 />
                             </q-stepper>
+                            <q-tooltip
+                                v-for="(step, index) in visitFlowSteps"
+                                :key="`step-tooltip-${step.name}`"
+                                :target="`.visit-flow-stepper .q-stepper__tab:nth-child(${index + 1})`"
+                                class="visit-step-tooltip"
+                                anchor="bottom middle"
+                                self="top middle"
+                                :offset="[0, -10]"
+                                :style="{
+                                    background: '#1d4ed8',
+                                    color: '#e2e8f0',
+                                    border: '1px solid #1e40af',
+                                    boxShadow: '0 8px 22px rgba(30, 64, 175, 0.28)',
+                                    maxWidth: '260px',
+                                    whiteSpace: 'pre-line',
+                                }"
+                            >
+                                {{ step.tooltip || `${step.title}: ${step.caption || '-'}` }}
+                            </q-tooltip>
+
+                            <div class="subsection-separator" />
+
+                            <div class="tw-grid md:tw-grid-cols-2 lg:tw-grid-cols-3 tw-gap-4">
+                                <div>
+                                    <div class="detail-label">IP</div>
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="detail-value">{{ detailPageview.ip || '-' }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailPageview.ip)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailPageview.ip)"
+                                        >
+                                            <q-tooltip>Copiar IP</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Campanha</div>
+                                    <div class="detail-value">
+                                        {{ detailCampaignName }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Canal</div>
+                                    <div class="detail-value">
+                                        {{ detailTrafficCategoryName }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Visitante</div>
+                                    <div class="tw-flex tw-items-center tw-gap-2 tw-flex-wrap">
+                                        <q-badge
+                                            rounded
+                                            color="blue-grey-1"
+                                            text-color="blue-grey-10"
+                                            class="visitor-chip"
+                                        >
+                                            {{ detailVisitorStatusLabel }}
+                                        </q-badge>
+                                        <span class="detail-value tw-font-semibold">
+                                            {{ detailVisitorHits.toLocaleString('pt-BR') }} {{ detailVisitorHitsLabel }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Primeira visita (campanha)</div>
+                                    <div class="detail-value">
+                                        {{ detailVisitor?.first_seen_at_formatted || '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Última visita (campanha)</div>
+                                    <div class="detail-value">
+                                        {{ detailVisitor?.last_seen_at_formatted || '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">GCLID</div>
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="truncated-preview">{{ previewValue(detailResolvedGclid) }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailResolvedGclid)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailResolvedGclid)"
+                                        >
+                                            <q-tooltip>Copiar GCLID</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
+                                <div class="lg:tw-col-start-2">
+                                    <div class="detail-label">Código de acompanhamento</div>
+                                    <div class="value-with-copy value-with-copy--inline">
+                                        <div class="truncated-preview">{{ previewValue(detailComposedCode) }}</div>
+                                        <q-btn
+                                            v-if="hasText(detailComposedCode)"
+                                            dense
+                                            flat
+                                            round
+                                            size="sm"
+                                            icon="content_copy"
+                                            @click="copyValue(detailComposedCode)"
+                                        >
+                                            <q-tooltip>Copiar código composto</q-tooltip>
+                                        </q-btn>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div class="subsection-separator" />
                             <div class="subsection-title">GEOLOCALIZAÇÃO</div>
@@ -484,6 +582,12 @@ async function copyValue(value) {
                                     <div class="detail-label">{{ field.label }}</div>
                                     <div class="detail-value">
                                         {{ detailGeo[field.key] ?? '-' }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="detail-label">Latitude/Longitude</div>
+                                    <div class="detail-value">
+                                        {{ detailLatLong }}
                                     </div>
                                 </div>
                             </div>
@@ -771,12 +875,16 @@ async function copyValue(value) {
 }
 
 .visit-flow-stepper :deep(.q-stepper__tab) {
-    color: #9ca3af;
+    color: #7c8aa0;
 }
 
 .visit-flow-stepper :deep(.q-stepper__tab.q-stepper__tab--done .q-stepper__title),
 .visit-flow-stepper :deep(.q-stepper__tab.q-stepper__tab--done .q-stepper__caption) {
-    color: #475569;
+    color: #54657e;
+}
+
+.visit-flow-stepper :deep(.q-stepper__tab.q-stepper__tab--done .q-stepper__caption) {
+    color: #97a7bb;
 }
 
 .visit-flow-stepper :deep(.q-stepper__tab:nth-child(4).q-stepper__tab--done .q-stepper__title),
@@ -802,13 +910,21 @@ async function copyValue(value) {
     }
 
     .visit-flow-stepper :deep(.q-stepper__title) {
-        font-size: 0.9rem;
-        line-height: 1.05;
+        font-size: 0.95rem;
+        line-height: 1.1;
+        font-weight: 600;
+        color: #4b5d76;
     }
 
     .visit-flow-stepper :deep(.q-stepper__caption) {
-        font-size: 0.76rem;
-        line-height: 1.05;
+        font-size: 0.82rem;
+        line-height: 1.22;
+        font-weight: 400;
+        color: #8fa1b8;
+        white-space: normal;
+        max-width: 170px;
+        margin: 0.05rem auto 0;
+        text-wrap: balance;
     }
 }
 
@@ -916,6 +1032,15 @@ async function copyValue(value) {
     pointer-events: none;
     background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 80%);
 }
+
+.visitor-chip {
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+}
+
+
 
 @media (min-width: 1024px) {
     .first-row-section > .section-card {

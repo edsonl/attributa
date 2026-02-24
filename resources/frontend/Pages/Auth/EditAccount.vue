@@ -1,28 +1,119 @@
 <script setup>
     import { Head, useForm, usePage } from '@inertiajs/vue3'
-    import { ref } from 'vue'
+    import { computed, ref, watch } from 'vue'
 
     // usa o usuário já compartilhado em usePage().props.auth.user
     const page = usePage()
     const user = page.props?.auth?.user ?? {}
+    const notificationOptions = computed(() => page.props?.notification_options || [])
+    const notificationPreferences = computed(() => page.props?.notification_preferences || [])
 
     // form com valores atuais; senha é opcional
     const form = useForm({
         name: user.name ?? '',
         email: user.email ?? '',
+        notification_email: user.notification_email ?? '',
         password: '',
         password_confirmation: '',
+        notification_preferences: [],
     })
 
     const showPass = ref(false)
     const showConfirm = ref(false)
+    const preferenceMap = ref({})
 
     function submit () {
+        form.notification_preferences = preferencesPayload()
         form.put(route('account.update'), { preserveScroll: true })
     }
     // regras simples de validação no client (backend também valida)
     const required = v => !!(v && String(v).trim()) || 'Campo obrigatório'
     const emailRule = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) || 'E-mail inválido'
+
+    function buildPreferenceMap(options, existingPreferences) {
+        const map = {}
+        const existingByType = {}
+
+        for (const pref of (existingPreferences || [])) {
+            const typeId = Number(pref?.notification_type_id || 0)
+            if (typeId <= 0) continue
+            existingByType[typeId] = {
+                enabled_in_app: Boolean(pref.enabled_in_app ?? true),
+                enabled_email: Boolean(pref.enabled_email ?? false),
+                enabled_push: Boolean(pref.enabled_push ?? false),
+                frequency: pref.frequency ?? null,
+            }
+        }
+
+        for (const category of (options || [])) {
+            for (const type of (category?.types || [])) {
+                const typeId = Number(type?.id || 0)
+                if (typeId <= 0) continue
+                map[typeId] = existingByType[typeId] || {
+                    enabled_in_app: true,
+                    enabled_email: false,
+                    enabled_push: false,
+                    frequency: null,
+                }
+            }
+        }
+
+        return map
+    }
+
+    function ensurePreference(typeId) {
+        const id = Number(typeId || 0)
+        if (id <= 0) {
+            return {
+                enabled_in_app: true,
+                enabled_email: false,
+                enabled_push: false,
+                frequency: null,
+            }
+        }
+
+        if (!preferenceMap.value[id]) {
+            preferenceMap.value[id] = {
+                enabled_in_app: true,
+                enabled_email: false,
+                enabled_push: false,
+                frequency: null,
+            }
+        }
+        return preferenceMap.value[id]
+    }
+
+    function preferencesPayload() {
+        const rows = []
+        for (const category of (notificationOptions.value || [])) {
+            for (const type of (category?.types || [])) {
+                const typeId = Number(type?.id || 0)
+                if (typeId <= 0) continue
+                const pref = preferenceMap.value[typeId] || {
+                    enabled_in_app: true,
+                    enabled_email: false,
+                    enabled_push: false,
+                    frequency: null,
+                }
+                rows.push({
+                    notification_type_id: typeId,
+                    enabled_in_app: Boolean(pref.enabled_in_app),
+                    enabled_email: Boolean(pref.enabled_email),
+                    enabled_push: Boolean(pref.enabled_push),
+                    frequency: pref.frequency ?? null,
+                })
+            }
+        }
+        return rows
+    }
+
+    watch(
+        () => [notificationOptions.value, notificationPreferences.value],
+        ([options, preferences]) => {
+            preferenceMap.value = buildPreferenceMap(options, preferences)
+        },
+        { immediate: true, deep: true }
+    )
 </script>
 
 <!-- Usa AppLayout e manda o título -->
@@ -86,6 +177,21 @@
                         </q-input>
                     </div>
 
+                    <div>
+                        <label class="tw-block tw-text-sm tw-font-medium tw-mb-1">E-mail para notificações</label>
+                        <q-input
+                            v-model="form.notification_email"
+                            type="email" dense outlined clearable
+                            autocomplete="email" inputmode="email"
+                            :error="!!form.errors.notification_email" :error-message="form.errors.notification_email"
+                            :rules="[v => !v || emailRule(v)]"
+                            placeholder="Se vazio, usa o e-mail principal"
+                            hint="Se vazio, usaremos o e-mail principal da conta."
+                        >
+                            <template #prepend><q-icon name="alternate_email" /></template>
+                        </q-input>
+                    </div>
+
                     <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-3">
                         <div>
                             <label class="tw-block tw-text-sm tw-font-medium tw-mb-1">Nova senha (opcional)</label>
@@ -124,6 +230,46 @@
                                     />
                                 </template>
                             </q-input>
+                        </div>
+                    </div>
+
+                    <div class="tw-border tw-border-slate-200 tw-rounded-lg tw-p-3 tw-space-y-3">
+                        <div class="tw-text-sm tw-font-semibold">Preferências de notificação</div>
+                        <div v-if="!notificationOptions.length" class="tw-text-sm tw-text-slate-500">
+                            Nenhum tipo de notificação ativo no catálogo.
+                        </div>
+                        <div v-else class="tw-space-y-3">
+                            <q-expansion-item
+                                v-for="category in notificationOptions"
+                                :key="`cat-${category.id}`"
+                                :label="category.name"
+                                dense
+                                default-opened
+                                class="tw-border tw-border-slate-200 tw-rounded"
+                            >
+                                <div class="tw-px-3 tw-pb-3 tw-space-y-2">
+                                    <div
+                                        v-for="type in category.types || []"
+                                        :key="`type-${type.id}`"
+                                        class="tw-grid tw-grid-cols-1 md:tw-grid-cols-[1fr_auto_auto] tw-gap-2 tw-items-center tw-border-b tw-border-slate-100 tw-py-2 last:tw-border-b-0"
+                                    >
+                                        <div>
+                                            <div class="tw-text-sm tw-font-medium">{{ type.name }}</div>
+                                            <div class="tw-text-xs tw-text-slate-500">{{ type.slug }}</div>
+                                        </div>
+                                        <q-checkbox
+                                            v-model="ensurePreference(type.id).enabled_in_app"
+                                            dense
+                                            label="No sistema"
+                                        />
+                                        <q-checkbox
+                                            v-model="ensurePreference(type.id).enabled_email"
+                                            dense
+                                            label="Por e-mail"
+                                        />
+                                    </div>
+                                </div>
+                            </q-expansion-item>
                         </div>
                     </div>
 

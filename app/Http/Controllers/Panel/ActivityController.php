@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Panel;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Pageview;
+use App\Models\CampaignVisitor;
 use App\Models\Campaign;
 use App\Models\IpLookupCache;
+use App\Support\TrackingEventDescriptions;
 use App\Services\HashidService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -46,6 +48,7 @@ class ActivityController extends Controller
         $sortableColumns = [
             'created_at'    => 'pageviews.created_at',
             'campaign_name' => 'campaigns.name',
+            'visitor'       => 'campaign_visitors.hits',
             'ip_category'   => 'ip_categories.name',
             'traffic_source' => 'traffic_source_categories.name',
             'device_browser' => 'pageviews.device_type',
@@ -68,9 +71,14 @@ class ActivityController extends Controller
             ->leftJoin('traffic_source_categories', 'traffic_source_categories.id', '=', 'pageviews.traffic_source_category_id')
             ->leftJoin('device_categories', 'device_categories.id', '=', 'pageviews.device_category_id')
             ->leftJoin('browsers', 'browsers.id', '=', 'pageviews.browser_id')
+            ->leftJoin('campaign_visitors', function ($join) {
+                $join->on('campaign_visitors.campaign_id', '=', 'pageviews.campaign_id')
+                    ->on('campaign_visitors.visitor_id', '=', 'pageviews.visitor_id');
+            })
             ->select([
                 'pageviews.id',
                 'pageviews.created_at',
+                'pageviews.visitor_id',
                 'pageviews.ip',
                 //'pageviews.created_at',
                 'pageviews.country_code',
@@ -91,6 +99,7 @@ class ActivityController extends Controller
                 'pageviews.browser_name',
                 'browsers.icon_name as browser_icon',
                 'browsers.color_hex as browser_color',
+                DB::raw('COALESCE(campaign_visitors.hits, 1) as visitor_hits'),
             ]);
 
         if ($sortBy === 'device_browser') {
@@ -128,6 +137,12 @@ class ActivityController extends Controller
             $row->created_at_formatted = $row->created_at
                 ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;
+            $visitorId = (int) ($row->visitor_id ?? 0);
+            $row->visitor_code = $visitorId > 0
+                ? app(HashidService::class)->encode($visitorId)
+                : null;
+            $row->visitor_hits = max((int) ($row->visitor_hits ?? 1), 1);
+            $row->visitor_status = $row->visitor_hits > 1 ? 'recorrente' : 'novo';
 
             unset($row->created_at);
 
@@ -229,6 +244,7 @@ class ActivityController extends Controller
                         'pageview_id',
                         'event_type',
                         'target_url',
+                        'element_id',
                         'element_name',
                         'form_fields_checked',
                         'form_fields_filled',
@@ -294,6 +310,7 @@ class ActivityController extends Controller
                     'id' => $event->id,
                     'event_type' => $event->event_type,
                     'target_url' => $event->target_url,
+                    'element_id' => $event->element_id,
                     'element_name' => $event->element_name,
                     'form_fields_checked' => $event->form_fields_checked,
                     'form_fields_filled' => $event->form_fields_filled,
@@ -306,13 +323,54 @@ class ActivityController extends Controller
             })
             ->values();
 
+        $flowSteps = TrackingEventDescriptions::buildVisitFlowSteps($pageview, $events);
+
+        $visitor = null;
+        $visitorId = (int) ($pageview->visitor_id ?? 0);
+        if ($visitorId > 0 && !empty($pageview->campaign_id)) {
+            $visitorRow = CampaignVisitor::query()
+                ->where('campaign_id', (int) $pageview->campaign_id)
+                ->where('visitor_id', $visitorId)
+                ->first();
+
+            if ($visitorRow) {
+                $visitor = [
+                    'visitor_code' => app(HashidService::class)->encode($visitorId),
+                    'hits' => (int) $visitorRow->hits,
+                    'status' => (int) $visitorRow->hits > 1 ? 'recorrente' : 'novo',
+                    'first_seen_at' => $visitorRow->first_seen_at,
+                    'first_seen_at_formatted' => optional($visitorRow->first_seen_at)
+                        ? Carbon::parse($visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        : null,
+                    'last_seen_at' => $visitorRow->last_seen_at,
+                    'last_seen_at_formatted' => optional($visitorRow->last_seen_at)
+                        ? Carbon::parse($visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        : null,
+                ];
+            }
+        }
+
+        if ($visitor === null) {
+            $visitor = [
+                'visitor_code' => $visitorId > 0 ? app(HashidService::class)->encode($visitorId) : null,
+                'hits' => 1,
+                'status' => 'novo',
+                'first_seen_at' => $pageview->created_at,
+                'first_seen_at_formatted' => $pageview->created_at_formatted,
+                'last_seen_at' => $pageview->created_at,
+                'last_seen_at_formatted' => $pageview->created_at_formatted,
+            ];
+        }
+
         return response()->json([
             'pageview' => $pageview,
+            'visitor' => $visitor,
             'composed_code' => $this->buildComposedCode($pageview),
             'url' => $urlData,
             'geo' => $geo,
             'network' => $networkInfo,
             'events' => $events,
+            'flow_steps' => $flowSteps,
             'ip_lookup_raw' => $ipLookup,
         ]);
     }

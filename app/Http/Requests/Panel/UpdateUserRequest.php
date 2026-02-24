@@ -22,7 +22,14 @@ class UpdateUserRequest extends FormRequest
                 'required', 'email', 'max:191',
                 Rule::unique('users', 'email')->ignore($userId),
             ],
+            'notification_email' => ['nullable', 'email', 'max:191'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'notification_preferences' => ['nullable', 'array'],
+            'notification_preferences.*.notification_type_id' => ['required', 'integer', Rule::exists('notification_types', 'id')],
+            'notification_preferences.*.enabled_in_app' => ['nullable', 'boolean'],
+            'notification_preferences.*.enabled_email' => ['nullable', 'boolean'],
+            'notification_preferences.*.enabled_push' => ['nullable', 'boolean'],
+            'notification_preferences.*.frequency' => ['nullable', 'string', 'max:20'],
         ];
     }
 
