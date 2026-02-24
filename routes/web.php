@@ -169,6 +169,8 @@ Route::middleware(['auth', 'verified'])
                     Route::get('/data', [LeadsController::class, 'data'])->name('data');
                     Route::get('/campaigns', [LeadsController::class, 'campaigns'])->name('campaigns');
                     Route::get('/platforms', [LeadsController::class, 'platforms'])->name('platforms');
+                    Route::delete('/bulk', [LeadsController::class, 'bulkDestroy'])->name('bulk-destroy');
+                    Route::delete('/{lead}', [LeadsController::class, 'destroy'])->name('destroy');
                 });
 
             Route::prefix('configuracoes')->middleware(['auth'])->group(function () {

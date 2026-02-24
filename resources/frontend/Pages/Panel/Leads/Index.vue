@@ -8,6 +8,8 @@ import PageviewDetailModal from '../Atividade/PageviewDetailModal.vue'
 const rows = ref([])
 const loading = ref(false)
 const $q = useQuasar()
+const selected = ref([])
+const hasSelection = computed(() => selected.value.length > 0)
 
 const pagination = ref({
     page: 1,
@@ -60,6 +62,7 @@ const columns = [
     { name: 'details', label: 'Detalhes', field: 'id', sortable: false, align: 'center' },
     { name: 'conversion', label: 'Conversão', field: 'has_conversion', sortable: false, align: 'left' },
     { name: 'callback_log', label: 'Log callback', field: 'payload_json', sortable: false, align: 'center' },
+    { name: 'actions', label: 'Ações', field: 'id', sortable: false, align: 'right' },
 ]
 const defaultHiddenColumns = ['updated_at']
 const visibleColumns = ref(
@@ -323,6 +326,7 @@ function fetchLeads(props) {
         })
         .then((res) => {
             rows.value = res.data.data
+            selected.value = []
             pagination.value = {
                 ...pagination.value,
                 page: res.data.current_page,
@@ -335,6 +339,88 @@ function fetchLeads(props) {
         .finally(() => {
             loading.value = false
         })
+}
+
+async function deleteLead(id) {
+    if (!id) return
+
+    let confirmed = true
+    const hasWindow = typeof window !== 'undefined'
+    const confirmDialog = hasWindow ? window.$confirm : null
+
+    if (confirmDialog) {
+        confirmed = await confirmDialog({
+            title: 'Excluir lead',
+            message: 'Esta ação é permanente. Deseja realmente remover?',
+            okLabel: 'Remover',
+            okColor: 'negative',
+        })
+    } else if (hasWindow) {
+        confirmed = window.confirm('Excluir este lead?')
+    }
+
+    if (!confirmed) return
+
+    loading.value = true
+    try {
+        const { data } = await axios.delete(route('panel.leads.destroy', id))
+        $q.notify({
+            type: 'positive',
+            message: data?.message || 'Lead excluído com sucesso.',
+        })
+        await fetchLeads({ pagination: pagination.value })
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Falha ao excluir lead.',
+        })
+    } finally {
+        loading.value = false
+    }
+}
+
+async function deleteSelected() {
+    if (!hasSelection.value) return
+
+    let confirmed = true
+    const hasWindow = typeof window !== 'undefined'
+    const confirmDialog = hasWindow ? window.$confirm : null
+    const message = `Você selecionou ${selected.value.length} lead(s). Deseja remover?`
+
+    if (confirmDialog) {
+        confirmed = await confirmDialog({
+            title: 'Remover leads',
+            message,
+            okLabel: 'Remover',
+            okColor: 'negative',
+        })
+    } else if (hasWindow) {
+        confirmed = window.confirm(message)
+    }
+
+    if (!confirmed) return
+
+    loading.value = true
+    try {
+        const { data } = await axios.delete(route('panel.leads.bulk-destroy'), {
+            data: { ids: selected.value.map(row => row.id) },
+        })
+        const deleted = Number(data?.deleted || 0)
+        $q.notify({
+            type: deleted > 0 ? 'positive' : 'warning',
+            message: deleted > 0
+                ? (data?.message || 'Leads excluídos com sucesso.')
+                : (data?.message || 'Nenhum lead elegível para exclusão.'),
+        })
+        await fetchLeads({ pagination: pagination.value })
+    } catch {
+        $q.notify({
+            type: 'negative',
+            message: 'Falha ao remover os leads selecionados.',
+        })
+    } finally {
+        loading.value = false
+    }
 }
 
 async function openPageviewDetails(pageviewId) {
@@ -586,6 +672,22 @@ onMounted(() => {
                     </q-menu>
                 </q-btn>
             </div>
+            <div class="col-12 col-md q-mt-sm q-mt-md-0 tw-flex md:tw-justify-end">
+                <q-btn
+                    color="negative"
+                    icon="delete"
+                    :disable="!hasSelection"
+                    @click="deleteSelected"
+                    class="bulk-delete-btn"
+                    round
+                    dense
+                    aria-label="Remover selecionados"
+                >
+                    <q-tooltip anchor="center left" self="center right" :offset="[8, 0]">
+                        {{ hasSelection ? 'Remover selecionados' : 'Selecione registros para remover' }}
+                    </q-tooltip>
+                </q-btn>
+            </div>
         </div>
 
         <q-table
@@ -598,6 +700,8 @@ onMounted(() => {
             :binary-state-sort="true"
             :rows-per-page-options="[10, 15, 20, 25, 50]"
             @request="fetchLeads"
+            selection="multiple"
+            v-model:selected="selected"
         >
             <template #body-cell-created_at="props">
                 <q-td :props="props">{{ props.value || '-' }}</q-td>
@@ -682,6 +786,19 @@ onMounted(() => {
                     </q-btn>
                 </q-td>
             </template>
+
+            <template #body-cell-actions="props">
+                <q-td :props="props" class="tw-text-right">
+                    <q-btn
+                        dense
+                        flat
+                        icon="delete"
+                        size="sm"
+                        class="qtable-delete-btn"
+                        @click="deleteLead(props.row.id)"
+                    />
+                </q-td>
+            </template>
         </q-table>
     </q-card>
 
@@ -707,6 +824,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.bulk-delete-btn:disabled {
+    background-color: #e2e8f0 !important;
+    color: #94a3b8 !important;
+    opacity: 0.4;
+    box-shadow: none;
+    border-color: transparent;
+}
+
 .filter-field :deep(.q-field__control) {
     min-height: 44px;
 }

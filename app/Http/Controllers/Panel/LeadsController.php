@@ -141,4 +141,52 @@ class LeadsController extends Controller
             ->orderBy('name')
             ->get();
     }
+
+    public function destroy(Lead $lead)
+    {
+        if ((int) $lead->user_id !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        $lead->delete();
+
+        return response()->json([
+            'deleted' => true,
+            'message' => 'Lead excluído com sucesso.',
+        ]);
+    }
+
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $ids = collect($validated['ids'] ?? [])
+            ->map(static fn ($id) => (int) $id)
+            ->filter(static fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return response()->json([
+                'deleted' => 0,
+                'message' => 'Nenhum lead válido para exclusão.',
+            ]);
+        }
+
+        $deleted = Lead::query()
+            ->where('user_id', (int) auth()->id())
+            ->whereIn('id', $ids->all())
+            ->delete();
+
+        return response()->json([
+            'deleted' => (int) $deleted,
+            'requested' => $ids->count(),
+            'message' => $deleted > 0
+                ? 'Leads excluídos com sucesso.'
+                : 'Nenhum lead elegível para exclusão.',
+        ]);
+    }
 }
