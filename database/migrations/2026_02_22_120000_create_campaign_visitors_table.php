@@ -18,8 +18,8 @@ return new class extends Migration {
                 ->cascadeOnDelete();
             // Mesmo visitor_id pode aparecer em campanhas diferentes.
             $table->unsignedBigInteger('visitor_id');
-            $table->timestamp('first_seen_at');
-            $table->timestamp('last_seen_at');
+            $table->dateTime('first_seen_at')->nullable();
+            $table->dateTime('last_seen_at')->nullable();
             $table->unsignedBigInteger('hits')->default(1);
             $table->timestamps();
 
