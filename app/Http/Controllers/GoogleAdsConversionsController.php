@@ -15,43 +15,37 @@ class GoogleAdsConversionsController extends Controller
 {
     public function goalExport(Request $request, string $userSlugId, string $goalCode)
     {
+
+
+
         $normalizedGoalCode = trim($goalCode);
+        $normalizedUserSlugId = trim($userSlugId);
+        $goalCodeLooksValid = (bool) preg_match('/^[A-Za-z0-9_-]{1,30}$/', $normalizedGoalCode);
+        $userSlugLooksValid = (bool) preg_match('/^[A-Za-z0-9]+$/', $normalizedUserSlugId);
+        /*
+        $hasUserSlugParam = trim($userSlugId) !== '';
+        $hasGoalCodeParam = trim($goalCode) !== '';
+        $userSlugLooksValid = (bool) preg_match('/^[A-Za-z0-9]+$/', $userSlugId);
+        $goalCodeLooksValid = (bool) preg_match('/^[A-Za-z0-9_-]{1,30}$/', $goalCode);
+        */
+        if (!$goalCodeLooksValid || !$userSlugLooksValid) {
+            return response()->json([
+                'message' => 'Invalid URL parameters.',
+            ], 400);
+        }
 
         // Resolve a meta diretamente pelos segmentos da URL de integração.
         $goal = ConversionGoal::query()
             ->with('timezone:id,identifier')
-            ->where('user_slug_id', $userSlugId)
+            ->where('user_slug_id', $normalizedUserSlugId)
             ->where('goal_code', $normalizedGoalCode)
             ->where('active', true)
             ->first();
 
         if (!$goal) {
-
-            $hasUserSlugParam = trim($userSlugId) !== '';
-            $hasGoalCodeParam = trim($goalCode) !== '';
-            $userSlugLooksValid = (bool) preg_match('/^[A-Za-z0-9]+$/', $userSlugId);
-            $goalCodeLooksValid = (bool) preg_match('/^[A-Za-z0-9_-]{1,30}$/', $goalCode);
-
-            $slugExists = ConversionGoal::query()
-                ->where('user_slug_id', $userSlugId)
-                ->exists();
-
-            if ($hasUserSlugParam && $hasGoalCodeParam && $userSlugLooksValid && $goalCodeLooksValid && $slugExists) {
-                $goalForUserLog = ConversionGoal::query()
-                    ->where('user_slug_id', $userSlugId)
-                    ->orderByDesc('id')
-                    ->first();
-
-                if ($goalForUserLog) {
-                    $this->writeGoalLog(
-                        $goalForUserLog,
-                        'Verifique a URL e o nome da meta de conversão.',
-                        'warning'
-                    );
-                }
-            }
-
-            return response('Not Found', 404);
+            return response()->json([
+                'message' => 'Goal not found or inactive.',
+            ], 404);
         }
 
         $this->writeGoalLog($goal, 'Requisição CSV do Google Ads recebida.', 'info');
@@ -83,7 +77,7 @@ class GoogleAdsConversionsController extends Controller
         $this->writeGoalLog($goal, 'Autenticação da requisição CSV realizada com sucesso.', 'success');
         $this->writeTechnicalLog($request, $goal, 'authentication_success');
 
-        return $this->exportConversionsByGoal($goal, $userSlugId);
+        return $this->exportConversionsByGoal($goal, $normalizedUserSlugId);
     }
 
     protected function authenticateBasic(Request $request, string $expectedUser, string $expectedPass, ?ConversionGoal $goal = null): string
