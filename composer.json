@@ -7,6 +7,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "geoip2/geoip2": "^3.3",
         "google/apiclient": "2.15",
         "googleads/google-ads-php": "^32.1",
         "hashids/hashids": "^5.0",

@@ -9,6 +9,7 @@ use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
 use App\Models\PageviewEvent;
 use App\Services\HashidService;
+use App\Services\IpClassifierService;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -305,6 +306,25 @@ class TrackingController extends Controller
         $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
         $visitorId = $this->resolveVisitorIdFromCode($data['visitor_code'] ?? null);
 
+        // Enriquecimento imediato apenas com MaxMind habilitado.
+        // Para outros drivers, o fluxo segue assíncrono pelo job existente.
+        $ipClassification = null;
+        $geoDriver = strtolower(trim((string) config('pageview.geolocation.driver', 'api')));
+        $maxmindCityDbPath = (string) config('pageview.geolocation.maxmind.city_db_path', '');
+        if ($geoDriver === 'maxmind' && $maxmindCityDbPath !== '' && is_file($maxmindCityDbPath)) {
+            try {
+                $ipClassification = app(IpClassifierService::class)->classify(
+                    (string) $request->ip(),
+                    $userAgent
+                );
+            } catch (\Throwable $e) {
+                $log->warning('Tracking collect: falha no enriquecimento síncrono via MaxMind.', [
+                    'ip' => $request->ip(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Transação para manter consistência entre pageview e agregação do visitante por campanha.
         [$pageview, $visitorId] = DB::transaction(function () use (
             $campaign,
@@ -319,7 +339,8 @@ class TrackingController extends Controller
             $trafficSourceCategoryId,
             $trafficSourceReason,
             $deviceCategoryId,
-            $browserId
+            $browserId,
+            $ipClassification
         ) {
             // Persistencia principal da pageview.
             $pageview = Pageview::create([
@@ -345,6 +366,7 @@ class TrackingController extends Controller
                 'ip'            => $request->ip(),
                 'timestamp_ms'  => $timestampMs,
                 'conversion'    => 0,
+                'ip_category_id' => $ipClassification['ip_category_id'] ?? null,
                 'traffic_source_category_id' => $trafficSourceCategoryId,
                 'traffic_source_reason' => $trafficSourceReason === '' ? null : $trafficSourceReason,
                 'device_category_id' => $deviceCategoryId,
@@ -363,6 +385,13 @@ class TrackingController extends Controller
                 'device_pixel_ratio' => isset($data['device_pixel_ratio']) ? (float) $data['device_pixel_ratio'] : null,
                 'platform' => $data['platform'] ?? null,
                 'language' => $data['language'] ?? null,
+                'country_code' => $ipClassification['geo']['country_code'] ?? null,
+                'country_name' => $ipClassification['geo']['country_name'] ?? null,
+                'region_name' => $ipClassification['geo']['region_name'] ?? null,
+                'city' => $ipClassification['geo']['city'] ?? null,
+                'latitude' => $ipClassification['geo']['latitude'] ?? null,
+                'longitude' => $ipClassification['geo']['longitude'] ?? null,
+                'timezone' => $ipClassification['geo']['timezone'] ?? null,
             ]);
 
             // Quando o front ainda nao tem visitor_code, fixa um id estavel para reutilizar nas proximas visitas.

@@ -4,19 +4,13 @@ namespace App\Services;
 
 use App\Models\IpLookupCache;
 use App\Models\IpCategory;
+use GeoIp2\Database\Reader;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class IpClassifierService
 {
-    protected string $apiKey;
-    protected string $apiUrl;
-
-    public function __construct()
-    {
-        $this->apiKey = config('services.ipgeolocation.key');
-        $this->apiUrl = 'https://api.ipgeolocation.io/v3/ipgeo';
-    }
+    protected const IPGEOLOCATION_API_URL = 'https://api.ipgeolocation.io/v3/ipgeo';
 
     /**
      * Classifica IP
@@ -39,8 +33,120 @@ class IpClassifierService
             return $this->storeGenericBot($ip);
         }
 
-        // 3️⃣ Consulta API
+        // 3️⃣ Geolocalização via driver configurado
+        return $this->queryGeolocationAndStore($ip);
+    }
+
+    /**
+     * Geolocalização via driver configurado
+     */
+    protected function queryGeolocationAndStore(string $ip): array
+    {
+        $driver = strtolower(trim((string) config('pageview.geolocation.driver', 'api')));
+        $fallback = strtolower(trim((string) config('pageview.geolocation.fallback', 'api')));
+
+        if ($driver === 'maxmind') {
+            $maxmindResult = $this->queryMaxMindAndStore($ip);
+            if ($maxmindResult !== null) {
+                return $maxmindResult;
+            }
+
+            if ($fallback === 'api') {
+                return $this->queryApiAndStore($ip);
+            }
+
+            return $this->unknownResult();
+        }
+
         return $this->queryApiAndStore($ip);
+    }
+
+    /**
+     * Consulta MaxMind (GeoLite2)
+     */
+    protected function queryMaxMindAndStore(string $ip): ?array
+    {
+        $cityDbPath = (string) config('pageview.geolocation.maxmind.city_db_path', '');
+        if ($cityDbPath === '' || !is_file($cityDbPath)) {
+            Log::warning('MaxMind city database not found', [
+                'ip' => $ip,
+                'path' => $cityDbPath,
+            ]);
+
+            return null;
+        }
+
+        try {
+            $cityReader = new Reader($cityDbPath);
+            $cityRecord = $cityReader->city($ip);
+
+            $asnPayload = [];
+            $organization = null;
+            $isp = null;
+            $asnDbPath = (string) config('pageview.geolocation.maxmind.asn_db_path', '');
+
+            if ($asnDbPath !== '' && is_file($asnDbPath)) {
+                try {
+                    $asnReader = new Reader($asnDbPath);
+                    $asnRecord = $asnReader->asn($ip);
+                    $organization = $asnRecord->autonomousSystemOrganization ?? null;
+                    $isp = $organization;
+                    $asnPayload = [
+                        'organization' => $organization,
+                        'asn' => $asnRecord->autonomousSystemNumber ?? null,
+                    ];
+                } catch (\Throwable $asnException) {
+                    Log::warning('MaxMind ASN lookup failed', [
+                        'ip' => $ip,
+                        'error' => $asnException->getMessage(),
+                    ]);
+                }
+            }
+
+            $regionName = $cityRecord->mostSpecificSubdivision->name ?? null;
+            if ($regionName === '' || $regionName === null) {
+                $regionName = $cityRecord->leastSpecificSubdivision->name ?? null;
+            }
+
+            $categorySlug = $this->determineCategory($asnPayload);
+            $category = IpCategory::where('slug', $categorySlug)->first();
+
+            $cache = IpLookupCache::updateOrCreate([
+                'ip' => $ip,
+            ], [
+                'ip_category_id' => $category?->id,
+                'is_proxy' => false,
+                'is_vpn' => false,
+                'is_tor' => false,
+                'is_bot' => false,
+                'is_datacenter' => $this->isDatacenter($asnPayload),
+                'fraud_score' => null,
+                'country_code' => $cityRecord->country->isoCode ?? null,
+                'country_name' => $cityRecord->country->name ?? null,
+                'region_name' => $regionName,
+                'city' => $cityRecord->city->name ?? null,
+                'latitude' => $cityRecord->location->latitude ?? null,
+                'longitude' => $cityRecord->location->longitude ?? null,
+                'timezone' => $cityRecord->location->timeZone ?? null,
+                'isp' => $isp,
+                'organization' => $organization,
+                'api_response' => [
+                    'provider' => 'maxmind',
+                    'city_db_path' => $cityDbPath,
+                    'asn_db_path' => $asnDbPath,
+                ],
+                'last_checked_at' => now(),
+            ]);
+
+            return $this->formatCacheResult($cache);
+        } catch (\Throwable $e) {
+            Log::error('MaxMind lookup error', [
+                'ip' => $ip,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**
@@ -49,11 +155,12 @@ class IpClassifierService
     protected function queryApiAndStore(string $ip): array
     {
         try {
+            $apiKey = (string) config('services.ipgeolocation.key');
 
             $response = Http::timeout(10)
                 ->withoutVerifying()
-                ->get($this->apiUrl, [
-                    'apiKey' => $this->apiKey,
+                ->get(self::IPGEOLOCATION_API_URL, [
+                    'apiKey' => $apiKey,
                     'ip'     => $ip,
                 ])
                 ->json();
@@ -69,8 +176,9 @@ class IpClassifierService
             $categorySlug = $this->determineCategory($asn);
             $category = IpCategory::where('slug', $categorySlug)->first();
 
-            $cache = IpLookupCache::create([
+            $cache = IpLookupCache::updateOrCreate([
                 'ip' => $ip,
+            ], [
                 'ip_category_id' => $category?->id,
 
                 // ⚠️ API não fornece esses dados → boolean como false
@@ -115,13 +223,18 @@ class IpClassifierService
                 'error' => $e->getMessage(),
             ]);
 
-            $unknown = IpCategory::where('slug', 'unknown')->first();
-
-            return [
-                'ip_category_id' => $unknown?->id,
-                'geo' => [],
-            ];
+            return $this->unknownResult();
         }
+    }
+
+    protected function unknownResult(): array
+    {
+        $unknown = IpCategory::where('slug', 'unknown')->first();
+
+        return [
+            'ip_category_id' => $unknown?->id,
+            'geo' => [],
+        ];
     }
 
     /**
@@ -172,17 +285,6 @@ class IpClassifierService
     protected function isGooglebot(string $ip, ?string $userAgent): bool
     {
         $ua = strtolower(trim((string) $userAgent));
-        if ($ua === '') {
-            return false;
-        }
-
-        $isGoogleCrawlerUa = str_contains($ua, 'googlebot')
-            || str_contains($ua, 'google-inspectiontool')
-            || str_contains($ua, 'adsbot-google');
-
-        if (!$isGoogleCrawlerUa) {
-            return false;
-        }
 
         $host = strtolower((string) gethostbyaddr($ip));
         if ($host === '' || $host === $ip) {
@@ -190,30 +292,25 @@ class IpClassifierService
         }
 
         $isAllowedGoogleHost = preg_match('/\.(googlebot\.com|google\.com|googleusercontent\.com)$/', $host) === 1;
-        if (!$isAllowedGoogleHost) {
+        if ($isAllowedGoogleHost) {
+            // Se o domínio reverso é Google, considera Googlebot/proxy do Google.
+            return true;
+        }
+
+        if ($ua === '') {
             return false;
         }
 
-        $forwardIps = [];
-        $forwardV4 = gethostbynamel($host) ?: [];
-        foreach ($forwardV4 as $value) {
-            $candidate = trim((string) $value);
-            if ($candidate !== '') {
-                $forwardIps[] = $candidate;
-            }
+        $isGoogleCrawlerUa = str_contains($ua, 'googlebot')
+            || str_contains($ua, 'google-inspectiontool')
+            || str_contains($ua, 'adsbot-google')
+            || str_contains($ua, 'proxy');
+
+        if (!$isGoogleCrawlerUa) {
+            return false;
         }
 
-        $forwardV6 = dns_get_record($host, DNS_AAAA) ?: [];
-        foreach ($forwardV6 as $record) {
-            $candidate = trim((string) ($record['ipv6'] ?? ''));
-            if ($candidate !== '') {
-                $forwardIps[] = $candidate;
-            }
-        }
-
-        $forwardIps = array_values(array_unique($forwardIps));
-
-        return in_array($ip, $forwardIps, true);
+        return false;
     }
 
     protected function isGenericBotUserAgent(?string $userAgent): bool
@@ -252,8 +349,9 @@ class IpClassifierService
     {
         $category = IpCategory::where('slug', 'googlebot')->first();
 
-        $cache = IpLookupCache::create([
+        $cache = IpLookupCache::updateOrCreate([
             'ip' => $ip,
+        ], [
             'ip_category_id' => $category?->id,
             'is_bot' => true,
             'is_proxy' => false,
@@ -271,8 +369,9 @@ class IpClassifierService
     {
         $category = IpCategory::where('slug', 'bot')->first();
 
-        $cache = IpLookupCache::create([
+        $cache = IpLookupCache::updateOrCreate([
             'ip' => $ip,
+        ], [
             'ip_category_id' => $category?->id,
             'is_bot' => true,
             'is_proxy' => false,
