@@ -10,6 +10,7 @@ use App\Models\TrafficSourceCategory;
 use App\Models\PageviewEvent;
 use App\Services\HashidService;
 use App\Services\IpClassifierService;
+use App\Services\DeviceClassificationService;
 use App\Services\PageviewClassificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -300,11 +301,29 @@ class TrackingController extends Controller
         // Classificação técnica da visita (origem, device, browser) antes da persistência.
         $classification = app(PageviewClassificationService::class)->classify($data, $request->ip());
         $trafficSourceCategoryId = $this->resolveTrafficSourceCategoryId((string) ($classification['traffic_source_slug'] ?? 'unknown'));
-        $deviceCategoryId = $this->resolveDeviceCategoryId('unknown');
-        $browserId = $this->resolveBrowserId('unknown');
         $trafficSourceReason = mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 191);
         $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
         $visitorId = $this->resolveVisitorIdFromCode($data['visitor_code'] ?? null);
+        $deviceClassification = [
+            'device_category_id' => $this->resolveDeviceCategoryId('unknown'),
+            'browser_id' => $this->resolveBrowserId('unknown'),
+            'device_type' => null,
+            'device_brand' => null,
+            'device_model' => null,
+            'os_name' => null,
+            'os_version' => null,
+            'browser_name' => null,
+            'browser_version' => null,
+        ];
+
+        try {
+            $deviceClassification = app(DeviceClassificationService::class)->classify($userAgent);
+        } catch (\Throwable $e) {
+            $log->warning('Tracking collect: falha na classificacao de dispositivo.', [
+                'ip' => $request->ip(),
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Enriquecimento imediato apenas com MaxMind habilitado.
         // Para outros drivers, o fluxo segue assíncrono pelo job existente.
@@ -338,8 +357,7 @@ class TrackingController extends Controller
             $timestampMs,
             $trafficSourceCategoryId,
             $trafficSourceReason,
-            $deviceCategoryId,
-            $browserId,
+            $deviceClassification,
             $ipClassification
         ) {
             // Persistencia principal da pageview.
@@ -369,15 +387,15 @@ class TrackingController extends Controller
                 'ip_category_id' => $ipClassification['ip_category_id'] ?? null,
                 'traffic_source_category_id' => $trafficSourceCategoryId,
                 'traffic_source_reason' => $trafficSourceReason === '' ? null : $trafficSourceReason,
-                'device_category_id' => $deviceCategoryId,
-                'browser_id' => $browserId,
-                'device_type' => null,
-                'device_brand' => null,
-                'device_model' => null,
-                'os_name' => null,
-                'os_version' => null,
-                'browser_name' => null,
-                'browser_version' => null,
+                'device_category_id' => $deviceClassification['device_category_id'] ?? null,
+                'browser_id' => $deviceClassification['browser_id'] ?? null,
+                'device_type' => $deviceClassification['device_type'] ?? null,
+                'device_brand' => $deviceClassification['device_brand'] ?? null,
+                'device_model' => $deviceClassification['device_model'] ?? null,
+                'os_name' => $deviceClassification['os_name'] ?? null,
+                'os_version' => $deviceClassification['os_version'] ?? null,
+                'browser_name' => $deviceClassification['browser_name'] ?? null,
+                'browser_version' => $deviceClassification['browser_version'] ?? null,
                 'screen_width' => $data['screen_width'] ?? null,
                 'screen_height' => $data['screen_height'] ?? null,
                 'viewport_width' => $data['viewport_width'] ?? null,
