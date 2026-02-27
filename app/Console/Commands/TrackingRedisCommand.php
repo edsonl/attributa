@@ -7,12 +7,14 @@ use Illuminate\Support\Facades\Redis;
 
 class TrackingRedisCommand extends Command
 {
-    protected $signature = 'tracking:redis
+    protected $aliases = ['tracking:redis'];
+
+    protected $signature = 'tracking:campaign
         {action : Acao: list|count|show|clear}
         {--type=all : Tipo de chave: campaign|pv|last|hit_gate|all}
         {--key= : Chave completa para acao show}
         {--pattern= : Pattern customizado (sobrescreve o tipo)}
-        {--limit=100 : Limite de registros na listagem}
+        {--limit= : Limite de registros na listagem (padrao: 10)}
         {--cursor=0 : Cursor inicial para listagem}
         {--scan-count=500 : Hint de volume por iteracao do SCAN}
         {--force : Necessario para acao clear}
@@ -54,7 +56,10 @@ class TrackingRedisCommand extends Command
 
     protected function handleList($redis, array $patternsByType, int $scanCount): int
     {
-        $limit = max((int) $this->option('limit'), 1);
+        $limitOption = $this->option('limit');
+        $limit = ($limitOption === null || trim((string) $limitOption) === '')
+            ? 10
+            : max((int) $limitOption, 1);
         $startCursor = max((int) $this->option('cursor'), 0);
         $remaining = $limit;
         $rows = [];
