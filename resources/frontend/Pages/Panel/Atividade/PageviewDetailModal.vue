@@ -434,13 +434,17 @@ function pickLatestEvent(currentEvent, candidateEvent) {
     return resolveEventMs(candidateEvent) >= resolveEventMs(currentEvent) ? candidateEvent : currentEvent
 }
 
-function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = []) {
+function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = [], hiddenLabels = []) {
     const entries = Object.entries(reasonBuckets || {})
     if (entries.length === 0) return []
 
     entries.sort((a, b) => resolveEventMs(b[1]?.lastEvent) - resolveEventMs(a[1]?.lastEvent))
 
     return entries.map(([label, meta]) => {
+        if (hiddenLabels.includes(label)) {
+            return null
+        }
+
         const count = Math.max(Number(meta?.count || 0), 1)
         const lastAt = String(meta?.lastEvent?.created_at_formatted || '-').trim() || '-'
 
@@ -449,11 +453,11 @@ function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = []) {
         }
 
         return `(${count}) ${label} - ${lastAt}`
-    })
+    }).filter(Boolean)
 }
 
 function buildEngagedTooltip(engaged) {
-    const lines = buildDetailedReasonLines(engaged?.reasons, ['Scroll 30%'])
+    const lines = buildDetailedReasonLines(engaged?.reasons, ['Scroll 30%'], ['2+ interações'])
     if (lines.length === 0) {
         return 'Usuário atingiu critério de engajamento nesta visita.'
     }

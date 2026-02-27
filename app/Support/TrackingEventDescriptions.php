@@ -133,7 +133,8 @@ class TrackingEventDescriptions
         $base = 'Visitante demonstrou interesse na página.';
         $details = self::buildDetailedReasonLines(
             $engaged['reason_details'] ?? [],
-            ['Scroll 30%']
+            ['Scroll 30%'],
+            ['2+ interações']
         );
 
         return count($details) > 0
@@ -254,7 +255,11 @@ class TrackingEventDescriptions
         return '-';
     }
 
-    protected static function buildDetailedReasonLines(array $reasonDetails, array $labelsWithoutCount = []): array
+    protected static function buildDetailedReasonLines(
+        array $reasonDetails,
+        array $labelsWithoutCount = [],
+        array $hiddenLabels = []
+    ): array
     {
         if (count($reasonDetails) === 0) {
             return [];
@@ -266,6 +271,10 @@ class TrackingEventDescriptions
 
         $lines = [];
         foreach ($reasonDetails as $label => $meta) {
+            if (in_array($label, $hiddenLabels, true)) {
+                continue;
+            }
+
             $count = max(1, (int) ($meta['count'] ?? 1));
             $lastAt = trim((string) ($meta['last_at'] ?? '-'));
             if ($lastAt === '') {
