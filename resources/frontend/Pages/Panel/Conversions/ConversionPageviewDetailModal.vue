@@ -448,7 +448,7 @@ function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = []) {
             return `${label} - ${lastAt}`
         }
 
-        return `(${count}x) ${label} - ${lastAt}`
+        return `(${count}) ${label} - ${lastAt}`
     })
 }
 

@@ -277,7 +277,7 @@ class TrackingEventDescriptions
                 continue;
             }
 
-            $lines[] = '(' . $count . 'x) ' . $label . ' - ' . $lastAt;
+            $lines[] = '(' . $count . ') ' . $label . ' - ' . $lastAt;
         }
 
         return $lines;
