@@ -760,6 +760,11 @@ class TrackingController extends Controller
     {
         $redis = $this->trackingRedis();
         $campaignKey = $this->trackingCampaignKey($campaignId);
+        $this->trackingRedisTempLog('collect.redis.get.campaign.start', [
+            'key' => $campaignKey,
+            'campaign_id' => $campaignId,
+            'user_id' => $userId,
+        ]);
         $cached = $this->decodeRedisJson($redis->get($campaignKey));
 
         if (is_array($cached)) {
@@ -767,6 +772,11 @@ class TrackingController extends Controller
             $cachedCode = (string) ($cached['code'] ?? '');
 
             if ($cachedUserId === $userId && $cachedCode !== '' && hash_equals($cachedCode, $campaignCode)) {
+                $this->trackingRedisTempLog('collect.redis.get.campaign.hit', [
+                    'key' => $campaignKey,
+                    'campaign_id' => (int) ($cached['id'] ?? $campaignId),
+                    'user_id' => $cachedUserId,
+                ]);
                 return [
                     'id' => (int) ($cached['id'] ?? $campaignId),
                     'user_id' => $cachedUserId,
@@ -775,6 +785,16 @@ class TrackingController extends Controller
                     'allowed_origin' => (string) ($cached['allowed_origin'] ?? ''),
                 ];
             }
+
+            $this->trackingRedisTempLog('collect.redis.get.campaign.mismatch', [
+                'key' => $campaignKey,
+                'expected_user_id' => $userId,
+                'cached_user_id' => $cachedUserId,
+            ], 'warning');
+        } else {
+            $this->trackingRedisTempLog('collect.redis.get.campaign.miss', [
+                'key' => $campaignKey,
+            ]);
         }
 
         $campaign = Campaign::query()
@@ -801,6 +821,12 @@ class TrackingController extends Controller
                 $this->trackingCampaignTtlSeconds(),
                 json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             );
+            $this->trackingRedisTempLog('collect.redis.set.campaign', [
+                'key' => $campaignKey,
+                'campaign_id' => (int) $campaign->id,
+                'saved' => $saved,
+                'ttl' => $this->trackingCampaignTtlSeconds(),
+            ], $saved ? 'info' : 'warning');
 
             Log::channel($this->trackingLogChannel('tracking_collect'))->info(
                 $saved
@@ -814,6 +840,11 @@ class TrackingController extends Controller
                 ]
             );
         } catch (\Throwable $e) {
+            $this->trackingRedisTempLog('collect.redis.set.campaign.error', [
+                'key' => $campaignKey,
+                'campaign_id' => (int) $campaign->id,
+                'error' => $e->getMessage(),
+            ], 'warning');
             Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
                 'Tracking Redis: falha ao salvar campanha.',
                 [
@@ -844,8 +875,15 @@ class TrackingController extends Controller
 
         $redis = $this->trackingRedis();
         $lastKey = $this->trackingLastCollectKey($userCode, $campaignCode, $visitorCode);
+        $this->trackingRedisTempLog('collect.redis.get.last.start', [
+            'key' => $lastKey,
+            'visitor_code' => $visitorCode,
+        ]);
         $payload = $this->decodeRedisJson($redis->get($lastKey));
         if (!is_array($payload)) {
+            $this->trackingRedisTempLog('collect.redis.get.last.miss', [
+                'key' => $lastKey,
+            ]);
             return null;
         }
 
@@ -854,18 +892,37 @@ class TrackingController extends Controller
         $visitorId = (int) ($payload['visitor_id'] ?? 0);
         $lastCollectAtMs = (int) ($payload['last_collect_at_ms'] ?? 0);
         if ($pageviewCode === '' || $cachedVisitorCode === '' || $visitorId < 1 || $lastCollectAtMs < 1) {
+            $this->trackingRedisTempLog('collect.redis.get.last.invalid_payload', [
+                'key' => $lastKey,
+            ], 'warning');
             return null;
         }
 
         $elapsedMs = $nowMs - $lastCollectAtMs;
         if ($elapsedMs < 0 || $elapsedMs > ($this->trackingDedupWindowSeconds() * 1000)) {
+            $this->trackingRedisTempLog('collect.redis.dedup.outside_window', [
+                'key' => $lastKey,
+                'elapsed_ms' => $elapsedMs,
+                'dedup_window_seconds' => $this->trackingDedupWindowSeconds(),
+            ]);
             return null;
         }
 
         $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
-        if ($redis->get($pvKey) === null) {
+        $hasPvContext = $redis->get($pvKey) !== null;
+        if (!$hasPvContext) {
+            $this->trackingRedisTempLog('collect.redis.get.pv.miss', [
+                'key' => $pvKey,
+                'pageview_code' => $pageviewCode,
+            ]);
             return null;
         }
+        $this->trackingRedisTempLog('collect.redis.dedup.reuse_hit', [
+            'last_key' => $lastKey,
+            'pv_key' => $pvKey,
+            'pageview_code' => $pageviewCode,
+            'visitor_id' => $visitorId,
+        ]);
 
         return [
             'pageview_code' => $pageviewCode,
@@ -886,6 +943,11 @@ class TrackingController extends Controller
         $redis = $this->trackingRedis();
         $ttl = $this->trackingPageviewTtlSeconds();
         $lastKey = $this->trackingLastCollectKey($userCode, $campaignCode, $visitorCode);
+        $this->trackingRedisTempLog('collect.redis.touch.last.start', [
+            'key' => $lastKey,
+            'ttl' => $ttl,
+            'hit_updated' => $hitUpdated,
+        ]);
         $lastPayload = $this->decodeRedisJson($redis->get($lastKey));
 
         if (!is_array($lastPayload)) {
@@ -903,15 +965,27 @@ class TrackingController extends Controller
             $lastPayload['last_hit_at_ms'] = $nowMs;
         }
 
-        $redis->setex(
+        $lastSaved = (bool) $redis->setex(
             $lastKey,
             $ttl,
             json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
+        $this->trackingRedisTempLog('collect.redis.touch.last.saved', [
+            'key' => $lastKey,
+            'saved' => $lastSaved,
+        ], $lastSaved ? 'info' : 'warning');
 
         $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        $this->trackingRedisTempLog('collect.redis.touch.pv.start', [
+            'key' => $pvKey,
+            'ttl' => $ttl,
+            'hit_updated' => $hitUpdated,
+        ]);
         $pvPayload = $this->decodeRedisJson($redis->get($pvKey));
         if (!is_array($pvPayload)) {
+            $this->trackingRedisTempLog('collect.redis.touch.pv.miss', [
+                'key' => $pvKey,
+            ]);
             return;
         }
 
@@ -922,11 +996,15 @@ class TrackingController extends Controller
         }
         $pvPayload['timing'] = $timing;
 
-        $redis->setex(
+        $pvSaved = (bool) $redis->setex(
             $pvKey,
             $ttl,
             json_encode($pvPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
+        $this->trackingRedisTempLog('collect.redis.touch.pv.saved', [
+            'key' => $pvKey,
+            'saved' => $pvSaved,
+        ], $pvSaved ? 'info' : 'warning');
     }
 
     /**
@@ -986,6 +1064,19 @@ class TrackingController extends Controller
                 $ttl,
                 json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             );
+            $this->trackingRedisTempLog('collect.redis.set.context', [
+                'pageview_id' => (int) $pageview->id,
+                'campaign_id' => (int) $campaign['id'],
+                'keys' => [
+                    'pv' => $pvKey,
+                    'last' => $lastKey,
+                ],
+                'saved' => [
+                    'pv' => $pvSaved,
+                    'last' => $lastSaved,
+                ],
+                'ttl' => $ttl,
+            ], ($pvSaved && $lastSaved) ? 'info' : 'warning');
 
             Log::channel($this->trackingLogChannel('tracking_collect'))->info(
                 ($pvSaved && $lastSaved)
@@ -1005,6 +1096,15 @@ class TrackingController extends Controller
                 ]
             );
         } catch (\Throwable $e) {
+            $this->trackingRedisTempLog('collect.redis.set.context.error', [
+                'pageview_id' => (int) $pageview->id,
+                'campaign_id' => (int) $campaign['id'],
+                'keys' => [
+                    'pv' => $pvKey,
+                    'last' => $lastKey,
+                ],
+                'error' => $e->getMessage(),
+            ], 'warning');
             Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
                 'Tracking Redis: falha ao salvar pageview e/ou ultimo collect.',
                 [
@@ -1030,14 +1130,30 @@ class TrackingController extends Controller
     {
         $redis = $this->trackingRedis();
         $hitGateKey = $this->trackingHitGateKey($campaignId, $visitorId);
+        $this->trackingRedisTempLog('collect.redis.get.hit_gate.start', [
+            'key' => $hitGateKey,
+            'campaign_id' => $campaignId,
+            'visitor_id' => $visitorId,
+        ]);
         $lastHitMs = (int) $redis->get($hitGateKey);
         if ($lastHitMs < 1) {
+            $this->trackingRedisTempLog('collect.redis.get.hit_gate.miss', [
+                'key' => $hitGateKey,
+            ]);
             return true;
         }
 
         $elapsedMs = $nowMs - $lastHitMs;
+        $shouldIncrement = $elapsedMs >= ($this->trackingMinHitIntervalSeconds() * 1000);
+        $this->trackingRedisTempLog('collect.redis.get.hit_gate.hit', [
+            'key' => $hitGateKey,
+            'last_hit_ms' => $lastHitMs,
+            'elapsed_ms' => $elapsedMs,
+            'min_hit_interval_seconds' => $this->trackingMinHitIntervalSeconds(),
+            'should_increment' => $shouldIncrement,
+        ]);
 
-        return $elapsedMs >= ($this->trackingMinHitIntervalSeconds() * 1000);
+        return $shouldIncrement;
     }
 
     protected function touchHitGate(int $campaignId, int $visitorId, int $nowMs): void
@@ -1045,11 +1161,20 @@ class TrackingController extends Controller
         $redis = $this->trackingRedis();
         $ttl = $this->trackingHitGateTtlSeconds();
 
-        $redis->setex(
-            $this->trackingHitGateKey($campaignId, $visitorId),
+        $key = $this->trackingHitGateKey($campaignId, $visitorId);
+        $saved = (bool) $redis->setex(
+            $key,
             $ttl,
             (string) $nowMs
         );
+        $this->trackingRedisTempLog('collect.redis.set.hit_gate', [
+            'key' => $key,
+            'campaign_id' => $campaignId,
+            'visitor_id' => $visitorId,
+            'saved' => $saved,
+            'ttl' => $ttl,
+            'now_ms' => $nowMs,
+        ], $saved ? 'info' : 'warning');
     }
 
     protected function upsertCampaignVisitorHit(int $campaignId, int $visitorId, \Illuminate\Support\Carbon $now, int $nowMs): void
@@ -1118,6 +1243,21 @@ class TrackingController extends Controller
         return $this->trackingLogsEnabled() ? $channel : 'null';
     }
 
+    /**
+     * Log temporario Redis: habilita investigacao detalhada de leituras/escritas no collect/event.
+     */
+    protected function trackingRedisTempLog(string $message, array $context = [], string $level = 'info'): void
+    {
+        $logger = Log::channel($this->trackingLogChannel('tracking_redis_temp'));
+
+        if ($level === 'warning') {
+            $logger->warning($message, $context);
+            return;
+        }
+
+        $logger->info($message, $context);
+    }
+
     protected function trackingCampaignKey(int $campaignId): string
     {
         return $this->trackingPrefix() . ':campaign:' . $campaignId;
@@ -1168,10 +1308,21 @@ class TrackingController extends Controller
         $redis = $this->trackingRedis();
 
         $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        $this->trackingRedisTempLog('event.redis.get.pv.start', [
+            'key' => $pvKey,
+            'campaign_id_from_code' => $campaignIdFromCode,
+            'pageview_id_from_code' => $pageviewIdFromCode,
+        ]);
         $pvPayload = $this->decodeRedisJson($redis->get($pvKey));
         if (!is_array($pvPayload)) {
+            $this->trackingRedisTempLog('event.redis.get.pv.miss', [
+                'key' => $pvKey,
+            ]);
             return null;
         }
+        $this->trackingRedisTempLog('event.redis.get.pv.hit', [
+            'key' => $pvKey,
+        ]);
 
         $campaignFromPv = is_array($pvPayload['campanha'] ?? null) ? $pvPayload['campanha'] : [];
         $pageviewFromPv = is_array($pvPayload['pageview'] ?? null) ? $pvPayload['pageview'] : [];
@@ -1191,14 +1342,30 @@ class TrackingController extends Controller
             || $campaignCodeFromPv === ''
             || !hash_equals($campaignCodeFromPv, $campaignCode)
         ) {
+            $this->trackingRedisTempLog('event.redis.get.pv.invalid_payload', [
+                'key' => $pvKey,
+                'campaign_id' => $campaignId,
+                'campaign_user_id' => $campaignUserId,
+                'pageview_id' => $pageviewId,
+            ], 'warning');
             return null;
         }
 
         $campaignKey = $this->trackingCampaignKey($campaignId);
+        $this->trackingRedisTempLog('event.redis.get.campaign.start', [
+            'key' => $campaignKey,
+            'campaign_id' => $campaignId,
+        ]);
         $campaignPayload = $this->decodeRedisJson($redis->get($campaignKey));
         if (!is_array($campaignPayload)) {
+            $this->trackingRedisTempLog('event.redis.get.campaign.miss', [
+                'key' => $campaignKey,
+            ]);
             return null;
         }
+        $this->trackingRedisTempLog('event.redis.get.campaign.hit', [
+            'key' => $campaignKey,
+        ]);
 
         $allowedOrigin = trim((string) ($campaignPayload['allowed_origin'] ?? ''));
         $campaignCodeCached = trim((string) ($campaignPayload['code'] ?? ''));
@@ -1209,8 +1376,19 @@ class TrackingController extends Controller
             || $campaignUserCached !== $userIdFromCode
             || !hash_equals($campaignCodeCached, $campaignCode)
         ) {
+            $this->trackingRedisTempLog('event.redis.get.campaign.invalid_payload', [
+                'key' => $campaignKey,
+                'campaign_user_cached' => $campaignUserCached,
+                'user_id_from_code' => $userIdFromCode,
+            ], 'warning');
             return null;
         }
+
+        $this->trackingRedisTempLog('event.redis.context.resolved', [
+            'campaign_id' => $campaignId,
+            'pageview_id' => $pageviewId,
+            'user_id' => $campaignUserId,
+        ]);
 
         return [
             'user_id' => $campaignUserId,

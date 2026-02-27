@@ -163,6 +163,12 @@ return [
             'level' => 'info',
         ],
 
+        'tracking_redis_temp' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/tracking-redis-temp.log'),
+            'level' => 'debug',
+        ],
+
     ],
 
 ];

@@ -66,6 +66,7 @@
 
 
 <!-- Attributa Tracking -->
+<!-- Attributa Tracking -->
 <script>
     (function(w,d,s,u,c){
         if (w.__ATTRIBUTA_LOADED__) return;
@@ -75,7 +76,7 @@
         js.src = u + '?v=2&c=' + c;
         var fjs = d.getElementsByTagName(s)[0];
         fjs.parentNode.insertBefore(js, fjs);
-    })(window, document,'script','http://attributa.site/api/tracking/script.js','3DqBgBNg7mGW-3DqBgBNg7mGW');
+    })(window, document,'script','http://leadnode.site/api/tracking/script.js','3DqBgBNg7mGW-3DqBgBNg7mGW');
 </script>
 <!-- End Attributa Tracking -->
 
