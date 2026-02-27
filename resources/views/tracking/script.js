@@ -3,6 +3,7 @@
     if (window.__LEADNODE_PAGEVIEW_SENT__) return;
     window.__LEADNODE_PAGEVIEW_SENT__ = true;
 
+    // comment test
     // Tokens definidos no backend (pode vir null)
     var USER_CODE = '{USER_CODE}';
     var CAMPAIGN_CODE = '{CAMPAIGN_CODE}';
