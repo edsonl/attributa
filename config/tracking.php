@@ -19,9 +19,13 @@ return [
     'collect' => [
         // Janela para reuso da mesma pageview em collects repetidos.
         'dedup_window_seconds' => (int) env('TRACKING_DEDUP_WINDOW_SECONDS', 86400),
-        // Intervalo minimo entre hits aceitos para evitar inflacao por F5.
+        // Intervalo minimo (em segundos) entre hits aceitos para o mesmo visitante na mesma campanha.
+        // Se um novo collect chegar antes desse prazo, nao incrementa campaign_visitors.hits.
         'min_hit_interval_seconds' => (int) env('TRACKING_MIN_HIT_INTERVAL_SECONDS', 30),
-        // TTL da chave de bloqueio de hit rapido (tracking:hit_gate:{campaign_id}:{visitor_id}).
+        // TTL da chave Redis de bloqueio de hit rapido:
+        // tracking:hit_gate:{campaign_id}:{visitor_id}.
+        // Essa chave guarda o timestamp do ultimo hit aceito e expira sozinha para nao acumular lixo no Redis.
+        // Regra pratica: usar TTL maior que min_hit_interval_seconds (ex.: 2x a 3x).
         'hit_gate_ttl_seconds' => (int) env('TRACKING_HIT_GATE_TTL_SECONDS', 90),
     ],
 ];
