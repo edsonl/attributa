@@ -41,6 +41,7 @@ class TrackingController extends Controller
     {
         $log = Log::channel($this->trackingLogChannel('tracking_collect'));
         $gclidAlertLog = Log::channel($this->trackingLogChannel('tracking_gclid_alert'));
+        $this->trackingRedisTempLog('collect.redis.connection.info', $this->trackingRedisConnectionInfo());
 
         // Validação estrutural do payload recebido pelo snippet.
         $data = $request->validate([
@@ -568,6 +569,7 @@ class TrackingController extends Controller
     {
         $log = Log::channel($this->trackingLogChannel('tracking_collect'));
         $ignoredLog = Log::channel($this->trackingLogChannel('tracking_event_ignored'));
+        $this->trackingRedisTempLog('event.redis.connection.info', $this->trackingRedisConnectionInfo());
 
         // Aceita payload JSON mesmo quando o navegador envia como text/plain
         // (ex.: sendBeacon/fetch no-cors para evitar preflight CORS).
@@ -1256,6 +1258,27 @@ class TrackingController extends Controller
         }
 
         $logger->info($message, $context);
+    }
+
+    /**
+     * Log temporario Redis: snapshot de conexao para diagnostico (connection, host, porta, db e prefixos).
+     */
+    protected function trackingRedisConnectionInfo(): array
+    {
+        $connectionName = (string) config('tracking.redis.connection', 'tracking');
+        $connectionConfig = config('database.redis.' . $connectionName);
+
+        return [
+            'connection' => $connectionName,
+            'client' => (string) config('database.redis.client', 'phpredis'),
+            'host' => is_array($connectionConfig) ? (string) ($connectionConfig['host'] ?? '') : '',
+            'port' => is_array($connectionConfig) ? (string) ($connectionConfig['port'] ?? '') : '',
+            'database' => is_array($connectionConfig) ? (string) ($connectionConfig['database'] ?? '') : '',
+            'username' => is_array($connectionConfig) ? (string) ($connectionConfig['username'] ?? '') : '',
+            'password_configured' => is_array($connectionConfig) ? !empty($connectionConfig['password']) : false,
+            'tracking_prefix' => $this->trackingPrefix(),
+            'global_prefix' => (string) config('database.redis.options.prefix', ''),
+        ];
     }
 
     protected function trackingCampaignKey(int $campaignId): string
