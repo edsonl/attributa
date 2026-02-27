@@ -65,9 +65,9 @@ class TrackingEventDescriptions
     protected static function summarizeEvents(Collection $events): array
     {
         $summary = [
-            'page_engaged' => ['first' => null, 'count' => 0, 'reasons' => []],
-            'form_submit' => ['first' => null, 'count' => 0, 'reasons' => []],
-            'link_click' => ['first' => null, 'count' => 0, 'reasons' => []],
+            'page_engaged' => ['first' => null, 'count' => 0, 'reason_details' => []],
+            'form_submit' => ['first' => null, 'count' => 0, 'reason_details' => []],
+            'link_click' => ['first' => null, 'count' => 0, 'reason_details' => []],
         ];
 
         foreach ($events as $event) {
@@ -83,7 +83,20 @@ class TrackingEventDescriptions
             $summary[$type]['count'] += 1;
             $reason = self::extractReasonLabel($type, $event);
             if ($reason !== '') {
-                $summary[$type]['reasons'][] = $reason;
+                $detail = $summary[$type]['reason_details'][$reason] ?? [
+                    'count' => 0,
+                    'last_ts' => 0,
+                    'last_at' => '-',
+                ];
+
+                $detail['count'] += 1;
+                $eventTs = self::resolveEventTimestamp($event);
+                if ($eventTs >= $detail['last_ts']) {
+                    $detail['last_ts'] = $eventTs;
+                    $detail['last_at'] = self::resolveEventFormattedTime($event);
+                }
+
+                $summary[$type]['reason_details'][$reason] = $detail;
             }
         }
 
@@ -117,14 +130,15 @@ class TrackingEventDescriptions
             return 'Nenhum evento de engajamento foi detectado nesta visita.';
         }
 
-        $firstReason = self::extractReasonLabel('page_engaged', $engaged['first']);
         $base = 'Visitante demonstrou interesse na página.';
-        if ($firstReason !== '') {
-            $base .= "\nMotivo: {$firstReason}.";
-        }
+        $details = self::buildDetailedReasonLines(
+            $engaged['reason_details'] ?? [],
+            ['Scroll 30%']
+        );
 
-        $extras = self::buildExtraReasonSummary($engaged['reasons'], $firstReason);
-        return $extras !== '' ? $base . "\n" . $extras : $base;
+        return count($details) > 0
+            ? $base . "\nDetalhado:\n" . implode("\n", $details)
+            : $base;
     }
 
     protected static function buildInteractionCaption(array $interaction, bool $useFormStep): string
@@ -154,13 +168,10 @@ class TrackingEventDescriptions
             ? 'Visitante enviou um formulário.'
             : 'Visitante clicou em um link monitorado.';
 
-        $reason = self::extractReasonLabel($useFormStep ? 'form_submit' : 'link_click', $interaction['first']);
-        if ($reason !== '') {
-            $base .= "\nDetalhe: {$reason}.";
-        }
-
-        $extras = self::buildExtraReasonSummary($interaction['reasons'], $reason);
-        return $extras !== '' ? $base . "\n" . $extras : $base;
+        $details = self::buildDetailedReasonLines($interaction['reason_details'] ?? []);
+        return count($details) > 0
+            ? $base . "\nDetalhado:\n" . implode("\n", $details)
+            : $base;
     }
 
     protected static function buildConversionTooltip(bool $conversionDone): string
@@ -208,42 +219,67 @@ class TrackingEventDescriptions
         return '';
     }
 
-    protected static function buildExtraReasonSummary(array $reasons, string $primaryReason = ''): string
+    protected static function resolveEventTimestamp(array $event): int
     {
-        if (count($reasons) <= 1) {
-            return '';
+        $raw = $event['created_at'] ?? null;
+        if ($raw instanceof \DateTimeInterface) {
+            return $raw->getTimestamp();
         }
 
-        $extraReasons = array_slice($reasons, 1);
-        if (count($extraReasons) === 0) {
-            return '';
+        if ($raw === null) {
+            return 0;
         }
 
-        $counts = [];
-        $sameAsPrimary = 0;
-        foreach ($extraReasons as $reason) {
-            if ($reason === '') {
+        $parsed = strtotime((string) $raw);
+        return $parsed !== false ? (int) $parsed : 0;
+    }
+
+    protected static function resolveEventFormattedTime(array $event): string
+    {
+        $formatted = trim((string) ($event['created_at_formatted'] ?? ''));
+        if ($formatted !== '') {
+            return $formatted;
+        }
+
+        $raw = $event['created_at'] ?? null;
+        if ($raw instanceof \DateTimeInterface) {
+            return $raw->format('d/m/Y, H:i:s');
+        }
+
+        $parsed = strtotime((string) $raw);
+        if ($parsed !== false) {
+            return date('d/m/Y, H:i:s', $parsed);
+        }
+
+        return '-';
+    }
+
+    protected static function buildDetailedReasonLines(array $reasonDetails, array $labelsWithoutCount = []): array
+    {
+        if (count($reasonDetails) === 0) {
+            return [];
+        }
+
+        uasort($reasonDetails, static function (array $a, array $b) {
+            return ((int) ($b['last_ts'] ?? 0)) <=> ((int) ($a['last_ts'] ?? 0));
+        });
+
+        $lines = [];
+        foreach ($reasonDetails as $label => $meta) {
+            $count = max(1, (int) ($meta['count'] ?? 1));
+            $lastAt = trim((string) ($meta['last_at'] ?? '-'));
+            if ($lastAt === '') {
+                $lastAt = '-';
+            }
+
+            if (in_array($label, $labelsWithoutCount, true)) {
+                $lines[] = $label . ' - ' . $lastAt;
                 continue;
             }
-            if ($primaryReason !== '' && mb_strtolower($reason) === mb_strtolower($primaryReason)) {
-                $sameAsPrimary += 1;
-                continue;
-            }
-            $counts[$reason] = ($counts[$reason] ?? 0) + 1;
+
+            $lines[] = '(' . $count . 'x) ' . $label . ' - ' . $lastAt;
         }
 
-        $parts = [];
-        foreach ($counts as $label => $count) {
-            $parts[] = $count > 1 ? "{$label} ({$count}x)" : $label;
-        }
-        if ($sameAsPrimary > 0) {
-            $parts[] = $sameAsPrimary . ' ocorrência(s) do mesmo motivo';
-        }
-
-        if (count($parts) === 0) {
-            return '';
-        }
-
-        return 'Eventos adicionais: ' . implode(', ', $parts) . '.';
+        return $lines;
     }
 }

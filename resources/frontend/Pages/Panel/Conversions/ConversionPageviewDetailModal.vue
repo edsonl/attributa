@@ -98,9 +98,9 @@ const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
 
 const detailFlowEventSummary = computed(() => {
     const summary = {
-        page_engaged: { first: null, count: 0 },
-        form_submit: { first: null, count: 0 },
-        link_click: { first: null, count: 0 },
+        page_engaged: { first: null, count: 0, reasons: {} },
+        form_submit: { first: null, count: 0, reasons: {} },
+        link_click: { first: null, count: 0, reasons: {} },
     }
 
     detailEvents.value.forEach((event) => {
@@ -113,6 +113,16 @@ const detailFlowEventSummary = computed(() => {
             summary[type].first = event
         }
         summary[type].count += 1
+
+        const reason = resolveEventReasonLabel(type, event)
+        if (!reason) {
+            return
+        }
+
+        const bucket = summary[type].reasons[reason] || { count: 0, lastEvent: null }
+        bucket.count += 1
+        bucket.lastEvent = pickLatestEvent(bucket.lastEvent, event)
+        summary[type].reasons[reason] = bucket
     })
 
     return summary
@@ -169,7 +179,7 @@ const visitFlowSteps = computed(() => {
             done: Boolean(engaged.first),
             color: Boolean(engaged.first) ? 'primary' : 'grey-6',
             tooltip: Boolean(engaged.first)
-                ? 'Usuário atingiu critério de engajamento nesta visita.'
+                ? buildEngagedTooltip(engaged)
                 : 'Nenhum evento de engajamento foi detectado nesta visita.',
         },
         {
@@ -180,9 +190,7 @@ const visitFlowSteps = computed(() => {
             done: Boolean(interactionBase.first),
             color: Boolean(interactionBase.first) ? 'primary' : 'grey-6',
             tooltip: Boolean(interactionBase.first)
-                ? (interactionUsesForm
-                    ? 'Visitante enviou formulário na página.'
-                    : 'Visitante clicou em link rastreado.')
+                ? buildInteractionTooltip(interactionBase, interactionUsesForm)
                 : (interactionUsesForm
                     ? 'Nenhum envio de formulário foi detectado nesta visita.'
                     : 'Nenhum clique em link rastreado foi detectado nesta visita.'),
@@ -397,6 +405,69 @@ function formatEngagementReason(event) {
     }
 
     return labels[reason] || (reason ? `Engajamento: ${reason}` : '')
+}
+
+function resolveEventReasonLabel(type, event) {
+    if (type === 'page_engaged') {
+        return formatEngagementReason(event)
+    }
+    if (type === 'form_submit') {
+        return event?.form_has_user_data ? 'Dados informados' : 'Sem dados informados'
+    }
+    if (type === 'link_click') {
+        return 'Clique em link'
+    }
+
+    return ''
+}
+
+function resolveEventMs(event) {
+    const raw = String(event?.created_at || '').trim()
+    if (!raw) return 0
+
+    const ts = Date.parse(raw)
+    return Number.isFinite(ts) ? ts : 0
+}
+
+function pickLatestEvent(currentEvent, candidateEvent) {
+    if (!currentEvent) return candidateEvent
+    return resolveEventMs(candidateEvent) >= resolveEventMs(currentEvent) ? candidateEvent : currentEvent
+}
+
+function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = []) {
+    const entries = Object.entries(reasonBuckets || {})
+    if (entries.length === 0) return []
+
+    entries.sort((a, b) => resolveEventMs(b[1]?.lastEvent) - resolveEventMs(a[1]?.lastEvent))
+
+    return entries.map(([label, meta]) => {
+        const count = Math.max(Number(meta?.count || 0), 1)
+        const lastAt = String(meta?.lastEvent?.created_at_formatted || '-').trim() || '-'
+
+        if (labelsWithoutCount.includes(label)) {
+            return `${label} - ${lastAt}`
+        }
+
+        return `(${count}x) ${label} - ${lastAt}`
+    })
+}
+
+function buildEngagedTooltip(engaged) {
+    const lines = buildDetailedReasonLines(engaged?.reasons, ['Scroll 30%'])
+    if (lines.length === 0) {
+        return 'Usuário atingiu critério de engajamento nesta visita.'
+    }
+    return `Usuário atingiu critério de engajamento nesta visita.\nDetalhado:\n${lines.join('\n')}`
+}
+
+function buildInteractionTooltip(interaction, useFormStep) {
+    const base = useFormStep
+        ? 'Visitante enviou formulário na página.'
+        : 'Visitante clicou em link rastreado.'
+    const lines = buildDetailedReasonLines(interaction?.reasons)
+
+    if (lines.length === 0) return base
+    return `${base}\nDetalhado:\n${lines.join('\n')}`
 }
 
 async function copyValue(value) {

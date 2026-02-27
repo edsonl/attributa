@@ -62,6 +62,59 @@
         return null;
     }
 
+    function generateSessionCode() {
+        try {
+            if (window.crypto && window.crypto.getRandomValues) {
+                var bytes = new Uint8Array(12);
+                window.crypto.getRandomValues(bytes);
+                var out = '';
+                for (var i = 0; i < bytes.length; i++) {
+                    out += bytes[i].toString(16).padStart(2, '0');
+                }
+                return out;
+            }
+        } catch (e) {}
+
+        return String(Date.now()) + String(Math.floor(Math.random() * 1000000));
+    }
+
+    function resolveUserSession() {
+        var existing = getCookie('at_user_session');
+        if (existing) {
+            return existing;
+        }
+
+        var created = generateSessionCode();
+        // Cookie de sessao: expira ao encerrar o navegador.
+        setCookie('at_user_session', created);
+        return created;
+    }
+
+    function resolveNavigationType() {
+        try {
+            var navEntries = window.performance && window.performance.getEntriesByType
+                ? window.performance.getEntriesByType('navigation')
+                : [];
+            if (navEntries && navEntries.length > 0) {
+                var navType = String(navEntries[0].type || '').trim();
+                if (navType) {
+                    return navType;
+                }
+            }
+        } catch (e) {}
+
+        try {
+            if (window.performance && window.performance.navigation) {
+                var legacyType = window.performance.navigation.type;
+                if (legacyType === 1) return 'reload';
+                if (legacyType === 2) return 'back_forward';
+                if (legacyType === 0) return 'navigate';
+            }
+        } catch (e) {}
+
+        return 'unknown';
+    }
+
     // ===============================
     // Acquisition params (UTM + Click IDs)
     // ===============================
@@ -80,6 +133,8 @@
         'gbraid'
     ];
     var trackedData = {};
+    var userSession = resolveUserSession();
+    var navigationType = resolveNavigationType();
 
     function readQueryParam(name) {
         if (window.URLSearchParams) {
@@ -115,6 +170,8 @@
         user_code: USER_CODE,
         campaign_code: CAMPAIGN_CODE,
         visitor_code: getCookie('at_visitor_code'),
+        user_session: userSession,
+        navigation_type: navigationType,
         auth_ts: AUTH_TS,
         auth_nonce: AUTH_NONCE,
         auth_sig: AUTH_SIG,
@@ -170,7 +227,7 @@
                         var visitorCode = json && json.visitor_code;
                         var eventSig = json && json.event_sig;
                         if (visitorCode) {
-                            setCookie('at_visitor_code', visitorCode, 365);
+                            setCookie('at_visitor_code', visitorCode, 30);
                         }
                         if (pageviewCode) {
                             setCookie('at_pageview_code', pageviewCode, 90);
@@ -178,7 +235,7 @@
                                 setCookie('at_event_sig', eventSig, 90);
                             }
                             initSubInjection(trackingParamKeys);
-                            initInteractionTracking(trackingParamKeys);
+                            initInteractionTracking(trackingParamKeys, navigationType);
                         }
                     })
                     .catch(function () {});
@@ -200,7 +257,7 @@
                             var visitorCode = json && json.visitor_code;
                             var eventSig = json && json.event_sig;
                             if (visitorCode) {
-                                setCookie('at_visitor_code', visitorCode, 365);
+                                setCookie('at_visitor_code', visitorCode, 30);
                             }
                             if (pageviewCode) {
                                 setCookie('at_pageview_code', pageviewCode, 90);
@@ -208,7 +265,7 @@
                                     setCookie('at_event_sig', eventSig, 90);
                                 }
                                 initSubInjection(trackingParamKeys);
-                                initInteractionTracking(trackingParamKeys);
+                                initInteractionTracking(trackingParamKeys, navigationType);
                             }
                         } catch (e) {}
                     }
@@ -280,7 +337,7 @@
     // ==============================================
     // Eventos de interação (link click / form submit)
     // ==============================================
-    function initInteractionTracking(paramKeys) {
+    function initInteractionTracking(paramKeys, currentNavigationType) {
         if (window.__ATTRIBUTA_EVENTS_INIT__) return;
         window.__ATTRIBUTA_EVENTS_INIT__ = true;
 
@@ -417,6 +474,17 @@
                 element_id: getSafeText('engagement_reason:' + normalizedReason, 191),
                 element_classes: null
             });
+        }
+
+        if (currentNavigationType === 'reload') {
+            sendEvent({
+                event_type: 'navigation_reload',
+                target_url: getSafeText(window.location.href, 2000),
+                element_name: getSafeText('Navigation reload', 191),
+                element_id: getSafeText('navigation_type:reload', 191),
+                element_classes: null
+            });
+            markEngaged('navigation_reload');
         }
 
         function getScrollPercent() {

@@ -41,13 +41,14 @@ class TrackingController extends Controller
     {
         $log = Log::channel($this->trackingLogChannel('tracking_collect'));
         $gclidAlertLog = Log::channel($this->trackingLogChannel('tracking_gclid_alert'));
-        $this->trackingRedisTempLog('collect.redis.connection.info', $this->trackingRedisConnectionInfo());
 
         // Validação estrutural do payload recebido pelo snippet.
         $data = $request->validate([
             'user_code'    => 'required|string|max:32',
             'campaign_code' => 'required|string|max:32',
             'visitor_code' => 'nullable|string|max:32',
+            'user_session' => 'nullable|string|max:64|regex:/^[A-Za-z0-9]+$/',
+            'navigation_type' => 'nullable|string|in:navigate,reload,back_forward,prerender,unknown',
             'auth_ts'      => 'required|integer',
             'auth_nonce'   => 'required|string|min:16|max:64|regex:/^[A-Za-z0-9]+$/',
             'auth_sig'     => 'required|string|size:64|regex:/^[a-f0-9]+$/',
@@ -332,6 +333,7 @@ class TrackingController extends Controller
         $now = now();
         $nowMs = $now->valueOf();
         $visitorCode = trim((string) ($data['visitor_code'] ?? ''));
+        $userSession = trim((string) ($data['user_session'] ?? ''));
         $visitorId = $this->resolveVisitorIdFromCode($visitorCode);
 
         $reuseContext = $this->resolveReusableCollectContext(
@@ -367,6 +369,7 @@ class TrackingController extends Controller
                 campaignCode: (string) $data['campaign_code'],
                 visitorCode: $reuseContext['visitor_code'],
                 pageviewCode: $reuseContext['pageview_code'],
+                userSession: $userSession,
                 nowMs: $nowMs,
                 hitUpdated: $shouldIncrementHit
             );
@@ -535,6 +538,7 @@ class TrackingController extends Controller
             pageviewCode: $pageviewCode,
             visitorCode: $visitorCode,
             visitorId: (int) $visitorId,
+            userSession: $userSession,
             nowMs: now()->valueOf()
         );
 
@@ -588,7 +592,7 @@ class TrackingController extends Controller
             'campaign_code' => 'required|string|max:32',
             'pageview_code' => 'required|string|max:32',
             'event_sig' => 'required|string|size:64|regex:/^[a-f0-9]+$/',
-            'event_type' => 'required|string|in:link_click,form_submit,page_engaged',
+            'event_type' => 'required|string|in:link_click,form_submit,page_engaged,navigation_reload',
             'event_ts' => 'nullable|integer|min:1',
             'target_url' => 'nullable|string',
             'element_id' => 'nullable|string',
@@ -939,6 +943,7 @@ class TrackingController extends Controller
         string $campaignCode,
         string $visitorCode,
         string $pageviewCode,
+        string $userSession,
         int $nowMs,
         bool $hitUpdated
     ): void {
@@ -956,6 +961,7 @@ class TrackingController extends Controller
             $lastPayload = [
                 'pageview_code' => $pageviewCode,
                 'visitor_code' => $visitorCode,
+                'user_session' => $userSession,
                 'visitor_id' => 0,
                 'last_collect_at_ms' => $nowMs,
                 'last_hit_at_ms' => $hitUpdated ? $nowMs : 0,
@@ -963,6 +969,9 @@ class TrackingController extends Controller
         }
 
         $lastPayload['last_collect_at_ms'] = $nowMs;
+        if ($userSession !== '') {
+            $lastPayload['user_session'] = $userSession;
+        }
         if ($hitUpdated) {
             $lastPayload['last_hit_at_ms'] = $nowMs;
         }
@@ -1022,6 +1031,7 @@ class TrackingController extends Controller
         string $pageviewCode,
         string $visitorCode,
         int $visitorId,
+        string $userSession,
         int $nowMs
     ): void {
         $redis = $this->trackingRedis();
@@ -1047,6 +1057,7 @@ class TrackingController extends Controller
         $lastPayload = [
             'pageview_code' => $pageviewCode,
             'visitor_code' => $visitorCode,
+            'user_session' => $userSession,
             'visitor_id' => $visitorId,
             'last_collect_at_ms' => $nowMs,
             'last_hit_at_ms' => $nowMs,
@@ -1250,6 +1261,10 @@ class TrackingController extends Controller
      */
     protected function trackingRedisTempLog(string $message, array $context = [], string $level = 'info'): void
     {
+        if (str_starts_with($message, 'collect.redis.')) {
+            return;
+        }
+
         $logger = Log::channel($this->trackingLogChannel('tracking_redis_temp'));
 
         if ($level === 'warning') {
