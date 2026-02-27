@@ -13,6 +13,7 @@ use App\Services\HashidService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\Rule;
 
 class ActivityController extends Controller
@@ -181,6 +182,13 @@ class ActivityController extends Controller
         }
 
         $pageview->delete();
+        $this->forgetTrackingRedisForPageview(
+            pageviewId: (int) $pageview->id,
+            userId: (int) $pageview->user_id,
+            campaignCode: (string) ($pageview->campaign?->code ?? ''),
+            visitorId: $pageview->visitor_id ? (int) $pageview->visitor_id : null,
+            campaignId: $pageview->campaign_id ? (int) $pageview->campaign_id : null,
+        );
 
         return response()->json([
             'message' => 'Pageview excluído com sucesso.',
@@ -208,7 +216,27 @@ class ActivityController extends Controller
             ->whereIn('id', $data['ids']);
         $totalSelected = count($data['ids']);
         $convertedCount = (clone $query)->where('conversion', 1)->count();
+
+        $deletableRows = (clone $query)
+            ->where('conversion', 0)
+            ->get(['id', 'user_id', 'campaign_id', 'visitor_id']);
+
+        $campaignCodesById = Campaign::query()
+            ->whereIn('id', $deletableRows->pluck('campaign_id')->filter()->unique()->values()->all())
+            ->pluck('code', 'id');
+
         $deleted = (clone $query)->where('conversion', 0)->delete();
+
+        foreach ($deletableRows as $row) {
+            $campaignCode = (string) ($campaignCodesById[(int) $row->campaign_id] ?? '');
+            $this->forgetTrackingRedisForPageview(
+                pageviewId: (int) $row->id,
+                userId: (int) $row->user_id,
+                campaignCode: $campaignCode,
+                visitorId: $row->visitor_id ? (int) $row->visitor_id : null,
+                campaignId: $row->campaign_id ? (int) $row->campaign_id : null,
+            );
+        }
 
         return response()->json([
             'message' => $convertedCount > 0
@@ -420,5 +448,37 @@ class ActivityController extends Controller
         $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
 
         return $userCode . '-' . $campaignCode . '-' . $pageviewCode;
+    }
+
+    protected function forgetTrackingRedisForPageview(
+        int $pageviewId,
+        int $userId,
+        string $campaignCode,
+        ?int $visitorId = null,
+        ?int $campaignId = null
+    ): void {
+        if ($pageviewId < 1 || $userId < 1 || trim($campaignCode) === '') {
+            return;
+        }
+
+        $prefix = trim((string) config('tracking.redis.prefix', 'tracking'));
+        $connection = (string) config('tracking.redis.connection', 'tracking');
+        $userCode = app(HashidService::class)->encode($userId);
+        $pageviewCode = app(HashidService::class)->encode($pageviewId);
+
+        $keys = [
+            $prefix . ':pv:' . $userCode . ':' . $campaignCode . ':' . $pageviewCode,
+        ];
+
+        if ($visitorId !== null && $visitorId > 0) {
+            $visitorCode = app(HashidService::class)->encode($visitorId);
+            $keys[] = $prefix . ':last:' . $userCode . ':' . $campaignCode . ':' . $visitorCode;
+
+            if ($campaignId !== null && $campaignId > 0) {
+                $keys[] = $prefix . ':hit_gate:' . $campaignId . ':' . $visitorId;
+            }
+        }
+
+        Redis::connection($connection)->del(...$keys);
     }
 }

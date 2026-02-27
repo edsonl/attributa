@@ -795,11 +795,36 @@ class TrackingController extends Controller
             'allowed_origin' => (string) Campaign::normalizeProductUrl((string) $campaign->product_url),
         ];
 
-        $redis->setex(
-            $campaignKey,
-            $this->trackingCampaignTtlSeconds(),
-            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
+        try {
+            $saved = (bool) $redis->setex(
+                $campaignKey,
+                $this->trackingCampaignTtlSeconds(),
+                json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            );
+
+            Log::channel($this->trackingLogChannel('tracking_collect'))->info(
+                $saved
+                    ? 'Tracking Redis: campanha salva com sucesso.'
+                    : 'Tracking Redis: campanha nao foi salva.',
+                [
+                    'redis_key' => $campaignKey,
+                    'campaign_id' => (int) $campaign->id,
+                    'campaign_code' => (string) $campaign->code,
+                    'saved' => $saved,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
+                'Tracking Redis: falha ao salvar campanha.',
+                [
+                    'redis_key' => $campaignKey,
+                    'campaign_id' => (int) $campaign->id,
+                    'campaign_code' => (string) $campaign->code,
+                    'saved' => false,
+                    'error' => $e->getMessage(),
+                ]
+            );
+        }
 
         return $payload;
     }
@@ -947,16 +972,56 @@ class TrackingController extends Controller
             'last_hit_at_ms' => $nowMs,
         ];
 
-        $redis->setex(
-            $pvKey,
-            $ttl,
-            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
-        $redis->setex(
-            $lastKey,
-            $ttl,
-            json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        );
+        $pvSaved = false;
+        $lastSaved = false;
+
+        try {
+            $pvSaved = (bool) $redis->setex(
+                $pvKey,
+                $ttl,
+                json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            );
+            $lastSaved = (bool) $redis->setex(
+                $lastKey,
+                $ttl,
+                json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            );
+
+            Log::channel($this->trackingLogChannel('tracking_collect'))->info(
+                ($pvSaved && $lastSaved)
+                    ? 'Tracking Redis: pageview e ponte de ultimo collect salvos com sucesso.'
+                    : 'Tracking Redis: salvamento parcial/sem sucesso para pageview e/ou ultimo collect.',
+                [
+                    'pageview_id' => (int) $pageview->id,
+                    'campaign_id' => (int) $campaign['id'],
+                    'redis_keys' => [
+                        'pageview' => $pvKey,
+                        'last' => $lastKey,
+                    ],
+                    'saved' => [
+                        'pageview' => $pvSaved,
+                        'last' => $lastSaved,
+                    ],
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
+                'Tracking Redis: falha ao salvar pageview e/ou ultimo collect.',
+                [
+                    'pageview_id' => (int) $pageview->id,
+                    'campaign_id' => (int) $campaign['id'],
+                    'redis_keys' => [
+                        'pageview' => $pvKey,
+                        'last' => $lastKey,
+                    ],
+                    'saved' => [
+                        'pageview' => $pvSaved,
+                        'last' => $lastSaved,
+                    ],
+                    'error' => $e->getMessage(),
+                ]
+            );
+        }
 
         $this->touchHitGate((int) $campaign['id'], $visitorId, $nowMs);
     }
