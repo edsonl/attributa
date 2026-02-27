@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Pageview;
 use App\Models\Campaign;
-use App\Models\Browser;
-use App\Models\DeviceCategory;
 use App\Models\TrafficSourceCategory;
 use App\Models\PageviewEvent;
 use App\Services\HashidService;
@@ -17,13 +15,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 
 class TrackingController extends Controller
 {
     protected array $trafficSourceIdBySlug = [];
-    protected array $deviceCategoryIdBySlug = [];
-    protected array $browserIdBySlug = [];
 
     /**
      * Recebe e persiste o pageview inicial de tracking enviado pelo snippet.
@@ -42,8 +39,8 @@ class TrackingController extends Controller
      */
     public function collect(Request $request)
     {
-        $log = Log::channel('tracking_collect');
-        $gclidAlertLog = Log::channel('tracking_gclid_alert');
+        $log = Log::channel($this->trackingLogChannel('tracking_collect'));
+        $gclidAlertLog = Log::channel($this->trackingLogChannel('tracking_gclid_alert'));
 
         // Validação estrutural do payload recebido pelo snippet.
         $data = $request->validate([
@@ -154,13 +151,15 @@ class TrackingController extends Controller
             ], 422);
         }
 
-        // Obtém campanha apenas quando os tokens são consistentes com banco.
-        // Aqui também valida vínculo forte user_id + campaign_id + campaign_code.
-        $campaign = Campaign::query()
-            ->where('id', $campaignIdFromCode)
-            ->where('user_id', $userIdFromCode)
-            ->where('code', $data['campaign_code'])
-            ->first();
+        // Resolve contexto da campanha preferindo Redis:
+        // - chave tracking:campaign:{campaign_id} (TTL longo);
+        // - fallback em banco quando cache miss;
+        // - valida consistência forte user_id + campaign_id + campaign_code.
+        $campaign = $this->resolveCampaignContext(
+            (int) $userIdFromCode,
+            (int) $campaignIdFromCode,
+            (string) $data['campaign_code']
+        );
 
         if (!$campaign) {
             $log->warning('Tracking collect rejeitado: campanha inválida.', [
@@ -179,11 +178,11 @@ class TrackingController extends Controller
 
         // Segurança de origem: coleta apenas da origem cadastrada na campanha.
         // Evita que um snippet copiado seja usado em domínio não autorizado.
-        $allowedOrigin = Campaign::normalizeProductUrl($campaign->product_url);
+        $allowedOrigin = (string) ($campaign['allowed_origin'] ?? '');
         if (!$allowedOrigin) {
             $log->warning('Tracking collect rejeitado: campanha sem origem configurada.', [
-                'campaign_id' => $campaign->id,
-                'campaign_code' => $campaign->code,
+                'campaign_id' => $campaign['id'] ?? null,
+                'campaign_code' => $campaign['code'] ?? null,
                 'ip' => $request->ip(),
             ]);
             return response()->json([
@@ -194,8 +193,8 @@ class TrackingController extends Controller
         $requestOrigin = $this->extractRequestOrigin($request);
         if (!$requestOrigin || !$this->originsMatch($allowedOrigin, $requestOrigin)) {
             $log->warning('Tracking collect rejeitado: origem não autorizada.', [
-                'campaign_id' => $campaign->id,
-                'campaign_code' => $campaign->code,
+                'campaign_id' => $campaign['id'] ?? null,
+                'campaign_code' => $campaign['code'] ?? null,
                 'allowed_origin' => $allowedOrigin,
                 'request_origin' => $requestOrigin,
                 'origin_header' => $request->headers->get('Origin'),
@@ -298,15 +297,98 @@ class TrackingController extends Controller
             $userAgent = mb_substr($userAgent, 0, 500);
         }
 
-        // Classificação técnica da visita (origem, device, browser) antes da persistência.
+        /*
+         |----------------------------------------------------------------------
+         | Fluxo Redis no collect (chaves e estratégia)
+         |----------------------------------------------------------------------
+         | 1) tracking:campaign:{campaign_id}
+         |    - cache de metadados da campanha para evitar SELECT repetido.
+         |    - guarda id, user_id, code, nome e allowed_origin.
+         |
+         | 2) tracking:pv:{user_code}:{campaign_code}:{pageview_code}
+         |    - contexto resolvido da pageview.
+         |    - estrutura principal para debug e reuso de sessão.
+         |    - contém:
+         |      * campanha (id, nome, user_id, code)
+         |      * pageview (campos atuais da linha salva em banco)
+         |      * timing (last_collect_at_ms, last_hit_at_ms)
+         |
+         | 3) tracking:last:{user_code}:{campaign_code}:{visitor_code}
+         |    - ponte para o último contexto da combinação visitante+campanha.
+         |    - permite detectar segundo collect sem tocar no banco.
+         |
+         | 4) tracking:hit_gate:{campaign_id}:{visitor_id}
+         |    - anti-refresh/F5: só permite incrementar hit após intervalo mínimo.
+         |
+         | Decisão no collect:
+         | - Se tracking:last existir e estiver dentro da janela de deduplicação:
+         |   * não cria nova pageview;
+         |   * opcionalmente incrementa campaign_visitors se passou o intervalo mínimo;
+         |   * retorna o mesmo pageview_code + visitor_code + event_sig.
+         | - Fora da janela (ou cache miss):
+         |   * segue fluxo normal: classifica, cria pageview e atualiza Redis.
+         */
+        $now = now();
+        $nowMs = $now->valueOf();
+        $visitorCode = trim((string) ($data['visitor_code'] ?? ''));
+        $visitorId = $this->resolveVisitorIdFromCode($visitorCode);
+
+        $reuseContext = $this->resolveReusableCollectContext(
+            userCode: (string) $data['user_code'],
+            campaignCode: (string) $data['campaign_code'],
+            visitorCode: $visitorCode,
+            nowMs: $nowMs
+        );
+
+        if ($reuseContext !== null) {
+            $shouldIncrementHit = $this->shouldIncrementHitByThrottle(
+                campaignId: (int) $campaign['id'],
+                visitorId: (int) $reuseContext['visitor_id'],
+                nowMs: $nowMs
+            );
+
+            if ($shouldIncrementHit) {
+                $this->upsertCampaignVisitorHit(
+                    campaignId: (int) $campaign['id'],
+                    visitorId: (int) $reuseContext['visitor_id'],
+                    now: $now,
+                    nowMs: $nowMs
+                );
+                $this->touchHitGate(
+                    campaignId: (int) $campaign['id'],
+                    visitorId: (int) $reuseContext['visitor_id'],
+                    nowMs: $nowMs
+                );
+            }
+
+            $this->touchReusableCollectContext(
+                userCode: (string) $data['user_code'],
+                campaignCode: (string) $data['campaign_code'],
+                visitorCode: $reuseContext['visitor_code'],
+                pageviewCode: $reuseContext['pageview_code'],
+                nowMs: $nowMs,
+                hitUpdated: $shouldIncrementHit
+            );
+
+            return response()->json([
+                'pageview_code' => $reuseContext['pageview_code'],
+                'visitor_code' => $reuseContext['visitor_code'],
+                'event_sig' => $this->buildEventSignature(
+                    (string) $data['user_code'],
+                    (string) $data['campaign_code'],
+                    $reuseContext['pageview_code']
+                ),
+            ]);
+        }
+
+        // Classificação técnica da visita (origem, device, browser) apenas quando houver necessidade de nova pageview.
         $classification = app(PageviewClassificationService::class)->classify($data, $request->ip());
         $trafficSourceCategoryId = $this->resolveTrafficSourceCategoryId((string) ($classification['traffic_source_slug'] ?? 'unknown'));
         $trafficSourceReason = mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 191);
         $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
-        $visitorId = $this->resolveVisitorIdFromCode($data['visitor_code'] ?? null);
         $deviceClassification = [
-            'device_category_id' => $this->resolveDeviceCategoryId('unknown'),
-            'browser_id' => $this->resolveBrowserId('unknown'),
+            'device_category_id' => null,
+            'browser_id' => null,
             'device_type' => null,
             'device_brand' => null,
             'device_model' => null,
@@ -362,8 +444,8 @@ class TrackingController extends Controller
         ) {
             // Persistencia principal da pageview.
             $pageview = Pageview::create([
-                'user_id'      => $campaign->user_id,
-                'campaign_id'   => $campaign->id,
+                'user_id'      => (int) $campaign['user_id'],
+                'campaign_id'   => (int) $campaign['id'],
                 'visitor_id'    => $visitorId,
                 'url'           => $url,
                 'landing_url'   => $landingUrl,
@@ -421,25 +503,11 @@ class TrackingController extends Controller
 
             $now = now();
             $nowMs = $now->valueOf();
-            // Atualiza agregação de visitantes únicos por campanha:
-            // - primeira ocorrência cria linha com hits=1
-            // - recorrência atualiza last_seen_at e incrementa hits
-            DB::statement(
-                'INSERT INTO campaign_visitors
-                    (campaign_id, visitor_id, first_seen_at, last_seen_at, hits, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, 1, ?, ?)
-                 ON DUPLICATE KEY UPDATE
-                    last_seen_at = VALUES(last_seen_at),
-                    hits = hits + 1,
-                    updated_at = VALUES(updated_at)',
-                [
-                    (int) $campaign->id,
-                    (int) $visitorId,
-                    $nowMs,
-                    $nowMs,
-                    $now,
-                    $now,
-                ]
+            $this->upsertCampaignVisitorHit(
+                campaignId: (int) $campaign['id'],
+                visitorId: (int) $visitorId,
+                now: $now,
+                nowMs: $nowMs
             );
 
             return [$pageview, (int) $visitorId];
@@ -448,18 +516,30 @@ class TrackingController extends Controller
         $log->info('Tracking collect salvo com sucesso.', [
             'pageview_id' => $pageview->id,
             'visitor_id' => $visitorId,
-            'campaign_id' => $campaign->id,
-            'campaign_code' => $campaign->code,
+            'campaign_id' => $campaign['id'],
+            'campaign_code' => $campaign['code'],
             'request_origin' => $requestOrigin,
             'ip' => $request->ip(),
         ]);
 
         // Retorna hashid da pageview para compor subids/código composto de callback.
         $pageviewCode = app(HashidService::class)->encode((int) $pageview->id);
+        $visitorCode = app(HashidService::class)->encode((int) $visitorId);
+
+        $this->persistCollectContext(
+            campaign: $campaign,
+            pageview: $pageview,
+            userCode: (string) $data['user_code'],
+            campaignCode: (string) $data['campaign_code'],
+            pageviewCode: $pageviewCode,
+            visitorCode: $visitorCode,
+            visitorId: (int) $visitorId,
+            nowMs: now()->valueOf()
+        );
 
         return response()->json([
             'pageview_code' => $pageviewCode,
-            'visitor_code' => app(HashidService::class)->encode((int) $visitorId),
+            'visitor_code' => $visitorCode,
             'event_sig' => $this->buildEventSignature(
                 (string) $data['user_code'],
                 (string) $data['campaign_code'],
@@ -475,8 +555,9 @@ class TrackingController extends Controller
      * Fluxo geral:
      * 1) aceita payload do navegador (incluindo envio como text/plain via sendBeacon/no-cors) e valida campos;
      * 2) normaliza dados do evento (tipo, alvo e metadados de formulário);
-     * 3) autentica o vínculo entre usuário, campanha e pageview antes de gravar;
-     * 4) registra o evento apenas quando existir pageview compatível com os identificadores informados.
+     * 3) valida assinatura e recupera contexto exclusivamente do Redis;
+     * 4) se contexto Redis existir e for consistente, grava o evento;
+     * 5) se contexto Redis não existir (campanha/pageview), ignora sem fallback em banco.
      *
      * Autenticação/segurança aplicada no event:
      * - assinatura HMAC (`event_sig`) calculada a partir de `user_code`, `campaign_code` e `pageview_code`;
@@ -485,7 +566,8 @@ class TrackingController extends Controller
      */
     public function event(Request $request)
     {
-        $log = Log::channel('tracking_collect');
+        $log = Log::channel($this->trackingLogChannel('tracking_collect'));
+        $ignoredLog = Log::channel($this->trackingLogChannel('tracking_event_ignored'));
 
         // Aceita payload JSON mesmo quando o navegador envia como text/plain
         // (ex.: sendBeacon/fetch no-cors para evitar preflight CORS).
@@ -567,23 +649,44 @@ class TrackingController extends Controller
             ], 422);
         }
 
-        $campaign = Campaign::query()
-            ->where('id', $campaignIdFromCode)
-            ->where('user_id', $userIdFromCode)
-            ->where('code', $campaignCode)
-            ->first();
+        $eventContext = $this->resolveEventContextFromRedis(
+            $userCode,
+            $campaignCode,
+            $pageviewCode,
+            (int) $userIdFromCode,
+            (int) $campaignIdFromCode,
+            (int) $pageviewIdFromCode
+        );
 
-        if (!$campaign) {
+        if (!$eventContext) {
+            $ignoredLog->info('Tracking event ignorado: contexto Redis ausente/inconsistente.', [
+                'user_code' => $userCode,
+                'campaign_code' => $campaignCode,
+                'pageview_code' => $pageviewCode,
+                'ip' => $request->ip(),
+                'reason' => 'redis_context_missing',
+            ]);
+
             return response()->json([
-                'message' => 'Campanha inválida.',
-            ], 422);
+                'ok' => true,
+                'ignored' => true,
+                'reason' => 'redis_context_missing',
+            ]);
         }
 
-        $allowedOrigin = Campaign::normalizeProductUrl($campaign->product_url);
-        if (!$allowedOrigin) {
+        $allowedOrigin = (string) ($eventContext['allowed_origin'] ?? '');
+        if ($allowedOrigin === '') {
+            $ignoredLog->info('Tracking event ignorado: campanha sem origem no Redis.', [
+                'campaign_id' => $eventContext['campaign_id'] ?? null,
+                'pageview_id' => $eventContext['pageview_id'] ?? null,
+                'reason' => 'redis_campaign_origin_missing',
+            ]);
+
             return response()->json([
-                'message' => 'Origem de tracking não configurada para a campanha.',
-            ], 403);
+                'ok' => true,
+                'ignored' => true,
+                'reason' => 'redis_campaign_origin_missing',
+            ]);
         }
 
         $requestOrigin = $this->extractRequestOrigin($request);
@@ -593,22 +696,10 @@ class TrackingController extends Controller
             ], 403);
         }
 
-        $pageview = Pageview::query()
-            ->where('id', $pageviewIdFromCode)
-            ->where('user_id', $campaign->user_id)
-            ->where('campaign_id', $campaign->id)
-            ->first();
-
-        if (!$pageview) {
-            return response()->json([
-                'message' => 'Pageview inválida para esta campanha.',
-            ], 422);
-        }
-
         $event = PageviewEvent::create([
-            'user_id' => $campaign->user_id,
-            'campaign_id' => $campaign->id,
-            'pageview_id' => $pageview->id,
+            'user_id' => (int) $eventContext['user_id'],
+            'campaign_id' => (int) $eventContext['campaign_id'],
+            'pageview_id' => (int) $eventContext['pageview_id'],
             'event_type' => $eventType,
             'target_url' => $targetUrl,
             'element_id' => $elementId,
@@ -642,34 +733,6 @@ class TrackingController extends Controller
             ?? null;
     }
 
-    protected function resolveDeviceCategoryId(string $slug): ?int
-    {
-        if ($this->deviceCategoryIdBySlug === []) {
-            $this->deviceCategoryIdBySlug = DeviceCategory::query()
-                ->pluck('id', 'slug')
-                ->map(fn ($id) => (int) $id)
-                ->toArray();
-        }
-
-        return $this->deviceCategoryIdBySlug[$slug]
-            ?? $this->deviceCategoryIdBySlug['unknown']
-            ?? null;
-    }
-
-    protected function resolveBrowserId(string $slug): ?int
-    {
-        if ($this->browserIdBySlug === []) {
-            $this->browserIdBySlug = Browser::query()
-                ->pluck('id', 'slug')
-                ->map(fn ($id) => (int) $id)
-                ->toArray();
-        }
-
-        return $this->browserIdBySlug[$slug]
-            ?? $this->browserIdBySlug['unknown']
-            ?? null;
-    }
-
     protected function extractRequestOrigin(Request $request): ?string
     {
         $origin = $request->headers->get('Origin');
@@ -688,6 +751,408 @@ class TrackingController extends Controller
     protected function originsMatch(string $allowedOrigin, string $requestOrigin): bool
     {
         return hash_equals($allowedOrigin, $requestOrigin);
+    }
+
+    /**
+     * @return array{id:int,user_id:int,code:string,name:?string,allowed_origin:string}|null
+     */
+    protected function resolveCampaignContext(int $userId, int $campaignId, string $campaignCode): ?array
+    {
+        $redis = $this->trackingRedis();
+        $campaignKey = $this->trackingCampaignKey($campaignId);
+        $cached = $this->decodeRedisJson($redis->get($campaignKey));
+
+        if (is_array($cached)) {
+            $cachedUserId = (int) ($cached['user_id'] ?? 0);
+            $cachedCode = (string) ($cached['code'] ?? '');
+
+            if ($cachedUserId === $userId && $cachedCode !== '' && hash_equals($cachedCode, $campaignCode)) {
+                return [
+                    'id' => (int) ($cached['id'] ?? $campaignId),
+                    'user_id' => $cachedUserId,
+                    'code' => $cachedCode,
+                    'name' => isset($cached['name']) ? (string) $cached['name'] : null,
+                    'allowed_origin' => (string) ($cached['allowed_origin'] ?? ''),
+                ];
+            }
+        }
+
+        $campaign = Campaign::query()
+            ->where('id', $campaignId)
+            ->where('user_id', $userId)
+            ->where('code', $campaignCode)
+            ->first(['id', 'user_id', 'code', 'name', 'product_url']);
+
+        if (!$campaign) {
+            return null;
+        }
+
+        $payload = [
+            'id' => (int) $campaign->id,
+            'user_id' => (int) $campaign->user_id,
+            'code' => (string) $campaign->code,
+            'name' => $campaign->name !== null ? (string) $campaign->name : null,
+            'allowed_origin' => (string) Campaign::normalizeProductUrl((string) $campaign->product_url),
+        ];
+
+        $redis->setex(
+            $campaignKey,
+            $this->trackingCampaignTtlSeconds(),
+            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+
+        return $payload;
+    }
+
+    /**
+     * @return array{pageview_code:string,visitor_code:string,visitor_id:int,last_collect_at_ms:int}|null
+     */
+    protected function resolveReusableCollectContext(
+        string $userCode,
+        string $campaignCode,
+        string $visitorCode,
+        int $nowMs
+    ): ?array {
+        if ($visitorCode === '') {
+            return null;
+        }
+
+        $redis = $this->trackingRedis();
+        $lastKey = $this->trackingLastCollectKey($userCode, $campaignCode, $visitorCode);
+        $payload = $this->decodeRedisJson($redis->get($lastKey));
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $pageviewCode = trim((string) ($payload['pageview_code'] ?? ''));
+        $cachedVisitorCode = trim((string) ($payload['visitor_code'] ?? ''));
+        $visitorId = (int) ($payload['visitor_id'] ?? 0);
+        $lastCollectAtMs = (int) ($payload['last_collect_at_ms'] ?? 0);
+        if ($pageviewCode === '' || $cachedVisitorCode === '' || $visitorId < 1 || $lastCollectAtMs < 1) {
+            return null;
+        }
+
+        $elapsedMs = $nowMs - $lastCollectAtMs;
+        if ($elapsedMs < 0 || $elapsedMs > ($this->trackingDedupWindowSeconds() * 1000)) {
+            return null;
+        }
+
+        $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        if ($redis->get($pvKey) === null) {
+            return null;
+        }
+
+        return [
+            'pageview_code' => $pageviewCode,
+            'visitor_code' => $cachedVisitorCode,
+            'visitor_id' => $visitorId,
+            'last_collect_at_ms' => $lastCollectAtMs,
+        ];
+    }
+
+    protected function touchReusableCollectContext(
+        string $userCode,
+        string $campaignCode,
+        string $visitorCode,
+        string $pageviewCode,
+        int $nowMs,
+        bool $hitUpdated
+    ): void {
+        $redis = $this->trackingRedis();
+        $ttl = $this->trackingPageviewTtlSeconds();
+        $lastKey = $this->trackingLastCollectKey($userCode, $campaignCode, $visitorCode);
+        $lastPayload = $this->decodeRedisJson($redis->get($lastKey));
+
+        if (!is_array($lastPayload)) {
+            $lastPayload = [
+                'pageview_code' => $pageviewCode,
+                'visitor_code' => $visitorCode,
+                'visitor_id' => 0,
+                'last_collect_at_ms' => $nowMs,
+                'last_hit_at_ms' => $hitUpdated ? $nowMs : 0,
+            ];
+        }
+
+        $lastPayload['last_collect_at_ms'] = $nowMs;
+        if ($hitUpdated) {
+            $lastPayload['last_hit_at_ms'] = $nowMs;
+        }
+
+        $redis->setex(
+            $lastKey,
+            $ttl,
+            json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+
+        $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        $pvPayload = $this->decodeRedisJson($redis->get($pvKey));
+        if (!is_array($pvPayload)) {
+            return;
+        }
+
+        $timing = is_array($pvPayload['timing'] ?? null) ? $pvPayload['timing'] : [];
+        $timing['last_collect_at_ms'] = $nowMs;
+        if ($hitUpdated) {
+            $timing['last_hit_at_ms'] = $nowMs;
+        }
+        $pvPayload['timing'] = $timing;
+
+        $redis->setex(
+            $pvKey,
+            $ttl,
+            json_encode($pvPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    /**
+     * Persiste contexto resolvido do collect para reuso em próximos requests.
+     *
+     * @param array{id:int,user_id:int,code:string,name:?string,allowed_origin:string} $campaign
+     */
+    protected function persistCollectContext(
+        array $campaign,
+        Pageview $pageview,
+        string $userCode,
+        string $campaignCode,
+        string $pageviewCode,
+        string $visitorCode,
+        int $visitorId,
+        int $nowMs
+    ): void {
+        $redis = $this->trackingRedis();
+        $ttl = $this->trackingPageviewTtlSeconds();
+        $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        $lastKey = $this->trackingLastCollectKey($userCode, $campaignCode, $visitorCode);
+
+        $payload = [
+            'v' => 1,
+            'campanha' => [
+                'id' => (int) $campaign['id'],
+                'nome' => $campaign['name'],
+                'user_id' => (int) $campaign['user_id'],
+                'code' => (string) $campaign['code'],
+            ],
+            'pageview' => $pageview->toArray(),
+            'timing' => [
+                'last_collect_at_ms' => $nowMs,
+                'last_hit_at_ms' => $nowMs,
+            ],
+        ];
+
+        $lastPayload = [
+            'pageview_code' => $pageviewCode,
+            'visitor_code' => $visitorCode,
+            'visitor_id' => $visitorId,
+            'last_collect_at_ms' => $nowMs,
+            'last_hit_at_ms' => $nowMs,
+        ];
+
+        $redis->setex(
+            $pvKey,
+            $ttl,
+            json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+        $redis->setex(
+            $lastKey,
+            $ttl,
+            json_encode($lastPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+
+        $this->touchHitGate((int) $campaign['id'], $visitorId, $nowMs);
+    }
+
+    protected function shouldIncrementHitByThrottle(int $campaignId, int $visitorId, int $nowMs): bool
+    {
+        $redis = $this->trackingRedis();
+        $hitGateKey = $this->trackingHitGateKey($campaignId, $visitorId);
+        $lastHitMs = (int) $redis->get($hitGateKey);
+        if ($lastHitMs < 1) {
+            return true;
+        }
+
+        $elapsedMs = $nowMs - $lastHitMs;
+
+        return $elapsedMs >= ($this->trackingMinHitIntervalSeconds() * 1000);
+    }
+
+    protected function touchHitGate(int $campaignId, int $visitorId, int $nowMs): void
+    {
+        $redis = $this->trackingRedis();
+        $ttl = $this->trackingHitGateTtlSeconds();
+
+        $redis->setex(
+            $this->trackingHitGateKey($campaignId, $visitorId),
+            $ttl,
+            (string) $nowMs
+        );
+    }
+
+    protected function upsertCampaignVisitorHit(int $campaignId, int $visitorId, \Illuminate\Support\Carbon $now, int $nowMs): void
+    {
+        DB::statement(
+            'INSERT INTO campaign_visitors
+                (campaign_id, visitor_id, first_seen_at, last_seen_at, hits, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 1, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                last_seen_at = VALUES(last_seen_at),
+                hits = hits + 1,
+                updated_at = VALUES(updated_at)',
+            [
+                $campaignId,
+                $visitorId,
+                $nowMs,
+                $nowMs,
+                $now,
+                $now,
+            ]
+        );
+    }
+
+    protected function trackingRedis(): \Illuminate\Redis\Connections\Connection
+    {
+        return Redis::connection((string) config('tracking.redis.connection', 'tracking'));
+    }
+
+    protected function trackingPrefix(): string
+    {
+        return trim((string) config('tracking.redis.prefix', 'tracking'));
+    }
+
+    protected function trackingCampaignTtlSeconds(): int
+    {
+        return max((int) config('tracking.redis.campaign_ttl_seconds', 86400), 60);
+    }
+
+    protected function trackingPageviewTtlSeconds(): int
+    {
+        return max((int) config('tracking.redis.pageview_ttl_seconds', 3600), 60);
+    }
+
+    protected function trackingDedupWindowSeconds(): int
+    {
+        return max((int) config('tracking.collect.dedup_window_seconds', 300), 1);
+    }
+
+    protected function trackingMinHitIntervalSeconds(): int
+    {
+        return max((int) config('tracking.collect.min_hit_interval_seconds', 30), 1);
+    }
+
+    protected function trackingHitGateTtlSeconds(): int
+    {
+        return max((int) config('tracking.collect.hit_gate_ttl_seconds', 90), 10);
+    }
+
+    protected function trackingLogsEnabled(): bool
+    {
+        return (bool) config('tracking.logs.enabled', true);
+    }
+
+    protected function trackingLogChannel(string $channel): string
+    {
+        return $this->trackingLogsEnabled() ? $channel : 'null';
+    }
+
+    protected function trackingCampaignKey(int $campaignId): string
+    {
+        return $this->trackingPrefix() . ':campaign:' . $campaignId;
+    }
+
+    protected function trackingPageviewKey(string $userCode, string $campaignCode, string $pageviewCode): string
+    {
+        return $this->trackingPrefix() . ':pv:' . $userCode . ':' . $campaignCode . ':' . $pageviewCode;
+    }
+
+    protected function trackingLastCollectKey(string $userCode, string $campaignCode, string $visitorCode): string
+    {
+        return $this->trackingPrefix() . ':last:' . $userCode . ':' . $campaignCode . ':' . $visitorCode;
+    }
+
+    protected function trackingHitGateKey(int $campaignId, int $visitorId): string
+    {
+        return $this->trackingPrefix() . ':hit_gate:' . $campaignId . ':' . $visitorId;
+    }
+
+    protected function decodeRedisJson(mixed $payload): ?array
+    {
+        if (!is_string($payload) || trim($payload) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($payload, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Resolve contexto do endpoint event exclusivamente via Redis.
+     *
+     * @return array{user_id:int,campaign_id:int,pageview_id:int,allowed_origin:string}|null
+     */
+    protected function resolveEventContextFromRedis(
+        string $userCode,
+        string $campaignCode,
+        string $pageviewCode,
+        int $userIdFromCode,
+        int $campaignIdFromCode,
+        int $pageviewIdFromCode
+    ): ?array {
+        $redis = $this->trackingRedis();
+
+        $pvKey = $this->trackingPageviewKey($userCode, $campaignCode, $pageviewCode);
+        $pvPayload = $this->decodeRedisJson($redis->get($pvKey));
+        if (!is_array($pvPayload)) {
+            return null;
+        }
+
+        $campaignFromPv = is_array($pvPayload['campanha'] ?? null) ? $pvPayload['campanha'] : [];
+        $pageviewFromPv = is_array($pvPayload['pageview'] ?? null) ? $pvPayload['pageview'] : [];
+
+        $campaignId = (int) ($campaignFromPv['id'] ?? 0);
+        $campaignUserId = (int) ($campaignFromPv['user_id'] ?? 0);
+        $campaignCodeFromPv = trim((string) ($campaignFromPv['code'] ?? ''));
+        $pageviewId = (int) ($pageviewFromPv['id'] ?? 0);
+
+        if (
+            $campaignId < 1
+            || $campaignUserId < 1
+            || $pageviewId < 1
+            || $campaignId !== $campaignIdFromCode
+            || $campaignUserId !== $userIdFromCode
+            || $pageviewId !== $pageviewIdFromCode
+            || $campaignCodeFromPv === ''
+            || !hash_equals($campaignCodeFromPv, $campaignCode)
+        ) {
+            return null;
+        }
+
+        $campaignKey = $this->trackingCampaignKey($campaignId);
+        $campaignPayload = $this->decodeRedisJson($redis->get($campaignKey));
+        if (!is_array($campaignPayload)) {
+            return null;
+        }
+
+        $allowedOrigin = trim((string) ($campaignPayload['allowed_origin'] ?? ''));
+        $campaignCodeCached = trim((string) ($campaignPayload['code'] ?? ''));
+        $campaignUserCached = (int) ($campaignPayload['user_id'] ?? 0);
+
+        if (
+            $campaignCodeCached === ''
+            || $campaignUserCached !== $userIdFromCode
+            || !hash_equals($campaignCodeCached, $campaignCode)
+        ) {
+            return null;
+        }
+
+        return [
+            'user_id' => $campaignUserId,
+            'campaign_id' => $campaignId,
+            'pageview_id' => $pageviewId,
+            'allowed_origin' => $allowedOrigin,
+        ];
     }
 
     //Retorna o script de acompanhamento

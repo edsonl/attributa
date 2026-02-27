@@ -15,6 +15,7 @@ use App\Models\GoogleAdsAccount;
 use App\Models\Pageview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -234,6 +235,7 @@ class CampaignController extends Controller
         ]);
 
         $campaign->countries()->sync($data['countries'] ?? []);
+        $this->invalidateTrackingCampaignCache((int) $campaign->id);
 
         return redirect()
             ->route('panel.campaigns.index')
@@ -245,6 +247,8 @@ class CampaignController extends Controller
      */
     public function destroy(Campaign $campaign)
     {
+        $campaignId = (int) $campaign->id;
+
         DB::transaction(function () use ($campaign) {
             Pageview::query()
                 ->where('campaign_id', (int) $campaign->id)
@@ -253,6 +257,8 @@ class CampaignController extends Controller
 
             $campaign->delete();
         });
+
+        $this->invalidateTrackingCampaignCache($campaignId);
 
         return redirect()
             ->route('panel.campaigns.index')
@@ -305,6 +311,7 @@ class CampaignController extends Controller
 
         $campaign->campaign_status_id = $targetStatus->id;
         $campaign->save();
+        $this->invalidateTrackingCampaignCache((int) $campaign->id);
 
         return response()->json([
             'message' => 'Status da campanha atualizado com sucesso.',
@@ -334,6 +341,7 @@ class CampaignController extends Controller
 
         $campaign->campaign_status_id = $targetStatus->id;
         $campaign->save();
+        $this->invalidateTrackingCampaignCache((int) $campaign->id);
 
         return response()->json([
             'message' => 'Status da campanha atualizado com sucesso.',
@@ -431,5 +439,21 @@ class CampaignController extends Controller
                 'label' => $status->name,
                 'tooltip' => $status->description ?: ('Status: ' . $status->name),
             ]);
+    }
+
+    /**
+     * Invalida o cache Redis de metadados da campanha usado no tracking collect.
+     */
+    protected function invalidateTrackingCampaignCache(int $campaignId): void
+    {
+        if ($campaignId < 1) {
+            return;
+        }
+
+        $connection = (string) config('tracking.redis.connection', 'tracking');
+        $prefix = trim((string) config('tracking.redis.prefix', 'tracking'));
+        $key = $prefix . ':campaign:' . $campaignId;
+
+        Redis::connection($connection)->del($key);
     }
 }

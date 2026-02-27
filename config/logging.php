@@ -157,6 +157,12 @@ return [
             'level' => 'warning',
         ],
 
+        'tracking_event_ignored' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/tracking-event-ignored.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];
