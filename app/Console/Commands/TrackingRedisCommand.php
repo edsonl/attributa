@@ -78,11 +78,12 @@ class TrackingRedisCommand extends Command
             );
 
             foreach ($keys as $key) {
-                $value = $redis->get($key);
+                $logicalKey = $this->logicalRedisKey((string) $key);
+                $value = $redis->get($logicalKey);
                 $rows[] = [
                     'type' => $type,
-                    'key' => $key,
-                    'ttl' => (int) $redis->ttl($key),
+                    'key' => $logicalKey,
+                    'ttl' => (int) $redis->ttl($logicalKey),
                     'bytes' => is_string($value) ? strlen($value) : 0,
                     'preview' => $this->previewValue($value),
                 ];
@@ -141,7 +142,7 @@ class TrackingRedisCommand extends Command
 
     protected function handleShow($redis): int
     {
-        $key = trim((string) $this->option('key'));
+        $key = $this->logicalRedisKey(trim((string) $this->option('key')));
         if ($key === '') {
             $this->error('Informe --key para acao show.');
 
@@ -192,8 +193,12 @@ class TrackingRedisCommand extends Command
         foreach ($patternsByType as $type => $pattern) {
             [$keys] = $this->scanKeys($redis, $pattern, $scanCount);
             $deleted = 0;
+            $logicalKeys = array_map(
+                fn (string $key) => $this->logicalRedisKey($key),
+                $keys
+            );
 
-            foreach (array_chunk($keys, 500) as $chunk) {
+            foreach (array_chunk($logicalKeys, 500) as $chunk) {
                 if ($chunk === []) {
                     continue;
                 }
@@ -228,34 +233,49 @@ class TrackingRedisCommand extends Command
      */
     protected function scanKeys($redis, string $pattern, int $scanCount, ?int $limit = null, int $startCursor = 0): array
     {
-        $cursor = max($startCursor, 0);
         $keys = [];
+        $seen = [];
         $total = 0;
+        $patterns = $this->expandScanPatterns($pattern);
 
-        do {
-            $response = $redis->scan($cursor, [
-                'match' => $pattern,
-                'count' => $scanCount,
-            ]);
+        foreach ($patterns as $scanPattern) {
+            $cursor = max($startCursor, 0);
 
-            if ($response === false || !is_array($response) || count($response) < 2) {
-                break;
-            }
+            do {
+                $response = $redis->scan($cursor, [
+                    'match' => $scanPattern,
+                    'count' => $scanCount,
+                ]);
 
-            $cursor = (int) ($response[0] ?? 0);
-            $batch = is_array($response[1] ?? null) ? $response[1] : [];
-
-            foreach ($batch as $key) {
-                $total++;
-                if ($limit === null || count($keys) < $limit) {
-                    $keys[] = (string) $key;
+                if (!is_array($response) || count($response) < 2) {
+                    break;
                 }
-            }
+
+                $cursor = (int) ($response[0] ?? 0);
+                $batch = is_array($response[1] ?? null) ? $response[1] : [];
+
+                foreach ($batch as $key) {
+                    $rawKey = (string) $key;
+                    if (isset($seen[$rawKey])) {
+                        continue;
+                    }
+                    $seen[$rawKey] = true;
+                    $total++;
+
+                    if ($limit === null || count($keys) < $limit) {
+                        $keys[] = $rawKey;
+                    }
+                }
+
+                if ($limit !== null && count($keys) >= $limit) {
+                    break;
+                }
+            } while ($cursor !== 0);
 
             if ($limit !== null && count($keys) >= $limit) {
                 break;
             }
-        } while ($cursor !== 0);
+        }
 
         return [$keys, $total];
     }
@@ -315,5 +335,38 @@ class TrackingRedisCommand extends Command
         }
 
         return $decoded;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function expandScanPatterns(string $pattern): array
+    {
+        $patterns = [trim($pattern)];
+        $globalPrefix = (string) config('database.redis.options.prefix', '');
+
+        if ($globalPrefix !== '') {
+            $prefixed = $globalPrefix . $pattern;
+            if (!in_array($prefixed, $patterns, true)) {
+                $patterns[] = $prefixed;
+            }
+        }
+
+        return array_values(array_filter($patterns, fn (string $item) => $item !== ''));
+    }
+
+    protected function logicalRedisKey(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return '';
+        }
+
+        $globalPrefix = (string) config('database.redis.options.prefix', '');
+        if ($globalPrefix !== '' && str_starts_with($key, $globalPrefix)) {
+            return substr($key, strlen($globalPrefix));
+        }
+
+        return $key;
     }
 }
