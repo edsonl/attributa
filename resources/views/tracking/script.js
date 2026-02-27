@@ -1,7 +1,7 @@
 (function () {
     // evita execução dupla
-    if (window.__ATTRIBUTA_PAGEVIEW_SENT__) return;
-    window.__ATTRIBUTA_PAGEVIEW_SENT__ = true;
+    if (window.__LEADNODE_PAGEVIEW_SENT__) return;
+    window.__LEADNODE_PAGEVIEW_SENT__ = true;
 
     // Tokens definidos no backend (pode vir null)
     var USER_CODE = '{USER_CODE}';
@@ -13,7 +13,7 @@
 
     // Validação final
     if (!USER_CODE || !CAMPAIGN_CODE || !AUTH_TS || !AUTH_NONCE || !AUTH_SIG) {
-        console.warn('[Attributa] Dados de autenticação do tracking não informados');
+        console.warn('[LEADNODE] Dados de autenticação do tracking não informados');
         return;
     }
 
@@ -338,8 +338,8 @@
     // Eventos de interação (link click / form submit)
     // ==============================================
     function initInteractionTracking(paramKeys, currentNavigationType) {
-        if (window.__ATTRIBUTA_EVENTS_INIT__) return;
-        window.__ATTRIBUTA_EVENTS_INIT__ = true;
+        if (window.__LEADNODE_EVENTS_INIT__) return;
+        window.__LEADNODE_EVENTS_INIT__ = true;
 
         var engagedSent = false;
         var interactionCount = 0;
