@@ -535,7 +535,7 @@ class TrackingRedisCommand extends Command
             }
         }
 
-        $database = (int) ($config['database'] ?? 0);
+        $database = 3;
         if ($redis->select($database) !== true) {
             throw new \RuntimeException('Não foi possível selecionar o banco Redis de tracking.');
         }
