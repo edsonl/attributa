@@ -1458,7 +1458,7 @@ class TrackingController extends Controller
                     ->first();
             }
 
-            echo trim((string) $request->query('c'))."\n";
+            echo "Código: ",$composedCode,"<br/>";
     
             echo $decodedUserId,' - '."/n";
             echo $decodedCampaignId,' - '."/n";
