@@ -7,14 +7,14 @@ use Illuminate\Support\Facades\Redis;
 
 class TrackingRedisCommand extends Command
 {
-    protected $aliases = ['tracking:redis'];
+    protected $aliases = ['tracking:campaign', 'tracking:pv', 'tracking:last', 'tracking:hit_gate', 'tracking:script', 'tracking:flush'];
 
-    protected $signature = 'tracking:campaign
-        {action : Acao: list|count|show|clear}
-        {--type=all : Tipo de chave: campaign|pv|last|hit_gate|script_template|all}
+    protected $signature = 'tracking:redis
+        {action? : Acao: list|count|show|clear}
+        {--type= : Tipo de chave: campaign|pv|last|hit_gate|script|all}
         {--key= : Chave completa para acao show}
         {--pattern= : Pattern customizado (sobrescreve o tipo)}
-        {--limit= : Limite de registros na listagem (padrao: 10)}
+        {--limit= : Limite de registros na listagem (padrao: 20)}
         {--cursor=0 : Cursor inicial para listagem}
         {--scan-count=500 : Hint de volume por iteracao do SCAN}
         {--force : Necessario para acao clear}
@@ -22,12 +22,13 @@ class TrackingRedisCommand extends Command
 
     protected $description = 'Inspeciona e gerencia chaves Redis do tracking (list, count, show, clear)';
 
-    private const TYPES = ['campaign', 'pv', 'last', 'hit_gate', 'script_template', 'all'];
+    private const TYPES = ['campaign', 'pv', 'last', 'hit_gate', 'script', 'all'];
 
     public function handle(): int
     {
-        $action = strtolower(trim((string) $this->argument('action')));
-        $type = strtolower(trim((string) $this->option('type')));
+        $invokedCommand = $this->invokedCommandName();
+        $action = $this->resolveAction($invokedCommand);
+        $type = $this->resolveCommandType();
         $scanCount = max((int) $this->option('scan-count'), 10);
 
         if (!in_array($action, ['list', 'count', 'show', 'clear'], true)) {
@@ -37,7 +38,7 @@ class TrackingRedisCommand extends Command
         }
 
         if (!in_array($type, self::TYPES, true)) {
-            $this->error('Tipo invalido. Use: campaign, pv, last, hit_gate, script_template ou all.');
+            $this->error('Tipo invalido. Use: campaign, pv, last, hit_gate, script ou all.');
 
             return self::FAILURE;
         }
@@ -58,7 +59,7 @@ class TrackingRedisCommand extends Command
     {
         $limitOption = $this->option('limit');
         $limit = ($limitOption === null || trim((string) $limitOption) === '')
-            ? 10
+            ? 20
             : max((int) $limitOption, 1);
         $startCursor = max((int) $this->option('cursor'), 0);
         $remaining = $limit;
@@ -181,7 +182,7 @@ class TrackingRedisCommand extends Command
 
     protected function handleClear($redis, array $patternsByType, int $scanCount): int
     {
-        if (!(bool) $this->option('force')) {
+        if ($this->invokedCommandName() !== 'tracking:flush' && !(bool) $this->option('force')) {
             $this->warn('Acao clear exige --force.');
 
             return self::FAILURE;
@@ -295,7 +296,7 @@ class TrackingRedisCommand extends Command
             'pv' => $prefix . ':pv:*',
             'last' => $prefix . ':last:*',
             'hit_gate' => $prefix . ':hit_gate:*',
-            'script_template' => $prefix . ':script:template:*',
+            'script' => $prefix . ':script:template:*',
         ];
 
         if ($type === 'all') {
@@ -303,6 +304,41 @@ class TrackingRedisCommand extends Command
         }
 
         return [$type => $base[$type]];
+    }
+
+    protected function resolveCommandType(): string
+    {
+        $optionType = strtolower(trim((string) $this->option('type')));
+        if ($optionType !== '') {
+            return $optionType;
+        }
+
+        $invokedCommand = $this->invokedCommandName();
+
+        return match ($invokedCommand) {
+            'tracking:campaign' => 'campaign',
+            'tracking:pv' => 'pv',
+            'tracking:last' => 'last',
+            'tracking:hit_gate' => 'hit_gate',
+            'tracking:script' => 'script',
+            default => 'all',
+        };
+    }
+
+    protected function resolveAction(string $invokedCommand): string
+    {
+        if ($invokedCommand === 'tracking:flush') {
+            return 'clear';
+        }
+
+        $action = strtolower(trim((string) ($this->argument('action') ?? 'list')));
+
+        return $action === '' ? 'list' : $action;
+    }
+
+    protected function invokedCommandName(): string
+    {
+        return strtolower(trim((string) ($_SERVER['argv'][1] ?? 'tracking:redis')));
     }
 
     protected function previewValue(mixed $value): string
