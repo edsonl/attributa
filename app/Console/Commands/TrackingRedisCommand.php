@@ -90,11 +90,11 @@ class TrackingRedisCommand extends Command
 
             foreach ($keys as $key) {
                 $logicalKey = $this->logicalRedisKey((string) $key);
-                $value = $redis->get($logicalKey);
+                $value = $this->redisGet($redis, (string) $key);
                 $rows[] = [
                     'type' => $type,
                     'key' => $logicalKey,
-                    'ttl' => (int) $redis->ttl($logicalKey),
+                    'ttl' => $this->redisTtl($redis, (string) $key),
                     'bytes' => is_string($value) ? strlen($value) : 0,
                     'preview' => $this->previewValue($value),
                 ];
@@ -153,24 +153,25 @@ class TrackingRedisCommand extends Command
 
     protected function handleShow($redis): int
     {
-        $key = $this->logicalRedisKey(trim((string) $this->option('key')));
-        if ($key === '') {
+        $inputKey = trim((string) $this->option('key'));
+        if ($inputKey === '') {
             $this->error('Informe --key para acao show.');
 
             return self::FAILURE;
         }
 
-        if (!$redis->exists($key)) {
-            $this->warn('Chave nao encontrada: ' . $key);
+        $resolvedKey = $this->resolveRedisKey($redis, $inputKey);
+        if ($resolvedKey === null) {
+            $this->warn('Chave nao encontrada: ' . $this->logicalRedisKey($inputKey));
 
             return self::SUCCESS;
         }
 
-        $value = $redis->get($key);
+        $value = $redis->get($resolvedKey);
         $decoded = $this->decodeJson($value);
         $payload = [
-            'key' => $key,
-            'ttl' => (int) $redis->ttl($key),
+            'key' => $this->logicalRedisKey($resolvedKey),
+            'ttl' => (int) $redis->ttl($resolvedKey),
             'bytes' => is_string($value) ? strlen($value) : 0,
             'value' => $decoded ?? $value,
         ];
@@ -204,12 +205,8 @@ class TrackingRedisCommand extends Command
         foreach ($patternsByType as $type => $pattern) {
             [$keys] = $this->scanKeys($redis, $pattern, $scanCount);
             $deleted = 0;
-            $logicalKeys = array_map(
-                fn (string $key) => $this->logicalRedisKey($key),
-                $keys
-            );
 
-            foreach (array_chunk($logicalKeys, 500) as $chunk) {
+            foreach (array_chunk($keys, 500) as $chunk) {
                 if ($chunk === []) {
                     continue;
                 }
@@ -390,13 +387,18 @@ class TrackingRedisCommand extends Command
     protected function expandScanPatterns(string $pattern): array
     {
         $patterns = [trim($pattern)];
-        $globalPrefix = (string) config('database.redis.options.prefix', '');
+        $globalPrefix = $this->redisGlobalPrefix();
 
         if ($globalPrefix !== '') {
             $prefixed = $globalPrefix . $pattern;
             if (!in_array($prefixed, $patterns, true)) {
                 $patterns[] = $prefixed;
             }
+        }
+
+        $wildcardPrefixed = '*' . ltrim($pattern, '*');
+        if (!in_array($wildcardPrefixed, $patterns, true)) {
+            $patterns[] = $wildcardPrefixed;
         }
 
         return array_values(array_filter($patterns, fn (string $item) => $item !== ''));
@@ -409,11 +411,67 @@ class TrackingRedisCommand extends Command
             return '';
         }
 
-        $globalPrefix = (string) config('database.redis.options.prefix', '');
+        $globalPrefix = $this->redisGlobalPrefix();
         if ($globalPrefix !== '' && str_starts_with($key, $globalPrefix)) {
             return substr($key, strlen($globalPrefix));
         }
 
         return $key;
+    }
+
+    protected function redisGlobalPrefix(): string
+    {
+        $prefix = trim((string) config('database.redis.options.prefix', ''));
+        if ($prefix !== '') {
+            return $prefix;
+        }
+
+        return trim((string) env('REDIS_PREFIX', ''));
+    }
+
+    protected function resolveRedisKey($redis, string $key): ?string
+    {
+        foreach ($this->candidateRedisKeys($key) as $candidate) {
+            if ($candidate !== '' && (int) $redis->exists($candidate) > 0) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    protected function candidateRedisKeys(string $key): array
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return [];
+        }
+
+        $globalPrefix = $this->redisGlobalPrefix();
+        $logicalKey = $this->logicalRedisKey($key);
+        $candidates = [$key, $logicalKey];
+
+        if ($globalPrefix !== '') {
+            $prefixedKey = $globalPrefix . $logicalKey;
+            if (!in_array($prefixedKey, $candidates, true)) {
+                $candidates[] = $prefixedKey;
+            }
+        }
+
+        return array_values(array_unique(array_filter($candidates, fn (string $item) => $item !== '')));
+    }
+
+    protected function redisGet($redis, string $key): mixed
+    {
+        $resolvedKey = $this->resolveRedisKey($redis, $key);
+
+        return $resolvedKey !== null ? $redis->get($resolvedKey) : null;
+    }
+
+    protected function redisTtl($redis, string $key): int
+    {
+        $resolvedKey = $this->resolveRedisKey($redis, $key);
+
+        return $resolvedKey !== null ? (int) $redis->ttl($resolvedKey) : -2;
     }
 }
