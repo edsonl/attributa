@@ -167,11 +167,11 @@ class TrackingRedisCommand extends Command
             return self::SUCCESS;
         }
 
-        $value = $redis->get($resolvedKey);
+        $value = $this->rawGet($redis, $resolvedKey);
         $decoded = $this->decodeJson($value);
         $payload = [
             'key' => $this->logicalRedisKey($resolvedKey),
-            'ttl' => (int) $redis->ttl($resolvedKey),
+            'ttl' => $this->rawTtl($redis, $resolvedKey),
             'bytes' => is_string($value) ? strlen($value) : 0,
             'value' => $decoded ?? $value,
         ];
@@ -210,7 +210,7 @@ class TrackingRedisCommand extends Command
                 if ($chunk === []) {
                     continue;
                 }
-                $deleted += (int) $redis->command('del', $chunk);
+                $deleted += $this->rawDel($redis, $chunk);
             }
 
             $rows[] = [
@@ -250,10 +250,7 @@ class TrackingRedisCommand extends Command
             $cursor = max($startCursor, 0);
 
             do {
-                $response = $redis->scan($cursor, [
-                    'match' => $scanPattern,
-                    'count' => $scanCount,
-                ]);
+                $response = $this->rawScan($redis, $cursor, $scanPattern, $scanCount);
 
                 if (!is_array($response) || count($response) < 2) {
                     break;
@@ -432,7 +429,7 @@ class TrackingRedisCommand extends Command
     protected function resolveRedisKey($redis, string $key): ?string
     {
         foreach ($this->candidateRedisKeys($key) as $candidate) {
-            if ($candidate !== '' && (int) $redis->exists($candidate) > 0) {
+            if ($candidate !== '' && $this->rawExists($redis, $candidate)) {
                 return $candidate;
             }
         }
@@ -465,13 +462,64 @@ class TrackingRedisCommand extends Command
     {
         $resolvedKey = $this->resolveRedisKey($redis, $key);
 
-        return $resolvedKey !== null ? $redis->get($resolvedKey) : null;
+        return $resolvedKey !== null ? $this->rawGet($redis, $resolvedKey) : null;
     }
 
     protected function redisTtl($redis, string $key): int
     {
         $resolvedKey = $this->resolveRedisKey($redis, $key);
 
-        return $resolvedKey !== null ? (int) $redis->ttl($resolvedKey) : -2;
+        return $resolvedKey !== null ? $this->rawTtl($redis, $resolvedKey) : -2;
+    }
+
+    protected function rawScan($redis, int $cursor, string $pattern, int $scanCount): array|false
+    {
+        return $this->withRawPrefixDisabled($redis, function ($client) use ($cursor, $pattern, $scanCount) {
+            $result = $client->scan($cursor, $pattern, $scanCount);
+
+            if ($result === false) {
+                $result = [];
+            }
+
+            return $cursor === 0 && empty($result) ? false : [$cursor, $result];
+        });
+    }
+
+    protected function rawGet($redis, string $key): mixed
+    {
+        return $this->withRawPrefixDisabled($redis, fn ($client) => $client->get($key));
+    }
+
+    protected function rawTtl($redis, string $key): int
+    {
+        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->ttl($key));
+    }
+
+    protected function rawExists($redis, string $key): bool
+    {
+        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->exists($key)) > 0;
+    }
+
+    protected function rawDel($redis, array $keys): int
+    {
+        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->del(...$keys));
+    }
+
+    protected function withRawPrefixDisabled($redis, callable $callback): mixed
+    {
+        $client = method_exists($redis, 'client') ? $redis->client() : null;
+        if (!$client instanceof \Redis) {
+            return $callback($client ?? $redis);
+        }
+
+        $originalPrefix = $client->getOption(\Redis::OPT_PREFIX);
+
+        try {
+            $client->setOption(\Redis::OPT_PREFIX, '');
+
+            return $callback($client);
+        } finally {
+            $client->setOption(\Redis::OPT_PREFIX, $originalPrefix);
+        }
     }
 }
