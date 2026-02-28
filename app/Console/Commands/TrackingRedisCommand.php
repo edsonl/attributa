@@ -443,7 +443,7 @@ class TrackingRedisCommand extends Command
             return [];
         }
 
-        $globalPrefix = $this->redisGlobalPrefix();
+        $globalPrefix = 'ld:';
         $logicalKey = $this->logicalRedisKey($key);
         $candidates = [$key, $logicalKey];
 
@@ -513,18 +513,15 @@ class TrackingRedisCommand extends Command
         $config = $this->trackingRedisConfig();
         $redis = new \Redis();
 
-        $host = (string) ($config['host'] ?? '127.0.0.1');
-        $port = (int) ($config['port'] ?? 6379);
-        $timeout = isset($config['read_timeout']) ? (float) $config['read_timeout'] : 2.5;
-
+        $host = '127.0.0.1';
+        $port =  6379;
+        $timeout =  2.5;
         $connected = $redis->connect($host, $port, $timeout);
         if ($connected !== true) {
             throw new \RuntimeException('Não foi possível conectar ao Redis de tracking.');
         }
-
-        $password = $config['password'] ?? null;
-        $username = $config['username'] ?? null;
-
+        $password =  null;
+        $username =  null;
         if ($password !== null && $password !== '') {
             $authPayload = $username !== null && $username !== ''
                 ? [(string) $username, (string) $password]
