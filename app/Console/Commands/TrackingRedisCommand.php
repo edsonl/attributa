@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Redis;
 
 class TrackingRedisCommand extends Command
 {
@@ -53,7 +52,7 @@ class TrackingRedisCommand extends Command
             return self::FAILURE;
         }
 
-        $redis = Redis::connection((string) config('tracking.redis.connection', 'tracking'));
+        $redis = $this->createRedisClient();
         $patternsByType = $this->resolvePatternsByType($type, (string) $this->option('pattern'));
 
         return match ($action) {
@@ -426,7 +425,7 @@ class TrackingRedisCommand extends Command
         return trim((string) env('REDIS_PREFIX', ''));
     }
 
-    protected function resolveRedisKey($redis, string $key): ?string
+    protected function resolveRedisKey(\Redis $redis, string $key): ?string
     {
         foreach ($this->candidateRedisKeys($key) as $candidate) {
             if ($candidate !== '' && $this->rawExists($redis, $candidate)) {
@@ -458,68 +457,113 @@ class TrackingRedisCommand extends Command
         return array_values(array_unique(array_filter($candidates, fn (string $item) => $item !== '')));
     }
 
-    protected function redisGet($redis, string $key): mixed
+    protected function redisGet(\Redis $redis, string $key): mixed
     {
         $resolvedKey = $this->resolveRedisKey($redis, $key);
 
         return $resolvedKey !== null ? $this->rawGet($redis, $resolvedKey) : null;
     }
 
-    protected function redisTtl($redis, string $key): int
+    protected function redisTtl(\Redis $redis, string $key): int
     {
         $resolvedKey = $this->resolveRedisKey($redis, $key);
 
         return $resolvedKey !== null ? $this->rawTtl($redis, $resolvedKey) : -2;
     }
 
-    protected function rawScan($redis, int $cursor, string $pattern, int $scanCount): array|false
+    protected function rawScan(\Redis $redis, int &$cursor, string $pattern, int $scanCount): array|false
     {
-        return $this->withRawPrefixDisabled($redis, function ($client) use ($cursor, $pattern, $scanCount) {
-            $result = $client->scan($cursor, $pattern, $scanCount);
+        $result = $redis->scan($cursor, $pattern, $scanCount);
 
-            if ($result === false) {
-                $result = [];
+        if ($result === false) {
+            $result = [];
+        }
+
+        return $cursor === 0 && empty($result) ? false : [$cursor, $result];
+    }
+
+    protected function rawGet(\Redis $redis, string $key): mixed
+    {
+        $result = $redis->get($key);
+
+        return $result === false ? null : $result;
+    }
+
+    protected function rawTtl(\Redis $redis, string $key): int
+    {
+        return (int) $redis->ttl($key);
+    }
+
+    protected function rawExists(\Redis $redis, string $key): bool
+    {
+        return (int) $redis->exists($key) > 0;
+    }
+
+    protected function rawDel(\Redis $redis, array $keys): int
+    {
+        return (int) $redis->del(...$keys);
+    }
+
+    protected function createRedisClient(): \Redis
+    {
+        if (!class_exists(\Redis::class)) {
+            throw new \RuntimeException('A extensão phpredis não está instalada.');
+        }
+
+        $config = $this->trackingRedisConfig();
+        $redis = new \Redis();
+
+        $host = (string) ($config['host'] ?? '127.0.0.1');
+        $port = (int) ($config['port'] ?? 6379);
+        $timeout = isset($config['read_timeout']) ? (float) $config['read_timeout'] : 2.5;
+
+        $connected = $redis->connect($host, $port, $timeout);
+        if ($connected !== true) {
+            throw new \RuntimeException('Não foi possível conectar ao Redis de tracking.');
+        }
+
+        $password = $config['password'] ?? null;
+        $username = $config['username'] ?? null;
+
+        if ($password !== null && $password !== '') {
+            $authPayload = $username !== null && $username !== ''
+                ? [(string) $username, (string) $password]
+                : (string) $password;
+
+            if ($redis->auth($authPayload) !== true) {
+                throw new \RuntimeException('Falha na autenticação do Redis de tracking.');
             }
-
-            return $cursor === 0 && empty($result) ? false : [$cursor, $result];
-        });
-    }
-
-    protected function rawGet($redis, string $key): mixed
-    {
-        return $this->withRawPrefixDisabled($redis, fn ($client) => $client->get($key));
-    }
-
-    protected function rawTtl($redis, string $key): int
-    {
-        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->ttl($key));
-    }
-
-    protected function rawExists($redis, string $key): bool
-    {
-        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->exists($key)) > 0;
-    }
-
-    protected function rawDel($redis, array $keys): int
-    {
-        return (int) $this->withRawPrefixDisabled($redis, fn ($client) => $client->del(...$keys));
-    }
-
-    protected function withRawPrefixDisabled($redis, callable $callback): mixed
-    {
-        $client = method_exists($redis, 'client') ? $redis->client() : null;
-        if (!$client instanceof \Redis) {
-            return $callback($client ?? $redis);
         }
 
-        $originalPrefix = $client->getOption(\Redis::OPT_PREFIX);
-
-        try {
-            $client->setOption(\Redis::OPT_PREFIX, '');
-
-            return $callback($client);
-        } finally {
-            $client->setOption(\Redis::OPT_PREFIX, $originalPrefix);
+        $database = (int) ($config['database'] ?? 0);
+        if ($redis->select($database) !== true) {
+            throw new \RuntimeException('Não foi possível selecionar o banco Redis de tracking.');
         }
+
+        return $redis;
+    }
+
+    protected function trackingRedisConfig(): array
+    {
+        $connectionName = (string) config('tracking.redis.connection', 'tracking');
+        $config = config('database.redis.' . $connectionName);
+
+        if (is_array($config) && !empty($config['url'])) {
+            $parsed = parse_url((string) $config['url']);
+            if (is_array($parsed)) {
+                $config['host'] = $parsed['host'] ?? ($config['host'] ?? '127.0.0.1');
+                $config['port'] = $parsed['port'] ?? ($config['port'] ?? 6379);
+                $config['password'] = $parsed['pass'] ?? ($config['password'] ?? null);
+                $config['username'] = $parsed['user'] ?? ($config['username'] ?? null);
+                if (isset($parsed['path'])) {
+                    $path = trim((string) $parsed['path'], '/');
+                    if ($path !== '') {
+                        $config['database'] = (int) $path;
+                    }
+                }
+            }
+        }
+
+        return is_array($config) ? $config : [];
     }
 }
