@@ -1439,6 +1439,9 @@ class TrackingController extends Controller
     //Retorna o script de acompanhamento
     public function script(Request $request)
     {
+
+            $log = Log::channel($this->trackingLogChannel('tracking_collect'));
+             
             // Token composto vindo da URL (?c={user_code}-{campaign_code}).
             $composedCode = trim((string) $request->query('c'));
             [$userCode, $campaignCode] = $this->parseComposedTrackingCode($composedCode);
@@ -1446,11 +1449,8 @@ class TrackingController extends Controller
             $decodedUserId = app(HashidService::class)->decode($userCode);
             $decodedCampaignId = app(HashidService::class)->decode($campaignCode);
 
-
-           
-
             $campaign = null;
-            if ($decodedUserId && $decodedCampaignId) {
+            if ($decodedUserId && $decodedCampaignId && !empty($composedCode)) {
                 $campaign = Campaign::query()
                     ->with('affiliatePlatform:id,tracking_param_mapping')
                     ->where('id', $decodedCampaignId)
@@ -1459,22 +1459,10 @@ class TrackingController extends Controller
                     ->first();
             }
 
-            echo "Código: ",$composedCode,"<br/>";
-    
-            echo $decodedUserId,' - '."/n";
-            echo $decodedCampaignId,' - '."/n";
-            print_r($campaign);
-
-            dd([
-                'fullUrl' => $request->fullUrl(),
-                'query' => $request->query(),
-                'c' => $request->query('c'),
-                'query_string' => $_SERVER['QUERY_STRING'] ?? null,
-                'request_uri' => $_SERVER['REQUEST_URI'] ?? null,
-            ]);
-
-
-            exit();
+            //verificar query string
+            if(empty($composedCode)){
+                $log->warning('Composed code not found in request', []);
+            }
 
             // Só entrega o JS quando os tokens batem com uma campanha válida do usuário.
             if (!$campaign) {
