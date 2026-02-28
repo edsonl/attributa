@@ -11,7 +11,7 @@ class TrackingRedisCommand extends Command
 
     protected $signature = 'tracking:campaign
         {action : Acao: list|count|show|clear}
-        {--type=all : Tipo de chave: campaign|pv|last|hit_gate|all}
+        {--type=all : Tipo de chave: campaign|pv|last|hit_gate|script_template|all}
         {--key= : Chave completa para acao show}
         {--pattern= : Pattern customizado (sobrescreve o tipo)}
         {--limit= : Limite de registros na listagem (padrao: 10)}
@@ -22,7 +22,7 @@ class TrackingRedisCommand extends Command
 
     protected $description = 'Inspeciona e gerencia chaves Redis do tracking (list, count, show, clear)';
 
-    private const TYPES = ['campaign', 'pv', 'last', 'hit_gate', 'all'];
+    private const TYPES = ['campaign', 'pv', 'last', 'hit_gate', 'script_template', 'all'];
 
     public function handle(): int
     {
@@ -37,7 +37,7 @@ class TrackingRedisCommand extends Command
         }
 
         if (!in_array($type, self::TYPES, true)) {
-            $this->error('Tipo invalido. Use: campaign, pv, last, hit_gate ou all.');
+            $this->error('Tipo invalido. Use: campaign, pv, last, hit_gate, script_template ou all.');
 
             return self::FAILURE;
         }
@@ -295,6 +295,7 @@ class TrackingRedisCommand extends Command
             'pv' => $prefix . ':pv:*',
             'last' => $prefix . ':last:*',
             'hit_gate' => $prefix . ':hit_gate:*',
+            'script_template' => $prefix . ':script:template:*',
         ];
 
         if ($type === 'all') {

@@ -17,6 +17,7 @@
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "matomo/device-detector": "^6.5",
+        "tedivm/jshrink": "^1.8",
         "tightenco/ziggy": "^2.6"
     },
     "require-dev": {

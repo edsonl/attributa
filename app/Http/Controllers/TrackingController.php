@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use JShrink\Minifier;
+use Throwable;
 
 class TrackingController extends Controller
 {
@@ -1439,95 +1441,33 @@ class TrackingController extends Controller
     //Retorna o script de acompanhamento
     public function script(Request $request)
     {
+        $log = Log::channel($this->trackingLogChannel('tracking_collect'));
 
-            $log = Log::channel($this->trackingLogChannel('tracking_collect'));
-             
-            // Token composto vindo da URL (?c={user_code}-{campaign_code}).
-            $composedCode = trim((string) $request->query('c'));
-            [$userCode, $campaignCode] = $this->parseComposedTrackingCode($composedCode);
+        // Token composto vindo da URL (?c={user_code}-{campaign_code}).
+        $composedCode = trim((string) $request->query('c'));
+        [$userCode, $campaignCode] = $this->parseComposedTrackingCode($composedCode);
 
-            $decodedUserId = app(HashidService::class)->decode($userCode);
-            $decodedCampaignId = app(HashidService::class)->decode($campaignCode);
+        $decodedUserId = app(HashidService::class)->decode($userCode);
+        $decodedCampaignId = app(HashidService::class)->decode($campaignCode);
 
-            $campaign = null;
-            if ($decodedUserId && $decodedCampaignId && !empty($composedCode)) {
-                $campaign = Campaign::query()
-                    ->with('affiliatePlatform:id,tracking_param_mapping')
-                    ->where('id', $decodedCampaignId)
-                    ->where('user_id', $decodedUserId)
-                    ->where('code', $campaignCode)
-                    ->first();
-            }
+        $campaign = null;
+        if ($decodedUserId && $decodedCampaignId && $composedCode !== '') {
+            $campaign = Campaign::query()
+                ->with('affiliatePlatform:id,tracking_param_mapping')
+                ->where('id', $decodedCampaignId)
+                ->where('user_id', $decodedUserId)
+                ->where('code', $campaignCode)
+                ->first();
+        }
 
-            //verificar query string
-            if(empty($composedCode)){
-                $log->warning('Composed code not found in request', []);
-            }
+        if ($composedCode === '') {
+            $log->warning('Composed code not found in request');
+        }
 
-            // Só entrega o JS quando os tokens batem com uma campanha válida do usuário.
-            if (!$campaign) {
-                return response()->make(
-                    'console.error("[Leadnode] Tokens de tracking inválidos");',
-                    200,
-                    [
-                        'Content-Type'  => 'application/javascript',
-                        'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-                        'Pragma'        => 'no-cache',
-                        'Expires'       => '0',
-                    ]
-                );
-            }
-
-            // 🔹 Caminho do arquivo JS base
-            $path = resource_path('views/tracking/script.js');
-
-            if (!File::exists($path)) {
-                return response()->make(
-                    'console.error("[Leadnode] Script base não encontrado");',
-                    500,
-                    ['Content-Type' => 'application/javascript']
-                );
-            }
-
-            // 🔹 Lê o JS base
-            $js = File::get($path);
-
-            // 🔹 Valores dinâmicos
-            $endpoint = rtrim(config('app.url'), '/') . '/api/tracking/collect';
-            $eventEndpoint = rtrim(config('app.url'), '/') . '/api/tracking/event';
-
-            // 🔹 Replace seguro (JS válido)
-            $authTs = time();
-            $authNonce = Str::random(24);
-            $authSig = $this->buildTrackingSignature($userCode, $campaignCode, $authTs, $authNonce);
-            $trackingParamMapping = $campaign->affiliatePlatform?->tracking_param_mapping;
-            $trackingParamKeys = is_array($trackingParamMapping)
-                ? array_values(array_filter(array_map(
-                    fn ($k) => trim((string) $k),
-                    array_keys($trackingParamMapping)
-                )))
-                : [];
-
-            $replacements = [
-                "'{ENDPOINT}'"       => json_encode($endpoint),
-                "'{EVENT_ENDPOINT}'" => json_encode($eventEndpoint),
-                "'{USER_CODE}'"      => json_encode($userCode),
-                "'{CAMPAIGN_CODE}'"  => json_encode($campaignCode),
-                "'{AUTH_TS}'"        => json_encode($authTs),
-                "'{AUTH_NONCE}'"     => json_encode($authNonce),
-                "'{AUTH_SIG}'"       => json_encode($authSig),
-                "'{TRACKING_PARAM_KEYS}'" => json_encode($trackingParamKeys),
-            ];
-
-            $js = str_replace(
-                array_keys($replacements),
-                array_values($replacements),
-                $js
-            );
-
-            // 🔹 Retorna JS puro (stateless)
+        // Só entrega o JS quando os tokens batem com uma campanha válida do usuário.
+        if (!$campaign) {
             return response()->make(
-                $js,
+                'console.error("[Leadnode] Tokens de tracking inválidos");',
                 200,
                 [
                     'Content-Type'  => 'application/javascript',
@@ -1536,6 +1476,60 @@ class TrackingController extends Controller
                     'Expires'       => '0',
                 ]
             );
+        }
+
+        $jsTemplate = $this->resolveTrackingScriptTemplate();
+        if ($jsTemplate === null) {
+            return response()->make(
+                'console.error("[Leadnode] Script base não encontrado");',
+                500,
+                ['Content-Type' => 'application/javascript']
+            );
+        }
+
+        // Valores dinâmicos.
+        $endpoint = rtrim(config('app.url'), '/') . '/api/tracking/collect';
+        $eventEndpoint = rtrim(config('app.url'), '/') . '/api/tracking/event';
+
+        $authTs = time();
+        $authNonce = Str::random(24);
+        $authSig = $this->buildTrackingSignature($userCode, $campaignCode, $authTs, $authNonce);
+        $trackingParamMapping = $campaign->affiliatePlatform?->tracking_param_mapping;
+        $trackingParamKeys = is_array($trackingParamMapping)
+            ? array_values(array_filter(array_map(
+                fn ($k) => trim((string) $k),
+                array_keys($trackingParamMapping)
+            )))
+            : [];
+
+        $replacements = [
+            "'{ENDPOINT}'"       => json_encode($endpoint),
+            "'{EVENT_ENDPOINT}'" => json_encode($eventEndpoint),
+            "'{USER_CODE}'"      => json_encode($userCode),
+            "'{CAMPAIGN_CODE}'"  => json_encode($campaignCode),
+            "'{AUTH_TS}'"        => json_encode($authTs),
+            "'{AUTH_NONCE}'"     => json_encode($authNonce),
+            "'{AUTH_SIG}'"       => json_encode($authSig),
+            "'{TRACKING_PARAM_KEYS}'" => json_encode($trackingParamKeys),
+        ];
+
+        $js = str_replace(
+            array_keys($replacements),
+            array_values($replacements),
+            $jsTemplate
+        );
+
+        // Retorna JS puro (stateless).
+        return response()->make(
+            $js,
+            200,
+            [
+                'Content-Type'  => 'application/javascript',
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma'        => 'no-cache',
+                'Expires'       => '0',
+            ]
+        );
     }
 
     protected function parseComposedTrackingCode(string $composedCode): array
@@ -1564,6 +1558,65 @@ class TrackingController extends Controller
         $secret = (string) config('app.tracking_signature_secret', '');
 
         return hash_hmac('sha256', $payload, $secret);
+    }
+
+    protected function resolveTrackingScriptTemplate(): ?string
+    {
+        $cacheKey = $this->trackingScriptTemplateCacheKey();
+        $redis = $this->trackingRedis();
+
+        try {
+            $cached = $redis->get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+
+            $template = $this->loadAndMinifyTrackingScriptTemplate();
+            if ($template !== null && $template !== '') {
+                $redis->setex($cacheKey, $this->trackingScriptTemplateTtlSeconds(), $template);
+            }
+
+            return $template;
+        } catch (Throwable $e) {
+            Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
+                'Unable to load tracking script template from tracking Redis.',
+                ['error' => $e->getMessage()]
+            );
+        }
+
+        return $this->loadAndMinifyTrackingScriptTemplate();
+    }
+
+    protected function loadAndMinifyTrackingScriptTemplate(): ?string
+    {
+        $path = resource_path('views/tracking/script.js');
+
+        if (!File::exists($path)) {
+            return null;
+        }
+
+        $js = File::get($path);
+
+        try {
+            return Minifier::minify($js, ['flaggedComments' => false]);
+        } catch (Throwable $e) {
+            Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
+                'Unable to minify tracking script template. Falling back to the original asset.',
+                ['error' => $e->getMessage()]
+            );
+
+            return $js;
+        }
+    }
+
+    protected function trackingScriptTemplateCacheKey(): string
+    {
+        return $this->trackingPrefix() . ':script:template:v1';
+    }
+
+    protected function trackingScriptTemplateTtlSeconds(): int
+    {
+        return max((int) config('tracking.redis.script_template_ttl_seconds', 2592000), 60);
     }
 
     protected function buildEventSignature(string $userCode, string $campaignCode, string $pageviewCode): string

@@ -15,6 +15,8 @@ return [
         'campaign_ttl_seconds' => (int) env('TRACKING_CAMPAIGN_TTL_SECONDS', 86400),
         // TTL do contexto da pageview e ponte de ultimo collect.
         'pageview_ttl_seconds' => (int) env('TRACKING_PAGEVIEW_TTL_SECONDS', 86400),
+        // TTL do template JS minificado usado pelo endpoint /api/tracking/script.js.
+        'script_template_ttl_seconds' => (int) env('TRACKING_SCRIPT_TEMPLATE_TTL_SECONDS', 2592000),
     ],
     'collect' => [
         // Janela para reuso da mesma pageview em collects repetidos.
