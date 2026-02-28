@@ -1458,6 +1458,8 @@ class TrackingController extends Controller
                     ->first();
             }
 
+            echo trim((string) $request->query('c'))."\n";
+    
             echo $decodedUserId,' - '."/n";
             echo $decodedCampaignId,' - '."/n";
             print_r($campaign);
