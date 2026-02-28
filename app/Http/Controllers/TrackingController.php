@@ -1447,6 +1447,7 @@ class TrackingController extends Controller
             $decodedCampaignId = app(HashidService::class)->decode($campaignCode);
 
 
+           
 
             $campaign = null;
             if ($decodedUserId && $decodedCampaignId) {
@@ -1463,6 +1464,15 @@ class TrackingController extends Controller
             echo $decodedUserId,' - '."/n";
             echo $decodedCampaignId,' - '."/n";
             print_r($campaign);
+
+            dd([
+                'fullUrl' => $request->fullUrl(),
+                'query' => $request->query(),
+                'c' => $request->query('c'),
+                'query_string' => $_SERVER['QUERY_STRING'] ?? null,
+                'request_uri' => $_SERVER['REQUEST_URI'] ?? null,
+            ]);
+
 
             exit();
 
