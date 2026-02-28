@@ -7,6 +7,16 @@ use Illuminate\Support\Facades\Redis;
 
 class TrackingRedisCommand extends Command
 {
+
+   /*
+    php artisan tracking:redis lista as chaves existentes de todos os tipos
+    php artisan tracking:campaign lista os primeiros 20 registros de campaign
+    php artisan tracking:pv lista os primeiros 20 de pv
+    php artisan tracking:last lista os primeiros 20 de last
+    php artisan tracking:hit_gate lista os primeiros 20 de hit_gate
+    php artisan tracking:script lista os primeiros 20 de script
+    php artisan tracking:flush  dletar tudo que está em cache
+   */
     protected $aliases = ['tracking:campaign', 'tracking:pv', 'tracking:last', 'tracking:hit_gate', 'tracking:script', 'tracking:flush'];
 
     protected $signature = 'tracking:redis

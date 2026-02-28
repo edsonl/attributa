@@ -762,7 +762,7 @@ class TrackingController extends Controller
     }
 
     /**
-     * @return array{id:int,user_id:int,code:string,name:?string,allowed_origin:string}|null
+     * @return array{id:int,user_id:int,code:string,name:?string,allowed_origin:string,tracking_param_mapping:array<string,mixed>}|null
      */
     protected function resolveCampaignContext(int $userId, int $campaignId, string $campaignCode): ?array
     {
@@ -791,6 +791,9 @@ class TrackingController extends Controller
                     'code' => $cachedCode,
                     'name' => isset($cached['name']) ? (string) $cached['name'] : null,
                     'allowed_origin' => (string) ($cached['allowed_origin'] ?? ''),
+                    'tracking_param_mapping' => is_array($cached['tracking_param_mapping'] ?? null)
+                        ? $cached['tracking_param_mapping']
+                        : [],
                 ];
             }
 
@@ -806,10 +809,11 @@ class TrackingController extends Controller
         }
 
         $campaign = Campaign::query()
+            ->with('affiliatePlatform:id,tracking_param_mapping')
             ->where('id', $campaignId)
             ->where('user_id', $userId)
             ->where('code', $campaignCode)
-            ->first(['id', 'user_id', 'code', 'name', 'product_url']);
+            ->first(['id', 'user_id', 'code', 'name', 'product_url', 'affiliate_platform_id']);
 
         if (!$campaign) {
             return null;
@@ -821,6 +825,9 @@ class TrackingController extends Controller
             'code' => (string) $campaign->code,
             'name' => $campaign->name !== null ? (string) $campaign->name : null,
             'allowed_origin' => (string) Campaign::normalizeProductUrl((string) $campaign->product_url),
+            'tracking_param_mapping' => is_array($campaign->affiliatePlatform?->tracking_param_mapping)
+                ? $campaign->affiliatePlatform->tracking_param_mapping
+                : [],
         ];
 
         try {
@@ -1452,12 +1459,11 @@ class TrackingController extends Controller
 
         $campaign = null;
         if ($decodedUserId && $decodedCampaignId && $composedCode !== '') {
-            $campaign = Campaign::query()
-                ->with('affiliatePlatform:id,tracking_param_mapping')
-                ->where('id', $decodedCampaignId)
-                ->where('user_id', $decodedUserId)
-                ->where('code', $campaignCode)
-                ->first();
+            $campaign = $this->resolveCampaignContext(
+                (int) $decodedUserId,
+                (int) $decodedCampaignId,
+                $campaignCode
+            );
         }
 
         if ($composedCode === '') {
@@ -1494,7 +1500,9 @@ class TrackingController extends Controller
         $authTs = time();
         $authNonce = Str::random(24);
         $authSig = $this->buildTrackingSignature($userCode, $campaignCode, $authTs, $authNonce);
-        $trackingParamMapping = $campaign->affiliatePlatform?->tracking_param_mapping;
+        $trackingParamMapping = is_array($campaign['tracking_param_mapping'] ?? null)
+            ? $campaign['tracking_param_mapping']
+            : [];
         $trackingParamKeys = is_array($trackingParamMapping)
             ? array_values(array_filter(array_map(
                 fn ($k) => trim((string) $k),
