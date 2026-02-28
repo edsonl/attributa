@@ -1446,6 +1446,8 @@ class TrackingController extends Controller
             $decodedUserId = app(HashidService::class)->decode($userCode);
             $decodedCampaignId = app(HashidService::class)->decode($campaignCode);
 
+
+
             $campaign = null;
             if ($decodedUserId && $decodedCampaignId) {
                 $campaign = Campaign::query()
@@ -1456,10 +1458,16 @@ class TrackingController extends Controller
                     ->first();
             }
 
+            echo $decodedUserId,' - '."/n";
+            echo $decodedCampaignId,' - '."/n";
+            print_r($campaign);
+
+            exit();
+
             // Só entrega o JS quando os tokens batem com uma campanha válida do usuário.
             if (!$campaign) {
                 return response()->make(
-                    'console.error("[Attributa] Tokens de tracking inválidos");',
+                    'console.error("[Leadnode] Tokens de tracking inválidos");',
                     200,
                     [
                         'Content-Type'  => 'application/javascript',
@@ -1475,7 +1483,7 @@ class TrackingController extends Controller
 
             if (!File::exists($path)) {
                 return response()->make(
-                    'console.error("[Attributa] Script base não encontrado");',
+                    'console.error("[Leadnode] Script base não encontrado");',
                     500,
                     ['Content-Type' => 'application/javascript']
                 );
