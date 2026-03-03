@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { Head } from '@inertiajs/vue3'
 import { useQuasar } from 'quasar'
+import { assetBaseUrl } from '../../../utils/assetBaseUrl'
 
 const rows = ref([])
 const loading = ref(false)
@@ -34,11 +35,6 @@ const defaultForm = () => ({
 
 const form = ref(defaultForm())
 const isEditing = computed(() => Boolean(form.value.id))
-const assetBaseUrl = (
-    import.meta.env.VITE_ASSET_URL
-        ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
-).replace(/\/$/, '')
-
 const columns = [
     { name: 'name', label: 'Nome', field: 'name', sortable: true, align: 'left' },
     { name: 'iso2', label: 'ISO2', field: 'iso2', sortable: true, align: 'left' },

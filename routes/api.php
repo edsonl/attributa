@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\GoogleAdsConversionsController;
 use App\Http\Controllers\TrackingController;
+use App\Http\Controllers\TrackingScriptController;
 use App\Http\Controllers\ConversionCallbackPlatformController;
 use App\Http\Controllers\LeadCallbackPlatformController;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ Route::post('/tracking/event', [TrackingController::class, 'event'])
     ->middleware('throttle:tracking')
     ->name('tracking.event');
 
-Route::get('/tracking/script.js', [TrackingController::class, 'script'])->name('tracking.script');
+Route::get('/tracking/script.js', [TrackingScriptController::class, 'script'])->name('tracking.script');
 
 Route::get(
     '/google-ads/conversions/{userSlugId}/{goalCode}.csv',

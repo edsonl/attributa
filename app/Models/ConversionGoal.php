@@ -67,7 +67,7 @@ class ConversionGoal extends Model
             }
 
             $hashids = new Hashids(
-                (string) config('app.hashids.salt', 'attributa-2026'),
+                (string) config('app.hashids.salt', 'leadnode-2026'),
                 (int) config('app.hashids.min_length', 6)
             );
 

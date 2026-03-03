@@ -78,7 +78,7 @@ class TestCampaignSeeder extends Seeder
 
         $campaign->user_id = 1;
         $campaign->name = 'Campanha Teste Pageviews';
-        $campaign->product_url = 'http://attributa.site/produto-teste';
+        $campaign->product_url = 'http://leadnode.site/produto-teste';
         $campaign->campaign_status_id = $activeStatusId;
         $campaign->conversion_goal_id = $conversionGoal->id;
         $campaign->channel_id = $channel->id;

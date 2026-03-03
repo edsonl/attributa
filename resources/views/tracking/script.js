@@ -228,12 +228,12 @@
                         var visitorCode = json && json.visitor_code;
                         var eventSig = json && json.event_sig;
                         if (visitorCode) {
-                            setCookie('at_visitor_code', visitorCode, 30);
+                            setCookie('at_visitor_code', visitorCode, 7);
                         }
                         if (pageviewCode) {
-                            setCookie('at_pageview_code', pageviewCode, 90);
+                            setCookie('at_pageview_code', pageviewCode,3);
                             if (eventSig) {
-                                setCookie('at_event_sig', eventSig, 90);
+                                setCookie('at_event_sig', eventSig, 3);
                             }
                             initSubInjection(trackingParamKeys);
                             initInteractionTracking(trackingParamKeys, navigationType);

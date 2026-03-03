@@ -12,7 +12,7 @@
             <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
                 <tr>
                     <td style="background:#1e3a8a;color:#ffffff;padding:16px 20px;font-size:18px;font-weight:700;">
-                        Attributa - Notificação de Lead
+                        Leadnode - Notificação de Lead
                     </td>
                 </tr>
                 <tr>

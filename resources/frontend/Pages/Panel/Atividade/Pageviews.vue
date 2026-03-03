@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Head } from '@inertiajs/vue3'
 import { useQuasar } from 'quasar'
 import PageviewDetailModal from './PageviewDetailModal.vue'
+import { assetBaseUrl } from '../../../utils/assetBaseUrl'
 
 const rows = ref([])
 const loading = ref(false)
@@ -44,11 +45,6 @@ const dateRangeLabel = computed(() => {
     if (!from || !to) return ''
     return `${formatDateDots(from)}  -  ${formatDateDots(to)}`
 })
-const assetBaseUrl = (
-    import.meta.env.VITE_ASSET_URL
-        ?? (typeof window !== 'undefined' ? window.location.origin : 'http://attributa.site')
-).replace(/\/$/, '')
-
 const columns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', sortable: true, align: 'left' },
     { name: 'ip', label: 'Classificação / IP', field: 'ip', sortable: true, align: 'left' },

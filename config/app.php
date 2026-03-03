@@ -125,7 +125,7 @@ return [
     ],
 
     'hashids' => [
-        'salt' =>'attributa|2026',
+        'salt' =>'leadnode|2026',
         'min_length' => 12,
     ],
 

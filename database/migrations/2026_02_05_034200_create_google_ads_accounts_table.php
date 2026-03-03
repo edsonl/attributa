@@ -19,7 +19,7 @@ return new class extends Migration
             // ID interno da conta conectada
             $table->id();
 
-            // Dono da conta dentro do Attributa
+            // Dono da conta dentro do Leadnode
             $table->foreignId('user_id')
                 ->constrained()
                 ->cascadeOnDelete();
