@@ -35,6 +35,7 @@ const detailLoading = ref(false)
 const detailPayload = ref(null)
 const payloadDialog = ref(false)
 const payloadPretty = ref('')
+const expandedCampaignRows = ref({})
 const statusOptions = [
     { label: 'Processando', value: 'processing' },
     { label: 'Aprovado', value: 'approved' },
@@ -226,6 +227,27 @@ function formatPayout(value, currencyCode) {
         }).format(amount)
     } catch {
         return amount.toFixed(2)
+    }
+}
+
+function canPreviewFullCampaignName(row) {
+    const text = String(row?.campaign_name_base || row?.campaign_name || '').trim()
+    return text !== '' && text !== '-' && text.length > 30
+}
+
+function isCampaignNameExpanded(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return false
+    return Boolean(expandedCampaignRows.value[key])
+}
+
+function toggleCampaignName(row) {
+    const key = String(row?.id ?? '')
+    if (!key) return
+
+    expandedCampaignRows.value = {
+        ...expandedCampaignRows.value,
+        [key]: !Boolean(expandedCampaignRows.value[key]),
     }
 }
 
@@ -708,7 +730,42 @@ onMounted(() => {
             </template>
 
             <template #body-cell-campaign_name="props">
-                <q-td :props="props">{{ props.value || '-' }}</q-td>
+                <q-td :props="props">
+                    <div class="tw-flex tw-items-center tw-gap-1">
+                        <div
+                            class="campaign-name-wrap"
+                            :class="{
+                                'campaign-name-wrap--expanded': isCampaignNameExpanded(props.row),
+                            }"
+                        >
+                            <span
+                                class="campaign-name-truncate"
+                                :class="{
+                                    'campaign-name-truncate--fade': canPreviewFullCampaignName(props.row) && !isCampaignNameExpanded(props.row),
+                                    'campaign-name-truncate--expanded': isCampaignNameExpanded(props.row),
+                                }"
+                            >
+                                {{ isCampaignNameExpanded(props.row) ? (props.row.campaign_name_base || '-') : (props.row.campaign_name_display_name || props.row.campaign_name_base || '-') }}
+                            </span>
+                            <span v-if="props.row.campaign_name_suffix" class="campaign-name-suffix">
+                                {{ ` ${props.row.campaign_name_suffix}` }}
+                            </span>
+                        </div>
+                        <q-btn
+                            v-if="canPreviewFullCampaignName(props.row)"
+                            dense
+                            flat
+                            round
+                            size="sm"
+                            :icon="isCampaignNameExpanded(props.row) ? 'visibility_off' : 'visibility'"
+                            color="grey-6"
+                            class="campaign-name-eye-btn"
+                            @click="toggleCampaignName(props.row)"
+                        >
+                            <q-tooltip>{{ isCampaignNameExpanded(props.row) ? 'Recolher nome' : 'Ver nome completo' }}</q-tooltip>
+                        </q-btn>
+                    </div>
+                </q-td>
             </template>
 
             <template #body-cell-platform_name="props">
@@ -868,5 +925,53 @@ onMounted(() => {
     color: #e2e8f0;
     font-size: 12px;
     line-height: 1.45;
+}
+
+.campaign-name-wrap {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 38ch;
+}
+
+.campaign-name-wrap--expanded {
+    max-width: 60ch;
+}
+
+.campaign-name-truncate {
+    position: relative;
+    max-width: 30ch;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.campaign-name-truncate--expanded {
+    max-width: 52ch;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+}
+
+.campaign-name-truncate--fade::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 26px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 78%);
+}
+
+.campaign-name-suffix {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.campaign-name-eye-btn {
+    opacity: 0.9;
 }
 </style>

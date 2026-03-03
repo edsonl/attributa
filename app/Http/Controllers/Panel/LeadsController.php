@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AffiliatePlatform;
 use App\Models\Campaign;
 use App\Models\Lead;
+use App\Support\CampaignDisplayNameFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -104,8 +105,12 @@ class LeadsController extends Controller
 
         $paginator = $query->paginate($perPage);
         $tz = 'America/Sao_Paulo';
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds(
+            $paginator->getCollection()->pluck('campaign_id')->filter()->all()
+        );
 
-        $paginator->getCollection()->transform(function ($row) use ($tz) {
+        $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
             $row->created_at_formatted = $row->created_at
                 ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;
@@ -117,6 +122,15 @@ class LeadsController extends Controller
             $row->lead_status_label = Lead::statusLabel((string) $row->lead_status);
             $row->lead_status_color = Lead::statusColor((string) $row->lead_status);
             $row->has_conversion = (bool) $row->has_conversion;
+            $campaignLabel = $campaignDisplayNameFormatter->make(
+                (string) ($row->campaign_name ?? ''),
+                $countryCodesByCampaignId[(int) ($row->campaign_id ?? 0)] ?? []
+            );
+            $row->campaign_name_base = trim((string) ($row->campaign_name ?? ''));
+            $row->campaign_name = $campaignLabel['full'] !== '' ? $campaignLabel['full'] : null;
+            $row->campaign_name_display = $campaignLabel['display'] !== '' ? $campaignLabel['display'] : null;
+            $row->campaign_name_display_name = $campaignLabel['display_name'] !== '' ? $campaignLabel['display_name'] : null;
+            $row->campaign_name_suffix = $campaignLabel['suffix'] !== '' ? $campaignLabel['suffix'] : null;
 
             return $row;
         });
@@ -126,11 +140,26 @@ class LeadsController extends Controller
 
     public function campaigns()
     {
-        return Campaign::query()
+        $campaigns = Campaign::query()
             ->where('user_id', (int) auth()->id())
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds($campaigns->pluck('id')->all());
+
+        return $campaigns->map(function (Campaign $campaign) use ($campaignDisplayNameFormatter, $countryCodesByCampaignId) {
+            $campaignLabel = $campaignDisplayNameFormatter->make(
+                (string) $campaign->name,
+                $countryCodesByCampaignId[(int) $campaign->id] ?? []
+            );
+
+            return [
+                'id' => $campaign->id,
+                'name' => $campaignLabel['full'],
+                'display_name' => $campaignLabel['display'],
+            ];
+        });
     }
 
     public function platforms()

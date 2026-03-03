@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use App\Models\Campaign;
 use App\Models\AdsConversion;
 use App\Models\Timezone;
+use App\Support\CampaignDisplayNameFormatter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -112,8 +113,12 @@ class ConversionsController extends Controller
 
         $paginator = $query->paginate($perPage);
         $tz = 'America/Sao_Paulo';
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds(
+            $paginator->getCollection()->pluck('campaign_id')->filter()->all()
+        );
 
-        $paginator->getCollection()->transform(function ($row) use ($tz) {
+        $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
             $statusRaw = $row->getRawOriginal('google_upload_status');
             $row->google_upload_status_slug = AdsConversion::googleUploadStatusLabel($statusRaw);
             $row->google_upload_status_label = AdsConversion::googleUploadStatusDisplayLabel($statusRaw);
@@ -126,6 +131,15 @@ class ConversionsController extends Controller
             $row->created_at_formatted = $row->created_at
                 ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;
+            $campaignLabel = $campaignDisplayNameFormatter->make(
+                (string) ($row->campaign_name ?? ''),
+                $countryCodesByCampaignId[(int) ($row->campaign_id ?? 0)] ?? []
+            );
+            $row->campaign_name_base = trim((string) ($row->campaign_name ?? ''));
+            $row->campaign_name = $campaignLabel['full'] !== '' ? $campaignLabel['full'] : null;
+            $row->campaign_name_display = $campaignLabel['display'] !== '' ? $campaignLabel['display'] : null;
+            $row->campaign_name_display_name = $campaignLabel['display_name'] !== '' ? $campaignLabel['display_name'] : null;
+            $row->campaign_name_suffix = $campaignLabel['suffix'] !== '' ? $campaignLabel['suffix'] : null;
 
             return $row;
         });
@@ -159,18 +173,24 @@ class ConversionsController extends Controller
      */
     public function campaigns()
     {
-        return Campaign::query()
+        $campaigns = Campaign::query()
             ->with('conversionGoal.timezone:id,identifier')
             ->where('user_id', (int) auth()->id())
             ->select('id', 'name', 'code', 'conversion_goal_id')
             ->orderBy('name')
-            ->get()
-            ->map(fn (Campaign $campaign) => [
-                'id' => $campaign->id,
-                'name' => $campaign->name,
-                'code' => $campaign->code,
-                'timezone_identifier' => $campaign->conversionGoal?->timezone?->identifier ?: null,
-            ]);
+            ->get();
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds($campaigns->pluck('id')->all());
+
+        return $campaigns->map(fn (Campaign $campaign) => [
+            'id' => $campaign->id,
+            'name' => $campaignDisplayNameFormatter->make(
+                (string) $campaign->name,
+                $countryCodesByCampaignId[(int) $campaign->id] ?? []
+            )['full'],
+            'code' => $campaign->code,
+            'timezone_identifier' => $campaign->conversionGoal?->timezone?->identifier ?: null,
+        ]);
     }
 
     /**
@@ -273,7 +293,10 @@ class ConversionsController extends Controller
 
         return response()->json([
             'campaign_id' => $campaign->id,
-            'campaign_name' => $campaign->name,
+            'campaign_name' => app(CampaignDisplayNameFormatter::class)->make(
+                (string) $campaign->name,
+                app(CampaignDisplayNameFormatter::class)->countryCodesByCampaignIds([(int) $campaign->id])[(int) $campaign->id] ?? []
+            )['full'],
             'timezone' => $timezoneIdentifier,
             'has_rows' => $minUtc !== null && $maxUtc !== null,
             'min_datetime_local' => $minUtc?->copy()->setTimezone($timezoneIdentifier)->format('Y-m-d\TH:i'),

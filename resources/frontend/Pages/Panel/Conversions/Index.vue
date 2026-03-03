@@ -140,9 +140,9 @@ function statusBadgeLabel(value) {
     return value || '-'
 }
 
-function canPreviewFullCampaignName(value) {
-    const text = String(value || '').trim()
-    return text !== '' && text !== '-' && text.length > 24
+function canPreviewFullCampaignName(row) {
+    const text = String(row?.campaign_name_base || row?.campaign_name || '').trim()
+    return text !== '' && text !== '-' && text.length > 30
 }
 
 function isCampaignNameExpanded(row) {
@@ -826,16 +826,26 @@ onMounted(() => {
                 <q-td :props="props">
                     <div class="tw-flex tw-items-center tw-gap-1">
                         <div
-                            class="campaign-name-truncate"
+                            class="campaign-name-wrap"
                             :class="{
-                                'campaign-name-truncate--fade': canPreviewFullCampaignName(props.value) && !isCampaignNameExpanded(props.row),
-                                'campaign-name-truncate--expanded': isCampaignNameExpanded(props.row),
+                                'campaign-name-wrap--expanded': isCampaignNameExpanded(props.row),
                             }"
                         >
-                            {{ props.value || '-' }}
+                            <span
+                                class="campaign-name-truncate"
+                                :class="{
+                                    'campaign-name-truncate--fade': canPreviewFullCampaignName(props.row) && !isCampaignNameExpanded(props.row),
+                                    'campaign-name-truncate--expanded': isCampaignNameExpanded(props.row),
+                                }"
+                            >
+                                {{ isCampaignNameExpanded(props.row) ? (props.row.campaign_name_base || '-') : (props.row.campaign_name_display_name || props.row.campaign_name_base || '-') }}
+                            </span>
+                            <span v-if="props.row.campaign_name_suffix" class="campaign-name-suffix">
+                                {{ ` ${props.row.campaign_name_suffix}` }}
+                            </span>
                         </div>
                         <q-btn
-                            v-if="canPreviewFullCampaignName(props.value)"
+                            v-if="canPreviewFullCampaignName(props.row)"
                             dense
                             flat
                             round
@@ -1198,9 +1208,20 @@ onMounted(() => {
     background: var(--q-primary);
 }
 
+.campaign-name-wrap {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 38ch;
+}
+
+.campaign-name-wrap--expanded {
+    max-width: 60ch;
+}
+
 .campaign-name-truncate {
     position: relative;
-    max-width: 150px;
+    max-width: 30ch;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1223,6 +1244,12 @@ onMounted(() => {
     height: 100%;
     pointer-events: none;
     background: linear-gradient(to right, rgba(255, 255, 255, 0), #ffffff 78%);
+}
+
+.campaign-name-suffix {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    margin-left: 4px;
 }
 
 .campaign-name-eye-btn {

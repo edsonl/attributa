@@ -9,6 +9,7 @@ use App\Models\CampaignVisitor;
 use App\Models\Campaign;
 use App\Models\IpLookupCache;
 use App\Support\TrackingEventDescriptions;
+use App\Support\CampaignDisplayNameFormatter;
 use App\Services\HashidService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -79,6 +80,7 @@ class ActivityController extends Controller
             ->select([
                 'pageviews.id',
                 'pageviews.created_at',
+                'pageviews.campaign_id',
                 'pageviews.visitor_id',
                 'pageviews.ip',
                 //'pageviews.created_at',
@@ -133,8 +135,12 @@ class ActivityController extends Controller
 
         $paginator = $query->paginate($perPage);
         $tz = 'America/Sao_Paulo';
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds(
+            $paginator->getCollection()->pluck('campaign_id')->filter()->all()
+        );
 
-        $paginator->getCollection()->transform(function ($row) use ($tz) {
+        $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
             $row->created_at_formatted = $row->created_at
                 ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;
@@ -144,6 +150,15 @@ class ActivityController extends Controller
                 : null;
             $row->visitor_hits = max((int) ($row->visitor_hits ?? 1), 1);
             $row->visitor_status = $row->visitor_hits > 1 ? 'recorrente' : 'novo';
+            $campaignLabel = $campaignDisplayNameFormatter->make(
+                (string) ($row->campaign_name ?? ''),
+                $countryCodesByCampaignId[(int) ($row->campaign_id ?? 0)] ?? []
+            );
+            $row->campaign_name_base = trim((string) ($row->campaign_name ?? ''));
+            $row->campaign_name = $campaignLabel['full'] !== '' ? $campaignLabel['full'] : null;
+            $row->campaign_name_display = $campaignLabel['display'] !== '' ? $campaignLabel['display'] : null;
+            $row->campaign_name_display_name = $campaignLabel['display_name'] !== '' ? $campaignLabel['display_name'] : null;
+            $row->campaign_name_suffix = $campaignLabel['suffix'] !== '' ? $campaignLabel['suffix'] : null;
 
             unset($row->created_at);
 
@@ -158,11 +173,26 @@ class ActivityController extends Controller
      */
     public function campaigns()
     {
-        return Campaign::query()
+        $campaigns = Campaign::query()
             ->where('user_id', (int) auth()->id())
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
+        $campaignDisplayNameFormatter = app(CampaignDisplayNameFormatter::class);
+        $countryCodesByCampaignId = $campaignDisplayNameFormatter->countryCodesByCampaignIds($campaigns->pluck('id')->all());
+
+        return $campaigns->map(function (Campaign $campaign) use ($campaignDisplayNameFormatter, $countryCodesByCampaignId) {
+            $campaignLabel = $campaignDisplayNameFormatter->make(
+                (string) $campaign->name,
+                $countryCodesByCampaignId[(int) $campaign->id] ?? []
+            );
+
+            return [
+                'id' => $campaign->id,
+                'name' => $campaignLabel['full'],
+                'display_name' => $campaignLabel['display'],
+            ];
+        });
     }
 
     /**
