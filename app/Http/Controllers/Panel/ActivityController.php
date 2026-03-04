@@ -48,7 +48,7 @@ class ActivityController extends Controller
 
         // Mapa de colunas permitidas para ordenação
         $sortableColumns = [
-            'created_at'    => 'pageviews.created_at',
+            'created_at'    => 'pageviews.occurred_at',
             'campaign_name' => 'campaigns.name',
             'visitor'       => 'campaign_visitors.hits',
             'ip_category'   => 'ip_categories.name',
@@ -63,7 +63,7 @@ class ActivityController extends Controller
             'ip'            => 'pageviews.ip',
         ];
 
-        $orderColumn = $sortableColumns[$sortBy] ?? 'pageviews.created_at';
+        $orderColumn = $sortableColumns[$sortBy] ?? 'pageviews.occurred_at';
         $orderDir    = $descending ? 'desc' : 'asc';
 
         $query = Pageview::query()
@@ -80,6 +80,7 @@ class ActivityController extends Controller
             ->select([
                 'pageviews.id',
                 'pageviews.created_at',
+                'pageviews.occurred_at',
                 'pageviews.campaign_id',
                 'pageviews.visitor_id',
                 'pageviews.ip',
@@ -124,13 +125,13 @@ class ActivityController extends Controller
         if ($dateFrom && $dateTo) {
             $startUtc = Carbon::createFromFormat('Y-m-d', $dateFrom, $filterTimezone)->startOfDay()->setTimezone('UTC');
             $endUtc = Carbon::createFromFormat('Y-m-d', $dateTo, $filterTimezone)->endOfDay()->setTimezone('UTC');
-            $query->whereBetween('pageviews.created_at', [$startUtc, $endUtc]);
+            $query->whereBetween('pageviews.occurred_at', [$startUtc, $endUtc]);
         } elseif ($dateFrom) {
             $startUtc = Carbon::createFromFormat('Y-m-d', $dateFrom, $filterTimezone)->startOfDay()->setTimezone('UTC');
-            $query->where('pageviews.created_at', '>=', $startUtc);
+            $query->where('pageviews.occurred_at', '>=', $startUtc);
         } elseif ($dateTo) {
             $endUtc = Carbon::createFromFormat('Y-m-d', $dateTo, $filterTimezone)->endOfDay()->setTimezone('UTC');
-            $query->where('pageviews.created_at', '<=', $endUtc);
+            $query->where('pageviews.occurred_at', '<=', $endUtc);
         }
 
         $paginator = $query->paginate($perPage);
@@ -141,8 +142,9 @@ class ActivityController extends Controller
         );
 
         $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
-            $row->created_at_formatted = $row->created_at
-                ? Carbon::parse($row->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+            $pageviewDate = $row->occurred_at ?? $row->created_at;
+            $row->created_at_formatted = $pageviewDate
+                ? Carbon::parse($pageviewDate, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                 : null;
             $visitorId = (int) ($row->visitor_id ?? 0);
             $row->visitor_code = $visitorId > 0
@@ -160,7 +162,7 @@ class ActivityController extends Controller
             $row->campaign_name_display_name = $campaignLabel['display_name'] !== '' ? $campaignLabel['display_name'] : null;
             $row->campaign_name_suffix = $campaignLabel['suffix'] !== '' ? $campaignLabel['suffix'] : null;
 
-            unset($row->created_at);
+            unset($row->created_at, $row->occurred_at);
 
             return $row;
         });
@@ -307,15 +309,17 @@ class ActivityController extends Controller
                         'form_fields_checked',
                         'form_fields_filled',
                         'form_has_user_data',
+                        'event_at',
                         'created_at',
                     ])
-                    ->orderBy('created_at', 'asc');
+                    ->orderByRaw('COALESCE(event_at, created_at) asc');
             },
         ]);
 
         $tz = 'America/Sao_Paulo';
-        $pageview->created_at_formatted = optional($pageview->created_at)
-            ? Carbon::parse($pageview->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+        $pageviewOccurredAt = $pageview->occurred_at ?? $pageview->created_at;
+        $pageview->created_at_formatted = optional($pageviewOccurredAt)
+            ? Carbon::parse($pageviewOccurredAt, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
             : null;
 
         $urlData = $this->extractUrlData($pageview->url);
@@ -364,6 +368,7 @@ class ActivityController extends Controller
 
         $events = $pageview->events
             ->map(function ($event) use ($tz) {
+                $eventOccurredAt = $event->event_at ?? $event->created_at;
                 return [
                     'id' => $event->id,
                     'event_type' => $event->event_type,
@@ -373,9 +378,9 @@ class ActivityController extends Controller
                     'form_fields_checked' => $event->form_fields_checked,
                     'form_fields_filled' => $event->form_fields_filled,
                     'form_has_user_data' => $event->form_has_user_data,
-                    'created_at' => $event->created_at,
-                    'created_at_formatted' => optional($event->created_at)
-                        ? Carbon::parse($event->created_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                    'created_at' => $eventOccurredAt,
+                    'created_at_formatted' => optional($eventOccurredAt)
+                        ? Carbon::parse($eventOccurredAt, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                         : null,
                 ];
             })
@@ -398,11 +403,11 @@ class ActivityController extends Controller
                     'status' => (int) $visitorRow->hits > 1 ? 'recorrente' : 'novo',
                     'first_seen_at' => $visitorRow->first_seen_at,
                     'first_seen_at_formatted' => optional($visitorRow->first_seen_at)
-                        ? Carbon::createFromTimestampMs((int) $visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        ? Carbon::parse($visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                         : null,
                     'last_seen_at' => $visitorRow->last_seen_at,
                     'last_seen_at_formatted' => optional($visitorRow->last_seen_at)
-                        ? Carbon::createFromTimestampMs((int) $visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
+                        ? Carbon::parse($visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
                         : null,
                 ];
             }
@@ -413,9 +418,9 @@ class ActivityController extends Controller
                 'visitor_code' => $visitorId > 0 ? app(HashidService::class)->encode($visitorId) : null,
                 'hits' => 1,
                 'status' => 'novo',
-                'first_seen_at' => $pageview->created_at,
+                'first_seen_at' => $pageviewOccurredAt,
                 'first_seen_at_formatted' => $pageview->created_at_formatted,
-                'last_seen_at' => $pageview->created_at,
+                'last_seen_at' => $pageviewOccurredAt,
                 'last_seen_at_formatted' => $pageview->created_at_formatted,
             ];
         }

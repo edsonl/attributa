@@ -12,6 +12,7 @@ use App\Services\DeviceClassificationService;
 use App\Services\PageviewClassificationService;
 use App\Support\Tracking\TrackingScriptHelper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -61,7 +62,7 @@ class TrackingController extends Controller
             'landing_url'   => 'nullable|string|max:500',
             'referrer'      => 'nullable|string',
             'user_agent'    => 'nullable|string',
-            'timestamp'     => 'nullable|integer',
+            'timestamp'     => 'nullable',
             'gclid'         => 'nullable|string',
             'gad_campaignid'=> 'nullable|string',
             'utm_source'    => 'nullable|string',
@@ -335,8 +336,8 @@ class TrackingController extends Controller
          | - Fora da janela (ou cache miss):
          |   * segue fluxo normal: classifica, cria pageview e atualiza Redis.
          */
-        $now = now();
-        $nowMs = $now->valueOf();
+        $now = now('UTC');
+        $nowMs = $this->currentTrackingMs();
         $visitorCode = trim((string) ($data['visitor_code'] ?? ''));
         $userSession = trim((string) ($data['user_session'] ?? ''));
         $visitorId = $this->resolveVisitorIdFromCode($visitorCode);
@@ -394,7 +395,17 @@ class TrackingController extends Controller
         $classification = app(PageviewClassificationService::class)->classify($data, $request->ip());
         $trafficSourceCategoryId = $this->resolveTrafficSourceCategoryId((string) ($classification['traffic_source_slug'] ?? 'unknown'));
         $trafficSourceReason = mb_substr((string) ($classification['traffic_source_reason'] ?? ''), 0, 191);
-        $timestampMs = $this->normalizeTimestampMs($data['timestamp'] ?? null);
+        $occurredAt = $this->resolveClientDateTime(
+            $data['timestamp'] ?? null,
+            $now,
+            'collect.timestamp',
+            [
+                'campaign_id' => (int) $campaign['id'],
+                'user_code' => (string) $data['user_code'],
+                'campaign_code' => (string) $data['campaign_code'],
+                'ip' => $request->ip(),
+            ]
+        );
         $deviceClassification = [
             'device_category_id' => null,
             'browser_id' => null,
@@ -445,7 +456,7 @@ class TrackingController extends Controller
             $gclid,
             $userAgent,
             $request,
-            $timestampMs,
+            $occurredAt,
             $trafficSourceCategoryId,
             $trafficSourceReason,
             $deviceClassification,
@@ -473,7 +484,7 @@ class TrackingController extends Controller
                 'gbraid'        => $data['gbraid'] ?? null,
                 'user_agent'    => $userAgent,
                 'ip'            => $request->ip(),
-                'timestamp_ms'  => $timestampMs,
+                'occurred_at'   => $occurredAt,
                 'conversion'    => 0,
                 'ip_category_id' => $ipClassification['ip_category_id'] ?? null,
                 'traffic_source_category_id' => $trafficSourceCategoryId,
@@ -510,8 +521,8 @@ class TrackingController extends Controller
                 $pageview->save();
             }
 
-            $now = now();
-            $nowMs = $now->valueOf();
+            $now = now('UTC');
+            $nowMs = $this->currentTrackingMs();
             $this->upsertCampaignVisitorHit(
                 campaignId: (int) $campaign['id'],
                 visitorId: (int) $visitorId,
@@ -544,7 +555,7 @@ class TrackingController extends Controller
             visitorCode: $visitorCode,
             visitorId: (int) $visitorId,
             userSession: $userSession,
-            nowMs: now()->valueOf()
+            nowMs: $this->currentTrackingMs()
         );
 
         return response()->json([
@@ -598,7 +609,7 @@ class TrackingController extends Controller
             'pageview_code' => 'required|string|max:32',
             'event_sig' => 'required|string|size:64|regex:/^[a-f0-9]+$/',
             'event_type' => 'required|string|in:link_click,form_submit,page_engaged,navigation_reload',
-            'event_ts' => 'nullable|integer|min:1',
+            'event_ts' => 'nullable',
             'target_url' => 'nullable|string',
             'element_id' => 'nullable|string',
             'element_name' => 'nullable|string',
@@ -721,7 +732,17 @@ class TrackingController extends Controller
             'form_has_user_data' => array_key_exists('form_has_user_data', $data)
                 ? (bool) $data['form_has_user_data']
                 : null,
-            'event_ts_ms' => $this->normalizeTimestampMs($data['event_ts'] ?? null),
+            'event_at' => $this->resolveClientDateTime(
+                $data['event_ts'] ?? null,
+                now('UTC'),
+                'event.event_ts',
+                [
+                    'campaign_id' => (int) $eventContext['campaign_id'],
+                    'pageview_id' => (int) $eventContext['pageview_id'],
+                    'event_type' => $eventType,
+                    'ip' => $request->ip(),
+                ]
+            ),
         ]);
 
         return response()->json([
@@ -879,13 +900,13 @@ class TrackingController extends Controller
     }
 
     /**
-     * @return array{pageview_code:string,visitor_code:string,visitor_id:int,last_collect_at_ms:int}|null
+     * @return array{pageview_code:string,visitor_code:string,visitor_id:int,last_collect_at_ms:float}|null
      */
     protected function resolveReusableCollectContext(
         string $userCode,
         string $campaignCode,
         string $visitorCode,
-        int $nowMs
+        float $nowMs
     ): ?array {
         if ($visitorCode === '') {
             return null;
@@ -908,7 +929,7 @@ class TrackingController extends Controller
         $pageviewCode = trim((string) ($payload['pageview_code'] ?? ''));
         $cachedVisitorCode = trim((string) ($payload['visitor_code'] ?? ''));
         $visitorId = (int) ($payload['visitor_id'] ?? 0);
-        $lastCollectAtMs = (int) ($payload['last_collect_at_ms'] ?? 0);
+        $lastCollectAtMs = (float) ($payload['last_collect_at_ms'] ?? 0);
         if ($pageviewCode === '' || $cachedVisitorCode === '' || $visitorId < 1 || $lastCollectAtMs < 1) {
             $this->trackingRedisTempLog('collect.redis.get.last.invalid_payload', [
                 'key' => $lastKey,
@@ -956,7 +977,7 @@ class TrackingController extends Controller
         string $visitorCode,
         string $pageviewCode,
         string $userSession,
-        int $nowMs,
+        float $nowMs,
         bool $hitUpdated
     ): void {
         $redis = $this->trackingRedis();
@@ -976,7 +997,7 @@ class TrackingController extends Controller
                 'user_session' => $userSession,
                 'visitor_id' => 0,
                 'last_collect_at_ms' => $nowMs,
-                'last_hit_at_ms' => $hitUpdated ? $nowMs : 0,
+                'last_hit_at_ms' => $hitUpdated ? $nowMs : 0.0,
             ];
         }
 
@@ -1044,7 +1065,7 @@ class TrackingController extends Controller
         string $visitorCode,
         int $visitorId,
         string $userSession,
-        int $nowMs
+        float $nowMs
     ): void {
         $redis = $this->trackingRedis();
         $ttl = $this->trackingPageviewTtlSeconds();
@@ -1151,7 +1172,7 @@ class TrackingController extends Controller
         $this->touchHitGate((int) $campaign['id'], $visitorId, $nowMs);
     }
 
-    protected function shouldIncrementHitByThrottle(int $campaignId, int $visitorId, int $nowMs): bool
+    protected function shouldIncrementHitByThrottle(int $campaignId, int $visitorId, float $nowMs): bool
     {
         $redis = $this->trackingRedis();
         $hitGateKey = $this->trackingHitGateKey($campaignId, $visitorId);
@@ -1160,7 +1181,7 @@ class TrackingController extends Controller
             'campaign_id' => $campaignId,
             'visitor_id' => $visitorId,
         ]);
-        $lastHitMs = (int) $redis->get($hitGateKey);
+        $lastHitMs = (float) $redis->get($hitGateKey);
         if ($lastHitMs < 1) {
             $this->trackingRedisTempLog('collect.redis.get.hit_gate.miss', [
                 'key' => $hitGateKey,
@@ -1181,7 +1202,7 @@ class TrackingController extends Controller
         return $shouldIncrement;
     }
 
-    protected function touchHitGate(int $campaignId, int $visitorId, int $nowMs): void
+    protected function touchHitGate(int $campaignId, int $visitorId, float $nowMs): void
     {
         $redis = $this->trackingRedis();
         $ttl = $this->trackingHitGateTtlSeconds();
@@ -1202,7 +1223,7 @@ class TrackingController extends Controller
         ], $saved ? 'info' : 'warning');
     }
 
-    protected function upsertCampaignVisitorHit(int $campaignId, int $visitorId, \Illuminate\Support\Carbon $now, int $nowMs): void
+    protected function upsertCampaignVisitorHit(int $campaignId, int $visitorId, Carbon $now, float $nowMs): void
     {
         DB::statement(
             'INSERT INTO campaign_visitors
@@ -1215,8 +1236,8 @@ class TrackingController extends Controller
             [
                 $campaignId,
                 $visitorId,
-                $nowMs,
-                $nowMs,
+                $now,
+                $now,
                 $now,
                 $now,
             ]
@@ -1459,22 +1480,53 @@ class TrackingController extends Controller
         return 'tracking:nonce:' . $nonce;
     }
 
-    protected function normalizeTimestampMs(mixed $value): ?int
+    protected function resolveClientDateTime(
+        mixed $value,
+        Carbon $fallback,
+        string $context,
+        array $logContext = []
+    ): Carbon
     {
         if ($value === null || $value === '') {
-            return null;
+            return $fallback->copy()->utc();
         }
 
-        if (!is_numeric($value)) {
-            return null;
+        $text = trim((string) $value);
+        if ($text === '') {
+            return $fallback->copy()->utc();
         }
 
-        $normalized = (int) $value;
-        if ($normalized < 0) {
-            return null;
+        try {
+            if (is_numeric($text)) {
+                $normalized = ltrim($text, '+');
+                if ($normalized !== '' && preg_match('/^\d{13}$/', $normalized) === 1) {
+                    return Carbon::createFromTimestampUTC(((float) $normalized) / 1000)->utc();
+                }
+
+                if ($normalized !== '' && preg_match('/^\d{10}$/', $normalized) === 1) {
+                    return Carbon::createFromTimestampUTC((float) $normalized)->utc();
+                }
+            }
+
+            return Carbon::parse($text)->utc();
+        } catch (\Throwable $e) {
+            Log::channel($this->trackingLogChannel('tracking_collect'))->warning(
+                'Tracking timestamp inválido recebido; usando fallback do servidor.',
+                array_merge($logContext, [
+                    'context' => $context,
+                    'received_value' => mb_substr($text, 0, 100),
+                    'fallback_at' => $fallback->copy()->utc()->toIso8601String(),
+                    'error' => $e->getMessage(),
+                ])
+            );
         }
 
-        return $normalized;
+        return $fallback->copy()->utc();
+    }
+
+    protected function currentTrackingMs(): float
+    {
+        return floor(microtime(true) * 1000);
     }
 
     protected function resolveVisitorIdFromCode(mixed $value): ?int

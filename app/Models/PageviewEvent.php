@@ -23,14 +23,14 @@ class PageviewEvent extends Model
         'form_fields_checked',
         'form_fields_filled',
         'form_has_user_data',
-        'event_ts_ms',
+        'event_at',
     ];
 
     protected $casts = [
         'form_fields_checked' => 'integer',
         'form_fields_filled' => 'integer',
         'form_has_user_data' => 'boolean',
-        'event_ts_ms' => 'integer',
+        'event_at' => 'datetime',
     ];
 
     public function campaign()

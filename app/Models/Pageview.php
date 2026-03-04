@@ -27,7 +27,7 @@ class Pageview extends Model
         'utm_term',
         'utm_content',
         'ip',
-        'timestamp_ms',
+        'occurred_at',
         'gclid',
         'gad_campaignid',
         'fbclid',
@@ -70,7 +70,7 @@ class Pageview extends Model
 
     protected $casts = [
         'visitor_id' => 'integer',
-        'timestamp_ms' => 'integer',
+        'occurred_at' => 'datetime',
         'latitude' => 'float',
         'longitude' => 'float',
         'screen_width' => 'integer',

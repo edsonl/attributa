@@ -102,8 +102,8 @@ class TrackingControllerTest extends TestCase
                     'user_id' => (int) $user->id,
                 ],
                 'timing' => [
-                    'last_collect_at_ms' => now()->valueOf(),
-                    'last_hit_at_ms' => now()->valueOf(),
+                    'last_collect_at_ms' => (float) floor(microtime(true) * 1000),
+                    'last_hit_at_ms' => (float) floor(microtime(true) * 1000),
                 ],
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
@@ -117,7 +117,7 @@ class TrackingControllerTest extends TestCase
             'event_sig' => $eventSig,
             'event_type' => 'link_click',
             'target_url' => 'https://produto.example.com/checkout',
-            'event_ts' => Carbon::now()->valueOf(),
+            'event_ts' => Carbon::now()->format('Uv'),
         ], [
             'Origin' => 'https://produto.example.com',
             'Referer' => 'https://produto.example.com/pagina',
@@ -168,7 +168,7 @@ class TrackingControllerTest extends TestCase
             'event_sig' => $eventSig,
             'event_type' => 'page_engaged',
             'target_url' => 'https://produto.example.com/pagina',
-            'event_ts' => Carbon::now()->valueOf(),
+            'event_ts' => Carbon::now()->format('Uv'),
         ], [
             'Origin' => 'https://produto.example.com',
             'Referer' => 'https://produto.example.com/pagina',
@@ -220,7 +220,7 @@ class TrackingControllerTest extends TestCase
             'landing_url' => 'https://produto.example.com/pagina',
             'referrer' => 'https://google.com',
             'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            'timestamp' => Carbon::now()->valueOf(),
+            'timestamp' => Carbon::now()->format('Uv'),
             'utm_source' => 'google',
             'utm_medium' => 'cpc',
             'utm_campaign' => 'campanha-x',

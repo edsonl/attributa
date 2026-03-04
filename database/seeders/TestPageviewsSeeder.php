@@ -266,7 +266,6 @@ class TestPageviewsSeeder extends Seeder
         ];
 
         $now = now();
-        $nowMs = $now->valueOf();
         $rows = [];
 
         foreach ($scenarios as $index => $scenario) {
@@ -321,7 +320,7 @@ class TestPageviewsSeeder extends Seeder
                 'latitude' => $loc[4],
                 'longitude' => $loc[5],
                 'timezone' => $loc[6],
-                'timestamp_ms' => $nowMs - ($i * 60000),
+                'occurred_at' => $now->copy()->subMinutes($i),
                 'conversion' => $i % 3 === 0,
                 'created_at' => $now->copy()->subMinutes($i),
                 'updated_at' => $now->copy()->subMinutes($i),
@@ -354,7 +353,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => null,
                     'form_fields_filled' => null,
                     'form_has_user_data' => null,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(10)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(10),
                     'created_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
                 ];
@@ -375,7 +374,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => null,
                     'form_fields_filled' => null,
                     'form_has_user_data' => null,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(16)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(16),
                     'created_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
                 ];
@@ -392,7 +391,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => 2,
                     'form_fields_filled' => 2,
                     'form_has_user_data' => true,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(18)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(18),
                     'created_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
                 ];
@@ -414,7 +413,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => null,
                     'form_fields_filled' => null,
                     'form_has_user_data' => null,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(14)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(14),
                     'created_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
                 ];
@@ -433,7 +432,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => 2,
                     'form_fields_filled' => 2,
                     'form_has_user_data' => true,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(20)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(20),
                     'created_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
                 ];
@@ -453,7 +452,7 @@ class TestPageviewsSeeder extends Seeder
                     'form_fields_checked' => 3,
                     'form_fields_filled' => 3,
                     'form_has_user_data' => true,
-                    'event_ts_ms' => optional($baseTime)->copy()->addSeconds(24)?->valueOf(),
+                    'event_at' => optional($baseTime)->copy()->addSeconds(24),
                     'created_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
                     'updated_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
                 ];

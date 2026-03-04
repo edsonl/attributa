@@ -104,9 +104,8 @@ return new class extends Migration {
             // Timezone detectado
             $table->string('timezone')->nullable();
 
-            // Timestamp original da visita em milissegundos (epoch ms) - precisa de BIGINT.
-            //$table->bigInteger('timestamp_ms', false, true)->nullable();
-            $table->bigInteger('timestamp_ms')->nullable();
+            // Data/hora original da visita.
+            $table->dateTime('occurred_at', 3)->nullable();
 
             // Flag indicando se a visita converteu
             $table->boolean('conversion')->default(false);
@@ -125,6 +124,7 @@ return new class extends Migration {
             $table->index('visitor_id');
             $table->index(['campaign_id', 'visitor_id']);
             $table->index('gclid');
+            $table->index('occurred_at');
             $table->index('created_at');
 
         });
