@@ -50,7 +50,7 @@ const campaignPagination = ref({
     page: 1,
     rowsPerPage: 10,
     rowsNumber: 0,
-    sortBy: 'campaign_name',
+    sortBy: 'campaign_id',
     descending: false,
 })
 
@@ -61,7 +61,7 @@ const pageviewPagination = ref({
     page: 1,
     rowsPerPage: 10,
     rowsNumber: 0,
-    sortBy: 'occurred_at',
+    sortBy: 'pageview_id',
     descending: true,
 })
 
@@ -121,6 +121,7 @@ const summaryCards = computed(() => ([
 ]))
 
 const campaignColumns = [
+    { name: 'campaign_id', label: 'ID', field: 'campaign_id', align: 'left', sortable: true },
     { name: 'campaign_name', label: 'Campanha', field: 'campaign_name', align: 'left', sortable: true },
     { name: 'campaign_code', label: 'Código', field: 'campaign_code', align: 'left', sortable: true },
     { name: 'allowed_origin', label: 'Origem', field: 'allowed_origin', align: 'left', sortable: true },

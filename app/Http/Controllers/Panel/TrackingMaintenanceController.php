@@ -89,6 +89,20 @@ class TrackingMaintenanceController extends Controller
             'search' => ['nullable', 'string', 'max:120'],
         ]);
 
+        $search = trim((string) ($validated['search'] ?? ''));
+        $sortBy = (string) ($validated['sortBy'] ?? 'campaign_id');
+        $descending = filter_var($validated['descending'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($search === '' && $sortBy === 'campaign_id') {
+            return response()->json(
+                $this->paginateCampaignKeys(
+                    (int) ($validated['page'] ?? 1),
+                    (int) ($validated['per_page'] ?? 10),
+                    $descending
+                )
+            );
+        }
+
         $rows = collect($this->scanKeys($this->campaignKeyPrefix() . '*'))
             ->map(fn (string $key) => $this->buildCampaignRow($key))
             ->filter()
@@ -111,9 +125,10 @@ class TrackingMaintenanceController extends Controller
 
         $sorted = $this->sortRows(
             $rows,
-            (string) ($validated['sortBy'] ?? 'campaign_name'),
-            filter_var($validated['descending'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            $sortBy,
+            $descending,
             [
+                'campaign_id' => 'campaign_id',
                 'campaign_name' => 'campaign_name',
                 'campaign_code' => 'campaign_code',
                 'allowed_origin' => 'allowed_origin',
@@ -175,6 +190,21 @@ class TrackingMaintenanceController extends Controller
             'search' => ['nullable', 'string', 'max:120'],
         ]);
 
+        $search = trim((string) ($validated['search'] ?? ''));
+        $sortBy = (string) ($validated['sortBy'] ?? 'pageview_id');
+        $descending = filter_var($validated['descending'] ?? true, FILTER_VALIDATE_BOOLEAN);
+
+        if ($search === '' && in_array($sortBy, ['pageview_id', 'campaign_code'], true)) {
+            return response()->json(
+                $this->paginatePageviewKeys(
+                    (int) ($validated['page'] ?? 1),
+                    (int) ($validated['per_page'] ?? 10),
+                    $sortBy,
+                    $descending
+                )
+            );
+        }
+
         $rows = collect($this->scanKeys($this->pageviewKeyPrefix() . '*'))
             ->map(fn (string $key) => $this->buildPageviewRow($key))
             ->filter()
@@ -199,10 +229,11 @@ class TrackingMaintenanceController extends Controller
 
         $sorted = $this->sortRows(
             $rows,
-            (string) ($validated['sortBy'] ?? 'occurred_at_sort'),
-            filter_var($validated['descending'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            $sortBy,
+            $descending,
             [
                 'pageview_id' => 'pageview_id',
+                'campaign_code' => 'campaign_code',
                 'campaign_name' => 'campaign_name',
                 'visitor_id' => 'visitor_id',
                 'occurred_at' => 'occurred_at_sort',
@@ -444,6 +475,76 @@ class TrackingMaintenanceController extends Controller
         ];
     }
 
+    protected function paginateCampaignKeys(int $page, int $perPage, bool $descending): array
+    {
+        $keyRows = collect($this->scanKeys($this->campaignKeyPrefix() . '*'))
+            ->map(function (string $key) {
+                $campaignId = $this->extractCampaignIdFromKey($key);
+
+                if ($campaignId < 1) {
+                    return null;
+                }
+
+                return [
+                    'key' => $key,
+                    'campaign_id' => $campaignId,
+                ];
+            })
+            ->filter()
+            ->sortBy('campaign_id', SORT_NUMERIC, $descending)
+            ->values();
+
+        $pagination = $this->paginateRows($keyRows, $page, $perPage);
+        $pagination['data'] = collect($pagination['data'])
+            ->map(fn (array $item) => $this->buildCampaignRow((string) $item['key']))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $pagination;
+    }
+
+    protected function paginatePageviewKeys(int $page, int $perPage, string $sortBy, bool $descending): array
+    {
+        $keyRows = collect($this->scanKeys($this->pageviewKeyPrefix() . '*'))
+            ->map(function (string $key) {
+                $parsed = $this->extractPageviewKeyParts($key);
+                if ($parsed === null) {
+                    return null;
+                }
+
+                return array_merge($parsed, [
+                    'key' => $key,
+                ]);
+            })
+            ->filter()
+            ->sort(function (array $left, array $right) use ($sortBy, $descending) {
+                $leftValue = $left[$sortBy] ?? null;
+                $rightValue = $right[$sortBy] ?? null;
+
+                if (is_numeric($leftValue) && is_numeric($rightValue)) {
+                    $comparison = $leftValue <=> $rightValue;
+                } else {
+                    $comparison = strcmp(
+                        mb_strtolower((string) $leftValue),
+                        mb_strtolower((string) $rightValue)
+                    );
+                }
+
+                return $descending ? ($comparison * -1) : $comparison;
+            })
+            ->values();
+
+        $pagination = $this->paginateRows($keyRows, $page, $perPage);
+        $pagination['data'] = collect($pagination['data'])
+            ->map(fn (array $item) => $this->buildPageviewRow((string) $item['key']))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $pagination;
+    }
+
     protected function sortRows(Collection $rows, string $sortBy, bool $descending, array $allowedColumns): Collection
     {
         $column = $allowedColumns[$sortBy] ?? array_values($allowedColumns)[0] ?? $sortBy;
@@ -605,6 +706,36 @@ class TrackingMaintenanceController extends Controller
         }
 
         return $key;
+    }
+
+    protected function extractCampaignIdFromKey(string $key): int
+    {
+        $parts = explode(':', $key);
+        $campaignId = end($parts);
+
+        return is_numeric($campaignId) ? (int) $campaignId : 0;
+    }
+
+    protected function extractPageviewKeyParts(string $key): ?array
+    {
+        $parts = explode(':', $key);
+
+        if (count($parts) < 5) {
+            return null;
+        }
+
+        $pageviewCode = (string) ($parts[count($parts) - 1] ?? '');
+        $campaignCode = (string) ($parts[count($parts) - 2] ?? '');
+        $pageviewId = app(HashidService::class)->decode($pageviewCode);
+
+        if (!$pageviewId || $pageviewId < 1) {
+            return null;
+        }
+
+        return [
+            'pageview_id' => (int) $pageviewId,
+            'campaign_code' => $campaignCode,
+        ];
     }
 
     protected function deleteKeys(array $keys): int
