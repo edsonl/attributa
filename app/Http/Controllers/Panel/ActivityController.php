@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Pageview;
 use App\Models\CampaignVisitor;
 use App\Models\Campaign;
+use App\Models\AdsConversion;
 use App\Models\IpLookupCache;
 use App\Support\TrackingEventDescriptions;
 use App\Support\CampaignDisplayNameFormatter;
@@ -54,9 +55,7 @@ class ActivityController extends Controller
             'ip_category'   => 'ip_categories.name',
             'traffic_source' => 'traffic_source_categories.name',
             'device_browser' => 'pageviews.device_type',
-            'country_code'  => 'pageviews.country_code',
-            'region_name'   => 'pageviews.region_name',
-            'city'          => 'pageviews.city',
+            'location'      => 'pageviews.country_code',
             //'url'           => 'pageviews.url',
             'gclid'         => 'pageviews.gclid',
             'conversion'    => 'pageviews.conversion',
@@ -144,7 +143,7 @@ class ActivityController extends Controller
         $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
             $pageviewDateRaw = $this->resolveModelRawDateTime($row, 'occurred_at')
                 ?? $this->resolveModelRawDateTime($row, 'created_at');
-            $row->created_at_formatted = $this->formatUtcDateTimeForDisplay($pageviewDateRaw, $tz);
+            $row->created_at_formatted = $this->formatUtcDateTimeForDisplay($pageviewDateRaw, $tz, false);
             $visitorId = (int) ($row->visitor_id ?? 0);
             $row->visitor_code = $visitorId > 0
                 ? app(HashidService::class)->encode($visitorId)
@@ -160,6 +159,11 @@ class ActivityController extends Controller
             $row->campaign_name_display = $campaignLabel['display'] !== '' ? $campaignLabel['display'] : null;
             $row->campaign_name_display_name = $campaignLabel['display_name'] !== '' ? $campaignLabel['display_name'] : null;
             $row->campaign_name_suffix = $campaignLabel['suffix'] !== '' ? $campaignLabel['suffix'] : null;
+            $row->location_display = $this->formatPageviewLocation(
+                $row->country_code ?? null,
+                $row->region_name ?? null,
+                $row->city ?? null
+            );
 
             unset($row->created_at, $row->occurred_at);
 
@@ -212,13 +216,27 @@ class ActivityController extends Controller
             ]);
         }
 
-        $pageview->delete();
+        if ($this->pageviewHasRelatedConversion((int) $pageview->id)) {
+            return response()->json([
+                'message' => 'Pageview com conversão relacionada não pode ser excluído.',
+                'deleted' => false,
+            ]);
+        }
+
+        $campaignId = $pageview->campaign_id ? (int) $pageview->campaign_id : null;
+        $visitorId = $pageview->visitor_id ? (int) $pageview->visitor_id : null;
+
+        DB::transaction(function () use ($pageview, $campaignId, $visitorId) {
+            $pageview->delete();
+            $this->syncCampaignVisitorAggregate($campaignId, $visitorId);
+        });
+
         $this->forgetTrackingRedisForPageview(
             pageviewId: (int) $pageview->id,
             userId: (int) $pageview->user_id,
             campaignCode: (string) ($pageview->campaign?->code ?? ''),
-            visitorId: $pageview->visitor_id ? (int) $pageview->visitor_id : null,
-            campaignId: $pageview->campaign_id ? (int) $pageview->campaign_id : null,
+            visitorId: $visitorId,
+            campaignId: $campaignId,
         );
 
         return response()->json([
@@ -247,16 +265,55 @@ class ActivityController extends Controller
             ->whereIn('id', $data['ids']);
         $totalSelected = count($data['ids']);
         $convertedCount = (clone $query)->where('conversion', 1)->count();
+        $relatedConversionCount = (clone $query)
+            ->where('conversion', 0)
+            ->whereExists(function ($subQuery) {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('ads_conversions')
+                    ->whereColumn('ads_conversions.pageview_id', 'pageviews.id');
+            })
+            ->count();
 
         $deletableRows = (clone $query)
             ->where('conversion', 0)
+            ->whereNotExists(function ($subQuery) {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('ads_conversions')
+                    ->whereColumn('ads_conversions.pageview_id', 'pageviews.id');
+            })
             ->get(['id', 'user_id', 'campaign_id', 'visitor_id']);
 
         $campaignCodesById = Campaign::query()
             ->whereIn('id', $deletableRows->pluck('campaign_id')->filter()->unique()->values()->all())
             ->pluck('code', 'id');
 
-        $deleted = (clone $query)->where('conversion', 0)->delete();
+        $aggregatePairs = $deletableRows
+            ->map(fn ($row) => [
+                'campaign_id' => $row->campaign_id ? (int) $row->campaign_id : null,
+                'visitor_id' => $row->visitor_id ? (int) $row->visitor_id : null,
+            ])
+            ->filter(fn ($pair) => !empty($pair['campaign_id']) && !empty($pair['visitor_id']))
+            ->unique(fn ($pair) => $pair['campaign_id'] . ':' . $pair['visitor_id'])
+            ->values();
+
+        $deleted = 0;
+        if ($deletableRows->isNotEmpty()) {
+            $idsToDelete = $deletableRows->pluck('id')->all();
+            DB::transaction(function () use ($idsToDelete, $aggregatePairs, &$deleted) {
+                $deleted = Pageview::query()
+                    ->whereIn('id', $idsToDelete)
+                    ->delete();
+
+                foreach ($aggregatePairs as $pair) {
+                    $this->syncCampaignVisitorAggregate(
+                        (int) $pair['campaign_id'],
+                        (int) $pair['visitor_id']
+                    );
+                }
+            });
+        }
 
         foreach ($deletableRows as $row) {
             $campaignCode = (string) ($campaignCodesById[(int) $row->campaign_id] ?? '');
@@ -270,11 +327,10 @@ class ActivityController extends Controller
         }
 
         return response()->json([
-            'message' => $convertedCount > 0
-                ? 'Pageviews não convertidos excluídos. Os convertidos foram ignorados.'
-                : 'Pageviews excluídos com sucesso.',
+            'message' => $this->buildBulkDestroyMessage($deleted, $convertedCount, $relatedConversionCount),
             'deleted' => $deleted,
             'ignored_converted' => $convertedCount,
+            'ignored_related_conversion' => $relatedConversionCount,
             'selected' => $totalSelected,
         ]);
     }
@@ -458,7 +514,11 @@ class ActivityController extends Controller
         return (string) $raw;
     }
 
-    protected function formatUtcDateTimeForDisplay(mixed $value, string $timezone = 'America/Sao_Paulo'): ?string
+    protected function formatUtcDateTimeForDisplay(
+        mixed $value,
+        string $timezone = 'America/Sao_Paulo',
+        bool $withSeconds = true
+    ): ?string
     {
         if ($value === null || $value === '') {
             return null;
@@ -466,7 +526,92 @@ class ActivityController extends Controller
 
         return Carbon::parse((string) $value, 'UTC')
             ->setTimezone($timezone)
-            ->format('d/m/Y, H:i:s');
+            ->format($withSeconds ? 'd/m/Y, H:i:s' : 'd/m/Y, H:i');
+    }
+
+    protected function formatPageviewLocation(?string $countryCode, ?string $regionName, ?string $city): string
+    {
+        $parts = array_values(array_filter([
+            $this->normalizeLocationPart($countryCode ? strtoupper(trim($countryCode)) : null),
+            $this->normalizeLocationPart($regionName),
+            $this->normalizeLocationPart($city),
+        ]));
+
+        return count($parts) > 0 ? implode('/', $parts) : '-';
+    }
+
+    protected function normalizeLocationPart(?string $value): ?string
+    {
+        $text = trim((string) $value);
+        return $text !== '' ? $text : null;
+    }
+
+    protected function pageviewHasRelatedConversion(int $pageviewId): bool
+    {
+        return AdsConversion::query()
+            ->where('pageview_id', $pageviewId)
+            ->exists();
+    }
+
+    protected function syncCampaignVisitorAggregate(?int $campaignId, ?int $visitorId): void
+    {
+        if (empty($campaignId) || empty($visitorId)) {
+            return;
+        }
+
+        $aggregate = Pageview::query()
+            ->where('campaign_id', $campaignId)
+            ->where('visitor_id', $visitorId)
+            ->selectRaw('COUNT(*) as hits')
+            ->selectRaw('MIN(COALESCE(occurred_at, created_at)) as first_seen_at')
+            ->selectRaw('MAX(COALESCE(occurred_at, created_at)) as last_seen_at')
+            ->first();
+
+        $hits = (int) ($aggregate?->hits ?? 0);
+        if ($hits < 1) {
+            CampaignVisitor::query()
+                ->where('campaign_id', $campaignId)
+                ->where('visitor_id', $visitorId)
+                ->delete();
+            return;
+        }
+
+        CampaignVisitor::query()->updateOrCreate(
+            [
+                'campaign_id' => $campaignId,
+                'visitor_id' => $visitorId,
+            ],
+            [
+                'hits' => $hits,
+                'first_seen_at' => $aggregate?->first_seen_at,
+                'last_seen_at' => $aggregate?->last_seen_at,
+            ]
+        );
+    }
+
+    protected function buildBulkDestroyMessage(int $deleted, int $ignoredConverted, int $ignoredRelatedConversion): string
+    {
+        $ignoredParts = [];
+        if ($ignoredConverted > 0) {
+            $ignoredParts[] = 'convertidos foram ignorados';
+        }
+        if ($ignoredRelatedConversion > 0) {
+            $ignoredParts[] = 'com conversão relacionada foram ignorados';
+        }
+
+        if ($deleted > 0 && count($ignoredParts) === 0) {
+            return 'Pageviews excluídos com sucesso.';
+        }
+
+        if ($deleted > 0) {
+            return 'Pageviews elegíveis excluídos. Os que ' . implode(' e os que ', $ignoredParts) . '.';
+        }
+
+        if (count($ignoredParts) > 0) {
+            return 'Nenhum pageview elegível para exclusão. Os que ' . implode(' e os que ', $ignoredParts) . '.';
+        }
+
+        return 'Nenhum pageview elegível para exclusão.';
     }
 
     protected function extractUrlData(?string $url): array

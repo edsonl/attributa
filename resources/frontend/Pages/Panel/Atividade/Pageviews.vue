@@ -48,9 +48,7 @@ const dateRangeLabel = computed(() => {
 const columns = [
     { name: 'created_at', label: 'Data', field: 'created_at_formatted', sortable: true, align: 'left' },
     { name: 'ip', label: 'Classificação / IP', field: 'ip', sortable: true, align: 'left' },
-    { name: 'country_code', label: 'País', field: 'country_code', sortable: true, align: 'left' },
-    { name: 'region_name', label: 'Região', field: 'region_name', sortable: true, align: 'left' },
-    { name: 'city', label: 'Cidade', field: 'city', sortable: true, align: 'left' },
+    { name: 'location', label: 'Localização', field: 'location_display', sortable: true, align: 'left' },
     { name: 'campaign_name', label: 'Campanha', field: 'campaign_name', sortable: true, align: 'left' },
     { name: 'visitor', label: 'Visitante', field: 'visitor_status', sortable: true, align: 'center' },
     { name: 'traffic_source', label: 'Origem do Tráfego', field: 'traffic_source_name', sortable: true, align: 'left' },
@@ -60,12 +58,7 @@ const columns = [
     { name: 'details', label: 'Detalhes', field: 'id', align: 'center' },
     { name: 'actions', label: 'Ações', field: 'id', align: 'right' },
 ]
-const defaultHiddenColumns = ['region_name', 'city']
-const visibleColumns = ref(
-    columns
-        .map(column => column.name)
-        .filter(name => !defaultHiddenColumns.includes(name))
-)
+const visibleColumns = ref(columns.map(column => column.name))
 
 function isColumnVisible(name) {
     return visibleColumns.value.includes(name)
@@ -823,29 +816,17 @@ onMounted(() => {
                 </q-td>
             </template>
 
-            <template #body-cell-country_code="props">
+            <template #body-cell-location="props">
                 <q-td :props="props">
                     <div class="tw-flex tw-items-center tw-gap-2">
                         <img
                             v-if="resolveCountryFlag(props.row)"
                             :src="resolveCountryFlag(props.row)"
-                            :alt="props.value"
+                            :alt="props.row.country_code"
                             class="country-flag"
                         />
-                        <span>{{ props.value ? props.value.toUpperCase() : '-' }}</span>
+                        <span>{{ props.value || '-' }}</span>
                     </div>
-                </q-td>
-            </template>
-
-            <template #body-cell-region_name="props">
-                <q-td :props="props">
-                    {{ props.value || '-' }}
-                </q-td>
-            </template>
-
-            <template #body-cell-city="props">
-                <q-td :props="props">
-                    {{ props.value || '-' }}
                 </q-td>
             </template>
 
