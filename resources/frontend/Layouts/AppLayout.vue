@@ -278,6 +278,7 @@ const links = [
     { label: 'Origem de tráfego', icon: 'moving', route: 'panel.traffic-source-categories.index'},
     { label: 'Plataformas afiliado', icon: 'hub', route: 'panel.affiliate-platforms.index'},
     { label: 'Catálogo notificações', icon: 'notifications_active', route: 'panel.notification-catalog.index'},
+    { label: 'Tracking e Manutenção', icon: 'dns', route: 'panel.tracking-maintenance.index'},
 ]
 
 // Usuário (foto/nome/iniciais)

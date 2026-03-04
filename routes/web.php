@@ -20,6 +20,7 @@ use App\Http\Controllers\Panel\GoogleAuthController;
 use App\Http\Controllers\Panel\LeadsController;
 use App\Http\Controllers\Panel\NotificationController;
 use App\Http\Controllers\Panel\NotificationCatalogController;
+use App\Http\Controllers\Panel\TrackingMaintenanceController;
 use App\Http\Controllers\Panel\TaskController;
 use App\Http\Controllers\Panel\TaskNoteController;
 use App\Http\Controllers\Panel\UserController;
@@ -294,6 +295,22 @@ Route::middleware(['auth', 'verified'])
                     Route::patch('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
                     Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
                     Route::post('/read-all', [NotificationController::class, 'mark-all-as-read'])->name('mark-all-as-read');
+                });
+
+            Route::prefix('tracking-manutencao')
+                ->name('tracking-maintenance.')
+                ->group(function () {
+                    Route::get('/', [TrackingMaintenanceController::class, 'index'])->name('index');
+                    Route::get('/summary', [TrackingMaintenanceController::class, 'summary'])->name('summary');
+                    Route::get('/script', [TrackingMaintenanceController::class, 'script'])->name('script.show');
+                    Route::delete('/script', [TrackingMaintenanceController::class, 'destroyScript'])->name('script.destroy');
+                    Route::get('/campaigns/data', [TrackingMaintenanceController::class, 'campaigns'])->name('campaigns.data');
+                    Route::delete('/campaigns/{cacheId}', [TrackingMaintenanceController::class, 'destroyCampaign'])->name('campaigns.destroy');
+                    Route::delete('/campaigns', [TrackingMaintenanceController::class, 'bulkDestroyCampaigns'])->name('campaigns.bulk-destroy');
+                    Route::get('/pageviews/data', [TrackingMaintenanceController::class, 'pageviews'])->name('pageviews.data');
+                    Route::delete('/pageviews/{cacheId}', [TrackingMaintenanceController::class, 'destroyPageview'])->name('pageviews.destroy');
+                    Route::delete('/pageviews', [TrackingMaintenanceController::class, 'bulkDestroyPageviews'])->name('pageviews.bulk-destroy');
+                    Route::delete('/flush-all', [TrackingMaintenanceController::class, 'flushAll'])->name('flush-all');
                 });
 
 
