@@ -149,12 +149,7 @@ const visitFlowSteps = computed(() => {
     const interactionBaseCaption = interactionBase.first
         ? `${interactionBase.first.created_at_formatted || '-'}${interactionBase.count > 1 ? ` (+${interactionBase.count - 1})` : ''}`
         : (interactionUsesForm ? 'Sem envio de formulário' : 'Sem clique em link')
-    const formDataCaption = interactionUsesForm && interactionBase.first
-        ? (interactionBase.first.form_has_user_data ? 'Dados informados' : 'Sem dados informados')
-        : ''
-    const interactionCaption = formDataCaption
-        ? `${interactionBaseCaption} • ${formDataCaption}`
-        : interactionBaseCaption
+    const interactionCaption = interactionBaseCaption
 
     const conversionDone = Boolean(detailPageview.value?.conversion)
     const conversionCaption = conversionDone
@@ -164,7 +159,7 @@ const visitFlowSteps = computed(() => {
     return [
         {
             name: 1,
-            title: 'Page View',
+            title: 'Visita',
             caption: pageViewCaption,
             icon: 'visibility',
             done: true,
@@ -173,7 +168,7 @@ const visitFlowSteps = computed(() => {
         },
         {
             name: 2,
-            title: 'Page Engaged',
+            title: 'Engajamento',
             caption: engagedCaption,
             icon: 'insights',
             done: Boolean(engaged.first),
@@ -184,7 +179,7 @@ const visitFlowSteps = computed(() => {
         },
         {
             name: 3,
-            title: interactionUsesForm ? 'Form Submit' : 'Link Click',
+            title: interactionUsesForm ? 'Envio de formulário' : 'Clique em link',
             caption: interactionCaption,
             icon: interactionUsesForm ? 'fact_check' : 'ads_click',
             done: Boolean(interactionBase.first),
@@ -328,6 +323,12 @@ function previewValue(value) {
     return text.slice(0, PREVIEW_CHAR_LIMIT)
 }
 
+function cropText(value, limit = 50) {
+    const text = String(value || '').trim()
+    if (!text) return ''
+    return text.length > limit ? `${text.slice(0, limit)}...` : text
+}
+
 function resolveGclid() {
     const fromPageview = detailPageview.value?.gclid
     if (hasText(fromPageview)) return String(fromPageview)
@@ -385,23 +386,16 @@ function formatTrafficReason(value) {
 }
 
 function formatEngagementReason(event) {
-    const rawElementId = String(event?.element_id || '').trim().toLowerCase()
-    let reason = ''
-
-    if (rawElementId.startsWith('engagement_reason:')) {
-        reason = rawElementId.slice('engagement_reason:'.length)
-    } else {
-        const rawName = String(event?.element_name || '').trim()
-        const match = /^page engaged\s*\((.+)\)$/i.exec(rawName)
-        reason = match?.[1] ? String(match[1]).trim().toLowerCase() : ''
-    }
+    const reason = getEventReasonKey(event)
 
     const labels = {
-        scroll_30: 'Scroll 30%',
-        time_10s: 'Tempo 10s',
-        link_click: 'Clique em link',
-        form_submit: 'Envio de formulário',
-        interactions: '2+ interações',
+        scroll_30: 'Rolou 30% da página',
+        time_10s: 'Permaneceu 10 segundos',
+        link_click: 'Demonstrou intenção ao clicar em link',
+        form_submit: 'Demonstrou intenção ao iniciar envio de formulário',
+        interactions: 'Fez duas ou mais interações',
+        reload: 'Recarregou a página',
+        navigation_reload: 'Recarregou a página',
     }
 
     return labels[reason] || (reason ? `Engajamento: ${reason}` : '')
@@ -412,13 +406,55 @@ function resolveEventReasonLabel(type, event) {
         return formatEngagementReason(event)
     }
     if (type === 'form_submit') {
-        return event?.form_has_user_data ? 'Dados informados' : 'Sem dados informados'
+        return describeInteractionEvent(event, true)
     }
     if (type === 'link_click') {
-        return 'Clique em link'
+        return describeInteractionEvent(event, false)
     }
 
     return ''
+}
+
+function getEventReasonKey(event) {
+    const fromReason = String(event?.event_reason || '').trim().toLowerCase()
+    if (fromReason) return fromReason
+
+    const rawElementId = String(event?.element_id || '').trim().toLowerCase()
+    if (rawElementId.startsWith('engagement_reason:')) {
+        return rawElementId.slice('engagement_reason:'.length)
+    }
+    if (rawElementId === 'navigation_type:reload') {
+        return 'reload'
+    }
+
+    const rawName = String(event?.element_name || '').trim()
+    const match = /^page engaged\s*\((.+)\)$/i.exec(rawName)
+    return match?.[1] ? String(match[1]).trim().toLowerCase() : ''
+}
+
+function describeInteractionEvent(event, useFormStep) {
+    if (!event) return ''
+
+    const name = String(event?.element_name || '').trim()
+    const classes = String(event?.element_classes || '').trim()
+
+    if (useFormStep) {
+        const filled = Math.max(Number(event?.form_fields_filled || 0), 0)
+        const checked = Math.max(Number(event?.form_fields_checked || 0), 0)
+        const parts = [cropText(name || 'Formulário enviado')]
+
+        if (checked > 0) {
+            parts.push(`${filled} de ${checked} campos preenchidos`)
+        } else if (filled > 0) {
+            parts.push(`${filled} campos preenchidos`)
+        }
+
+        return parts.join(' • ')
+    }
+
+    if (name) return cropText(name)
+    if (classes) return `Clique em elemento com classe ${cropText(classes)}`
+    return 'Clique em link'
 }
 
 function resolveEventMs(event) {
@@ -457,7 +493,7 @@ function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = [], hidden
 }
 
 function buildEngagedTooltip(engaged) {
-    const lines = buildDetailedReasonLines(engaged?.reasons, ['Scroll 30%'], ['2+ interações'])
+    const lines = buildDetailedReasonLines(engaged?.reasons, ['Rolou 30% da página'], ['Fez duas ou mais interações'])
     if (lines.length === 0) {
         return 'Usuário atingiu critério de engajamento nesta visita.'
     }
@@ -468,10 +504,30 @@ function buildInteractionTooltip(interaction, useFormStep) {
     const base = useFormStep
         ? 'Visitante enviou formulário na página.'
         : 'Visitante clicou em link rastreado.'
+    const summary = describeInteractionEvent(interaction?.first, useFormStep)
     const lines = buildDetailedReasonLines(interaction?.reasons)
+    const extra = []
 
-    if (lines.length === 0) return base
-    return `${base}\nDetalhado:\n${lines.join('\n')}`
+    if (summary) {
+        extra.push(`Resumo: ${cropText(summary)}`)
+    }
+
+    const classes = String(interaction?.first?.element_classes || '').trim()
+    if (classes) {
+        extra.push(`Classes: ${cropText(classes)}`)
+    }
+
+    if (useFormStep) {
+        const filled = Math.max(Number(interaction?.first?.form_fields_filled || 0), 0)
+        const checked = Math.max(Number(interaction?.first?.form_fields_checked || 0), 0)
+        if (checked > 0) {
+            extra.push(`Preenchimento: ${filled} de ${checked} campos`)
+        }
+    }
+
+    const allLines = [...extra, ...lines]
+    if (allLines.length === 0) return base
+    return `${base}\nDetalhado:\n${allLines.join('\n')}`
 }
 
 async function copyValue(value) {

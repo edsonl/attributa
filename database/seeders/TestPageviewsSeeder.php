@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Browser;
 use App\Models\Campaign;
+use App\Models\CampaignVisitor;
 use App\Models\DeviceCategory;
 use App\Models\IpCategory;
 use App\Models\Pageview;
@@ -53,6 +54,10 @@ class TestPageviewsSeeder extends Seeder
             ->toArray();
 
         // Recria um conjunto limpo e previsível de visitas da campanha de teste.
+        CampaignVisitor::query()
+            ->where('campaign_id', $campaign->id)
+            ->delete();
+
         Pageview::query()
             ->where('campaign_id', $campaign->id)
             ->delete();
@@ -267,16 +272,19 @@ class TestPageviewsSeeder extends Seeder
 
         $now = now();
         $rows = [];
+        $visitorIds = [7101, 7101, 7102, 7103, 7103, 7104, 7105, 7105, 7106, 7107];
 
         foreach ($scenarios as $index => $scenario) {
             $i = $index + 1;
             $loc = $locations[$index % count($locations)];
             $query = trim((string) ($scenario['query'] ?? ''));
             $urlBase = "https://teste.com/produto-{$i}";
+            $occurredAt = $now->copy()->subMinutes($i * 3);
 
             $rows[] = [
                 'user_id' => 1,
                 'campaign_id' => $campaign->id,
+                'visitor_id' => $visitorIds[$index] ?? (8000 + $i),
                 'url' => $query !== '' ? "{$urlBase}?{$query}" : $urlBase,
                 'landing_url' => $urlBase,
                 'referrer' => $scenario['referrer'] ?? null,
@@ -320,10 +328,10 @@ class TestPageviewsSeeder extends Seeder
                 'latitude' => $loc[4],
                 'longitude' => $loc[5],
                 'timezone' => $loc[6],
-                'occurred_at' => $now->copy()->subMinutes($i),
+                'occurred_at' => $occurredAt,
                 'conversion' => $i % 3 === 0,
-                'created_at' => $now->copy()->subMinutes($i),
-                'updated_at' => $now->copy()->subMinutes($i),
+                'created_at' => $occurredAt,
+                'updated_at' => $occurredAt,
             ];
         }
 
@@ -332,130 +340,87 @@ class TestPageviewsSeeder extends Seeder
         $seededPageviews = Pageview::query()
             ->where('campaign_id', $campaign->id)
             ->orderBy('id')
-            ->get(['id', 'user_id', 'campaign_id', 'conversion', 'created_at']);
+            ->get(['id', 'user_id', 'campaign_id', 'visitor_id', 'conversion', 'url', 'created_at', 'occurred_at']);
+
+        $visitorRows = $seededPageviews
+            ->groupBy('visitor_id')
+            ->map(function ($group) use ($campaign) {
+                $ordered = $group->sortBy(fn ($row) => optional($row->occurred_at ?? $row->created_at)?->timestamp ?? 0)->values();
+                $firstAt = $ordered->first()?->occurred_at ?? $ordered->first()?->created_at;
+                $lastAt = $ordered->last()?->occurred_at ?? $ordered->last()?->created_at;
+
+                return [
+                    'campaign_id' => $campaign->id,
+                    'visitor_id' => (int) $group->first()->visitor_id,
+                    'first_seen_at' => $firstAt,
+                    'last_seen_at' => $lastAt,
+                    'hits' => $group->count(),
+                    'created_at' => $firstAt ?? now(),
+                    'updated_at' => $lastAt ?? now(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        if (!empty($visitorRows)) {
+            CampaignVisitor::query()->insert($visitorRows);
+        }
 
         $eventRows = [];
         foreach ($seededPageviews as $index => $pageview) {
             $step = $index + 1;
-            $baseTime = $pageview->created_at ?? now();
+            $baseTime = $pageview->occurred_at ?? $pageview->created_at ?? now();
+            $targetBaseUrl = preg_replace('/\?.*$/', '', (string) $pageview->url) ?: "https://teste.com/produto-{$step}";
 
-            // Parte das visitas recebe engajamento para simular comportamento real.
-            if ($step % 4 !== 0) {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'page_engaged',
-                    'target_url' => "https://teste.com/produto-{$step}",
-                    'element_id' => null,
-                    'element_name' => 'Page engaged (time_10s)',
-                    'element_classes' => null,
-                    'form_fields_checked' => null,
-                    'form_fields_filled' => null,
-                    'form_has_user_data' => null,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(10),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(10) ?? now(),
-                ];
+            $eventRows[] = $this->buildEventRow($pageview, 'page_engaged', $targetBaseUrl, $baseTime->copy()->addSeconds(10), [
+                'event_reason' => 'time_10s',
+                'element_name' => 'Engajamento da página',
+            ]);
+
+            if ($step % 2 === 0) {
+                $eventRows[] = $this->buildEventRow($pageview, 'page_engaged', $targetBaseUrl, $baseTime->copy()->addSeconds(14), [
+                    'event_reason' => 'scroll_30',
+                    'element_name' => 'Engajamento da página',
+                ]);
             }
 
-            // Simula interação principal: alterna entre clique e formulário,
-            // garantindo exemplos claros dos dois tipos no conjunto de teste.
-            if ($step % 2 === 0) {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'link_click',
-                    'target_url' => "https://teste.com/produto-{$step}/checkout",
-                    'element_id' => null,
+            if ($step % 3 === 0) {
+                $eventRows[] = $this->buildEventRow($pageview, 'navigation_reload', $targetBaseUrl, $baseTime->copy()->addSeconds(6), [
+                    'event_reason' => 'reload',
+                    'element_name' => 'Recarregamento da página',
+                ]);
+            }
+
+            if ($step % 4 === 0 || $step === 1) {
+                $eventRows[] = $this->buildEventRow($pageview, 'page_engaged', $targetBaseUrl, $baseTime->copy()->addSeconds(18), [
+                    'event_reason' => 'interactions',
+                    'element_name' => 'Engajamento da página',
+                ]);
+            }
+
+            if ($step % 2 === 0 || $step === 1) {
+                $eventRows[] = $this->buildEventRow($pageview, 'page_engaged', $targetBaseUrl, $baseTime->copy()->addSeconds(16), [
+                    'event_reason' => 'link_click',
+                    'element_name' => 'Engajamento da página',
+                ]);
+                $eventRows[] = $this->buildEventRow($pageview, 'link_click', "{$targetBaseUrl}/checkout", $baseTime->copy()->addSeconds(17), [
                     'element_name' => "Link {$step} - Comprar agora",
                     'element_classes' => 'btn btn-primary cta-checkout',
-                    'form_fields_checked' => null,
-                    'form_fields_filled' => null,
-                    'form_has_user_data' => null,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(16),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(16) ?? now(),
-                ];
-            } else {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'form_submit',
-                    'target_url' => "https://teste.com/produto-{$step}/lead",
-                    'element_id' => null,
+                ]);
+            }
+
+            if ($step % 2 !== 0 || (bool) $pageview->conversion) {
+                $eventRows[] = $this->buildEventRow($pageview, 'page_engaged', $targetBaseUrl, $baseTime->copy()->addSeconds(20), [
+                    'event_reason' => 'form_submit',
+                    'element_name' => 'Engajamento da página',
+                ]);
+                $eventRows[] = $this->buildEventRow($pageview, 'form_submit', "{$targetBaseUrl}/lead", $baseTime->copy()->addSeconds(21), [
                     'element_name' => "Formulário {$step}",
                     'element_classes' => 'lead-form checkout-step',
-                    'form_fields_checked' => 2,
-                    'form_fields_filled' => 2,
-                    'form_has_user_data' => true,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(18),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(18) ?? now(),
-                ];
-            }
-
-            // Reforço determinístico para teste manual rápido:
-            // primeira visita sempre tem clique;
-            // segunda visita sempre tem submit de formulário.
-            if ($step === 1) {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'link_click',
-                    'target_url' => "https://teste.com/produto-{$step}/detalhes",
-                    'element_id' => null,
-                    'element_name' => "Link {$step} - Ver detalhes",
-                    'element_classes' => 'btn btn-secondary cta-details',
-                    'form_fields_checked' => null,
-                    'form_fields_filled' => null,
-                    'form_has_user_data' => null,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(14),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(14) ?? now(),
-                ];
-            }
-
-            if ($step === 2) {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'form_submit',
-                    'target_url' => "https://teste.com/produto-{$step}/cadastro",
-                    'element_id' => null,
-                    'element_name' => "Formulário {$step} - Cadastro",
-                    'element_classes' => 'lead-form profile-step',
-                    'form_fields_checked' => 2,
-                    'form_fields_filled' => 2,
-                    'form_has_user_data' => true,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(20),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(20) ?? now(),
-                ];
-            }
-
-            // Para visitas convertidas, garante um fluxo mais "completo".
-            if ((bool) $pageview->conversion) {
-                $eventRows[] = [
-                    'user_id' => $pageview->user_id,
-                    'campaign_id' => $pageview->campaign_id,
-                    'pageview_id' => $pageview->id,
-                    'event_type' => 'form_submit',
-                    'target_url' => "https://teste.com/produto-{$step}/checkout/submit",
-                    'element_id' => null,
-                    'element_name' => "Formulário {$step} - Checkout",
-                    'element_classes' => 'checkout-form final-step',
                     'form_fields_checked' => 3,
-                    'form_fields_filled' => 3,
-                    'form_has_user_data' => true,
-                    'event_at' => optional($baseTime)->copy()->addSeconds(24),
-                    'created_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
-                    'updated_at' => optional($baseTime)->copy()->addSeconds(24) ?? now(),
-                ];
+                    'form_fields_filled' => $step % 5 === 0 ? 1 : 3,
+                    'form_has_user_data' => $step % 5 !== 0,
+                ]);
             }
         }
 
@@ -479,5 +444,26 @@ class TestPageviewsSeeder extends Seeder
 
         $text = trim((string) $value);
         return $text === '' ? null : $text;
+    }
+
+    protected function buildEventRow(Pageview $pageview, string $eventType, string $targetUrl, $eventAt, array $overrides = []): array
+    {
+        return array_merge([
+            'user_id' => $pageview->user_id,
+            'campaign_id' => $pageview->campaign_id,
+            'pageview_id' => $pageview->id,
+            'event_type' => $eventType,
+            'target_url' => $targetUrl,
+            'element_id' => null,
+            'event_reason' => null,
+            'element_name' => null,
+            'element_classes' => null,
+            'form_fields_checked' => null,
+            'form_fields_filled' => null,
+            'form_has_user_data' => null,
+            'event_at' => $eventAt,
+            'created_at' => $eventAt ?? now(),
+            'updated_at' => $eventAt ?? now(),
+        ], $overrides);
     }
 }

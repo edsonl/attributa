@@ -23,7 +23,7 @@ class TrackingEventDescriptions
         return [
             [
                 'name' => 1,
-                'title' => 'Page View',
+                'title' => 'Visita',
                 'caption' => $pageviewFormatted,
                 'icon' => 'visibility',
                 'done' => true,
@@ -32,7 +32,7 @@ class TrackingEventDescriptions
             ],
             [
                 'name' => 2,
-                'title' => 'Page Engaged',
+                'title' => 'Engajamento',
                 'caption' => self::buildEngagedCaption($engaged),
                 'icon' => 'insights',
                 'done' => !empty($engaged['first']),
@@ -41,7 +41,7 @@ class TrackingEventDescriptions
             ],
             [
                 'name' => 3,
-                'title' => $useFormStep ? 'Form Submit' : 'Link Click',
+                'title' => $useFormStep ? 'Envio de formulário' : 'Clique em link',
                 'caption' => self::buildInteractionCaption($interaction, $useFormStep),
                 'icon' => $useFormStep ? 'fact_check' : 'ads_click',
                 'done' => !empty($interaction['first']),
@@ -133,8 +133,8 @@ class TrackingEventDescriptions
         $base = 'Visitante demonstrou interesse na página.';
         $details = self::buildDetailedReasonLines(
             $engaged['reason_details'] ?? [],
-            ['Scroll 30%'],
-            ['2+ interações']
+            ['Rolou 30% da página'],
+            ['Fez duas ou mais interações']
         );
 
         return count($details) > 0
@@ -150,10 +150,10 @@ class TrackingEventDescriptions
 
         $createdAt = (string) ($interaction['first']['created_at_formatted'] ?? '-');
         $suffix = $interaction['count'] > 1 ? ' (+' . ($interaction['count'] - 1) . ')' : '';
-        $reason = self::extractReasonLabel($useFormStep ? 'form_submit' : 'link_click', $interaction['first']);
+        $detail = self::describeInteractionEvent($interaction['first'], $useFormStep);
 
-        return $reason !== ''
-            ? "{$createdAt}{$suffix} • {$reason}"
+        return $detail !== ''
+            ? "{$createdAt}{$suffix} • {$detail}"
             : "{$createdAt}{$suffix}";
     }
 
@@ -169,9 +169,17 @@ class TrackingEventDescriptions
             ? 'Visitante enviou um formulário.'
             : 'Visitante clicou em um link monitorado.';
 
+        $detail = self::describeInteractionEvent($interaction['first'] ?? null, $useFormStep);
+        if ($detail !== '') {
+            $base .= "\nResumo: " . $detail;
+        }
+
+        $extra = self::buildInteractionExtraLines($interaction['first'] ?? null, $useFormStep);
         $details = self::buildDetailedReasonLines($interaction['reason_details'] ?? []);
-        return count($details) > 0
-            ? $base . "\nDetalhado:\n" . implode("\n", $details)
+
+        $lines = array_values(array_filter(array_merge($extra, $details), fn ($line) => $line !== ''));
+        return count($lines) > 0
+            ? $base . "\nDetalhado:\n" . implode("\n", $lines)
             : $base;
     }
 
@@ -187,34 +195,25 @@ class TrackingEventDescriptions
     protected static function extractReasonLabel(string $eventType, array $event): string
     {
         if ($eventType === 'page_engaged') {
-            $rawElementId = strtolower(trim((string) ($event['element_id'] ?? '')));
-            $reasonKey = '';
-
-            if (str_starts_with($rawElementId, 'engagement_reason:')) {
-                $reasonKey = substr($rawElementId, strlen('engagement_reason:'));
-            } else {
-                $rawName = trim((string) ($event['element_name'] ?? ''));
-                if (preg_match('/^page engaged\s*\((.+)\)$/i', $rawName, $matches) === 1) {
-                    $reasonKey = strtolower(trim((string) ($matches[1] ?? '')));
-                }
-            }
+            $reasonKey = self::extractEventReasonKey($event);
 
             return match ($reasonKey) {
-                'scroll_30' => 'Scroll 30%',
-                'time_10s' => 'Tempo 10s',
-                'link_click' => 'Clique em link',
-                'form_submit' => 'Envio de formulário',
-                'interactions' => '2+ interações',
+                'scroll_30' => 'Rolou 30% da página',
+                'time_10s' => 'Permaneceu 10 segundos',
+                'link_click' => 'Demonstrou intenção ao clicar em link',
+                'form_submit' => 'Demonstrou intenção ao iniciar envio de formulário',
+                'interactions' => 'Fez duas ou mais interações',
+                'reload', 'navigation_reload' => 'Recarregou a página',
                 default => $reasonKey !== '' ? 'Engajamento: ' . $reasonKey : '',
             };
         }
 
         if ($eventType === 'form_submit') {
-            return !empty($event['form_has_user_data']) ? 'Dados informados' : 'Sem dados informados';
+            return self::describeInteractionEvent($event, true);
         }
 
         if ($eventType === 'link_click') {
-            return 'Clique em link';
+            return self::describeInteractionEvent($event, false);
         }
 
         return '';
@@ -287,6 +286,92 @@ class TrackingEventDescriptions
             }
 
             $lines[] = '(' . $count . ') ' . $label . ' - ' . $lastAt;
+        }
+
+        return $lines;
+    }
+
+    protected static function extractEventReasonKey(array $event): string
+    {
+        $reason = strtolower(trim((string) ($event['event_reason'] ?? '')));
+        if ($reason !== '') {
+            return $reason;
+        }
+
+        $rawElementId = strtolower(trim((string) ($event['element_id'] ?? '')));
+        if (str_starts_with($rawElementId, 'engagement_reason:')) {
+            return substr($rawElementId, strlen('engagement_reason:'));
+        }
+        if ($rawElementId === 'navigation_type:reload') {
+            return 'reload';
+        }
+
+        $rawName = trim((string) ($event['element_name'] ?? ''));
+        if (preg_match('/^page engaged\s*\((.+)\)$/i', $rawName, $matches) === 1) {
+            return strtolower(trim((string) ($matches[1] ?? '')));
+        }
+
+        return '';
+    }
+
+    protected static function describeInteractionEvent(?array $event, bool $useFormStep): string
+    {
+        if (!$event) {
+            return '';
+        }
+
+        $name = trim((string) ($event['element_name'] ?? ''));
+        $classes = trim((string) ($event['element_classes'] ?? ''));
+
+        if ($useFormStep) {
+            $filled = max(0, (int) ($event['form_fields_filled'] ?? 0));
+            $checked = max(0, (int) ($event['form_fields_checked'] ?? 0));
+            $parts = [];
+
+            if ($name !== '') {
+                $parts[] = $name;
+            } else {
+                $parts[] = 'Formulário enviado';
+            }
+
+            if ($checked > 0) {
+                $parts[] = $filled . ' de ' . $checked . ' campos preenchidos';
+            } elseif ($filled > 0) {
+                $parts[] = $filled . ' campos preenchidos';
+            }
+
+            return implode(' • ', $parts);
+        }
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($classes !== '') {
+            return 'Clique em elemento com classe ' . $classes;
+        }
+
+        return 'Clique em link';
+    }
+
+    protected static function buildInteractionExtraLines(?array $event, bool $useFormStep): array
+    {
+        if (!$event) {
+            return [];
+        }
+
+        $lines = [];
+        $classes = trim((string) ($event['element_classes'] ?? ''));
+        if ($classes !== '') {
+            $lines[] = 'Classes: ' . $classes;
+        }
+
+        if ($useFormStep) {
+            $filled = max(0, (int) ($event['form_fields_filled'] ?? 0));
+            $checked = max(0, (int) ($event['form_fields_checked'] ?? 0));
+            if ($checked > 0) {
+                $lines[] = 'Preenchimento: ' . $filled . ' de ' . $checked . ' campos';
+            }
         }
 
         return $lines;

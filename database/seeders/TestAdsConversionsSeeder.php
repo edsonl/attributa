@@ -79,8 +79,8 @@ class TestAdsConversionsSeeder extends Seeder
                 'currency_code' => $lead->currency_code ?: 'USD',
                 'conversion_event_time' => $lead->occurred_at ?? now(),
                 'google_upload_status' => AdsConversion::STATUS_PENDING,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => ($lead->occurred_at ?? now())->copy()->addSeconds(5),
+                'updated_at' => ($lead->occurred_at ?? now())->copy()->addSeconds(5),
             ];
         }
 

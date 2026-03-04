@@ -32,14 +32,14 @@ class TestLeadsSeeder extends Seeder
         $pageviews = Pageview::query()
             ->where('campaign_id', $campaign->id)
             ->orderBy('id')
-            ->get(['id', 'user_id', 'campaign_id', 'created_at']);
+            ->get(['id', 'user_id', 'campaign_id', 'created_at', 'occurred_at']);
 
         if ($pageviews->isEmpty()) {
             $this->call(TestPageviewsSeeder::class);
             $pageviews = Pageview::query()
                 ->where('campaign_id', $campaign->id)
                 ->orderBy('id')
-                ->get(['id', 'user_id', 'campaign_id', 'created_at']);
+                ->get(['id', 'user_id', 'campaign_id', 'created_at', 'occurred_at']);
         }
 
         if ($pageviews->isEmpty()) {
@@ -62,6 +62,8 @@ class TestLeadsSeeder extends Seeder
                 default => Lead::STATUS_APPROVED,
             };
 
+            $pageviewOccurredAt = $pageview->occurred_at ?? $pageview->created_at;
+
             $rows[] = [
                 'user_id' => $campaign->user_id,
                 'campaign_id' => $campaign->id,
@@ -73,15 +75,15 @@ class TestLeadsSeeder extends Seeder
                 'payout_amount' => number_format(0.80 + ($step * 0.15), 2, '.', ''),
                 'currency_code' => 'USD',
                 'offer_id' => 28000 + $step,
-                'occurred_at' => optional($pageview->created_at)->copy()->addSeconds(20) ?? now(),
+                'occurred_at' => optional($pageviewOccurredAt)->copy()->addSeconds(20) ?? now(),
                 'payload_json' => [
                     'source' => 'test_seed',
                     'status' => $status,
                     'uuid' => 'seed-uuid-' . str_pad((string) $step, 4, '0', STR_PAD_LEFT),
                     'offer' => 28000 + $step,
                 ],
-                'created_at' => now(),
-                'updated_at' => now(),
+                'created_at' => optional($pageviewOccurredAt)->copy()->addSeconds(21) ?? now(),
+                'updated_at' => optional($pageviewOccurredAt)->copy()->addSeconds(21) ?? now(),
             ];
         }
 

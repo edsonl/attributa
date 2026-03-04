@@ -36,6 +36,7 @@ return new class extends Migration {
             // Metadados do elemento alvo da interacao.
             $table->text('target_url')->nullable();
             $table->string('element_id', 191)->nullable();
+            $table->string('event_reason', 64)->nullable();
             $table->string('element_name', 191)->nullable();
             $table->string('element_classes', 500)->nullable();
 

@@ -366,7 +366,10 @@
         }
 
         function getSafeText(value, maxLen) {
-            var text = String(value || '').replace(/\s+/g, ' ').trim();
+            var text = String(value || '')
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
             if (!text) return '';
             return text.length > maxLen ? text.slice(0, maxLen) : text;
         }
@@ -471,8 +474,9 @@
             sendEvent({
                 event_type: 'page_engaged',
                 target_url: getSafeText(window.location.href, 2000),
-                element_name: getSafeText('Page engaged', 191),
-                element_id: getSafeText('engagement_reason:' + normalizedReason, 191),
+                event_reason: normalizedReason,
+                element_name: getSafeText('Engajamento da página', 191),
+                element_id: null,
                 element_classes: null
             });
         }
@@ -481,11 +485,12 @@
             sendEvent({
                 event_type: 'navigation_reload',
                 target_url: getSafeText(window.location.href, 2000),
-                element_name: getSafeText('Navigation reload', 191),
-                element_id: getSafeText('navigation_type:reload', 191),
+                event_reason: 'reload',
+                element_name: getSafeText('Recarregamento da página', 191),
+                element_id: null,
                 element_classes: null
             });
-            markEngaged('navigation_reload');
+            markEngaged('reload');
         }
 
         function getScrollPercent() {
@@ -532,14 +537,6 @@
             var tag = (field.tagName || '').toLowerCase();
             var type = tag === 'input' ? String(field.type || '').toLowerCase() : '';
 
-            if (type === 'checkbox' || type === 'radio') {
-                return !!field.checked;
-            }
-
-            if (type === 'file') {
-                return field.files && field.files.length > 0;
-            }
-
             if (tag === 'select' && field.multiple) {
                 if (!field.options) return false;
                 for (var i = 0; i < field.options.length; i++) {
@@ -563,7 +560,16 @@
 
                 var tag = (field.tagName || '').toLowerCase();
                 var type = tag === 'input' ? String(field.type || '').toLowerCase() : '';
-                if (tag === 'input' && type === 'hidden') return;
+                var allowedInputTypes = {
+                    text: true,
+                    tel: true,
+                    email: true,
+                    number: true,
+                    search: true,
+                    url: true
+                };
+                if (tag === 'input' && !allowedInputTypes[type]) return;
+                if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
 
                 var rawName = String(field.getAttribute('name') || '').trim();
                 var normalizedName = rawName.toLowerCase();
@@ -575,15 +581,10 @@
                 });
             });
 
-            var priority = candidates.filter(function (item) {
-                return item.normalizedName === 'name' || item.normalizedName === 'phone';
-            });
-
-            var evaluated = priority.length > 0 ? priority : candidates;
-            var checked = evaluated.length;
+            var checked = candidates.length;
             var filled = 0;
 
-            evaluated.forEach(function (item) {
+            candidates.forEach(function (item) {
                 if (fieldHasValue(item.field)) {
                     filled += 1;
                 }

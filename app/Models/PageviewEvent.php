@@ -18,6 +18,7 @@ class PageviewEvent extends Model
         'event_type',
         'target_url',
         'element_id',
+        'event_reason',
         'element_name',
         'element_classes',
         'form_fields_checked',

@@ -612,6 +612,7 @@ class TrackingController extends Controller
             'event_ts' => 'nullable',
             'target_url' => 'nullable|string',
             'element_id' => 'nullable|string',
+            'event_reason' => 'nullable|string|max:64',
             'element_name' => 'nullable|string',
             'element_classes' => 'nullable|string',
             'form_fields_checked' => 'nullable|integer|min:0|max:500',
@@ -624,7 +625,7 @@ class TrackingController extends Controller
                 return null;
             }
 
-            $normalized = trim((string) $value);
+            $normalized = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $value)) ?? '');
             if ($normalized === '') {
                 return null;
             }
@@ -638,6 +639,7 @@ class TrackingController extends Controller
         $eventType = (string) ($truncate($data['event_type'] ?? '', 30) ?? '');
         $targetUrl = $truncate($data['target_url'] ?? null, 2000);
         $elementId = $truncate($data['element_id'] ?? null, 191);
+        $eventReason = $truncate($data['event_reason'] ?? null, 64);
         $elementName = $truncate($data['element_name'] ?? null, 191);
         $elementClasses = $truncate($data['element_classes'] ?? null, 500);
 
@@ -725,6 +727,7 @@ class TrackingController extends Controller
             'event_type' => $eventType,
             'target_url' => $targetUrl,
             'element_id' => $elementId,
+            'event_reason' => $eventReason,
             'element_name' => $elementName,
             'element_classes' => $elementClasses,
             'form_fields_checked' => $data['form_fields_checked'] ?? null,
