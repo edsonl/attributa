@@ -71,6 +71,14 @@ const payloadSubtitle = ref('')
 const payloadData = ref(null)
 const payloadRawText = ref('')
 const activeTab = ref('overview')
+const loadedTabs = ref({
+    overview: false,
+    script: false,
+    campaigns: false,
+    pageviews: false,
+    memory: false,
+    cleanup: false,
+})
 
 let campaignSearchTimer = null
 let pageviewSearchTimer = null
@@ -148,6 +156,8 @@ async function fetchSummary() {
     try {
         const { data } = await axios.get(route('panel.tracking-maintenance.summary'))
         summary.value = data
+        loadedTabs.value.overview = true
+        loadedTabs.value.memory = true
     } catch {
         notifyError('Não foi possível carregar o resumo do Redis.')
     } finally {
@@ -161,6 +171,7 @@ async function fetchScript() {
     try {
         const { data } = await axios.get(route('panel.tracking-maintenance.script.show'))
         scriptItem.value = data?.item || scriptItem.value
+        loadedTabs.value.script = true
     } catch {
         notifyError('Não foi possível carregar o cache do script.')
     } finally {
@@ -190,6 +201,7 @@ async function fetchCampaigns() {
             rowsPerPage: data?.per_page || 10,
             rowsNumber: data?.total || 0,
         }
+        loadedTabs.value.campaigns = true
     } catch {
         notifyError('Não foi possível carregar os caches de campanha.')
     } finally {
@@ -219,6 +231,7 @@ async function fetchPageviews() {
             rowsPerPage: data?.per_page || 10,
             rowsNumber: data?.total || 0,
         }
+        loadedTabs.value.pageviews = true
     } catch {
         notifyError('Não foi possível carregar os caches de pageview.')
     } finally {
@@ -308,7 +321,7 @@ async function removeScript() {
     try {
         const { data } = await axios.delete(route('panel.tracking-maintenance.script.destroy'))
         notifySuccess(data?.message || 'Cache do script removido com sucesso.')
-        await refreshAll()
+        await Promise.all([fetchSummary(), fetchScript()])
     } catch {
         notifyError('Falha ao remover o cache do script.')
     } finally {
@@ -491,7 +504,27 @@ async function flushAllTrackingKeys() {
     try {
         const { data } = await axios.delete(route('panel.tracking-maintenance.flush-all'))
         notifySuccess(data?.message || 'Todas as chaves de tracking foram removidas com sucesso.')
-        await refreshAll()
+        loadedTabs.value = {
+            overview: false,
+            script: false,
+            campaigns: false,
+            pageviews: false,
+            memory: false,
+            cleanup: true,
+        }
+        await fetchSummary()
+
+        if (activeTab.value === 'script') {
+            await fetchScript()
+        }
+
+        if (activeTab.value === 'campaigns') {
+            await fetchCampaigns()
+        }
+
+        if (activeTab.value === 'pageviews') {
+            await fetchPageviews()
+        }
     } catch {
         notifyError('Falha ao limpar todas as chaves de tracking.')
     } finally {
@@ -499,13 +532,33 @@ async function flushAllTrackingKeys() {
     }
 }
 
-async function refreshAll() {
-    await Promise.all([
-        fetchSummary(),
-        fetchScript(),
-        fetchCampaigns(),
-        fetchPageviews(),
-    ])
+async function loadTabData(tabName, force = false) {
+    if (tabName === 'overview' || tabName === 'memory') {
+        if (force || !loadedTabs.value.overview) {
+            await fetchSummary()
+        }
+        return
+    }
+
+    if (tabName === 'script') {
+        if (force || !loadedTabs.value.script) {
+            await fetchScript()
+        }
+        return
+    }
+
+    if (tabName === 'campaigns') {
+        if (force || !loadedTabs.value.campaigns) {
+            await fetchCampaigns()
+        }
+        return
+    }
+
+    if (tabName === 'pageviews') {
+        if (force || !loadedTabs.value.pageviews) {
+            await fetchPageviews()
+        }
+    }
 }
 
 async function confirmAction(title, message) {
@@ -549,8 +602,12 @@ watch(pageviewSearch, () => {
     }, 250)
 })
 
+watch(activeTab, (tab) => {
+    loadTabData(tab)
+})
+
 onMounted(() => {
-    refreshAll()
+    loadTabData('overview')
 })
 </script>
 
