@@ -329,12 +329,16 @@ async function copyValue(value) {
                                 self="top middle"
                                 :offset="[0, -10]"
                                 :style="{
-                                    background: '#1d4ed8',
-                                    color: '#e2e8f0',
-                                    border: '1px solid #1e40af',
-                                    boxShadow: '0 8px 22px rgba(30, 64, 175, 0.28)',
+                                    background: '#f0f0f0',
+                                    color: '#334155',
+                                    border: '1px solid #475569',
+                                    boxShadow: '0 8px 22px rgba(15, 23, 42, 0.18)',
                                     maxWidth: '260px',
                                     whiteSpace: 'pre-line',
+                                    fontSize: '13px',
+                                    lineHeight: '1.45',
+                                    fontWeight: '400',
+                                    color: '#111827',
                                 }"
                             >
                                 {{ step.tooltip || `${step.title}: ${step.caption || '-'}` }}
