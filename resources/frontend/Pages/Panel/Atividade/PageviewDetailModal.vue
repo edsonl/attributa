@@ -81,7 +81,6 @@ const detailReferrer = computed(() => detailPageview.value?.referrer ?? null)
 const detailReferrerHost = computed(() => extractHost(detailReferrer.value))
 const detailResolvedGclid = computed(() => resolveGclid())
 const detailComposedCode = computed(() => props.payload?.composed_code ?? null)
-const detailEvents = computed(() => (Array.isArray(props.payload?.events) ? props.payload.events : []))
 const detailFlowStepsPayload = computed(() => (Array.isArray(props.payload?.flow_steps) ? props.payload.flow_steps : []))
 const detailLatLong = computed(() => {
     const lat = detailGeo.value?.latitude
@@ -96,113 +95,7 @@ const detailUrlParams = computed(() => {
 })
 const hasUrlParams = computed(() => detailUrlParams.value.length > 0)
 
-const detailFlowEventSummary = computed(() => {
-    const summary = {
-        page_engaged: { first: null, count: 0, reasons: {} },
-        form_submit: { first: null, count: 0, reasons: {} },
-        link_click: { first: null, count: 0, reasons: {} },
-    }
-
-    detailEvents.value.forEach((event) => {
-        const type = String(event?.event_type || '').toLowerCase()
-        if (!Object.prototype.hasOwnProperty.call(summary, type)) {
-            return
-        }
-
-        if (!summary[type].first) {
-            summary[type].first = event
-        }
-        summary[type].count += 1
-
-        const reason = resolveEventReasonLabel(type, event)
-        if (!reason) {
-            return
-        }
-
-        const bucket = summary[type].reasons[reason] || { count: 0, lastEvent: null }
-        bucket.count += 1
-        bucket.lastEvent = pickLatestEvent(bucket.lastEvent, event)
-        summary[type].reasons[reason] = bucket
-    })
-
-    return summary
-})
-
-const visitFlowSteps = computed(() => {
-    if (detailFlowStepsPayload.value.length > 0) {
-        return detailFlowStepsPayload.value
-    }
-
-    const engaged = detailFlowEventSummary.value.page_engaged
-    const formSubmit = detailFlowEventSummary.value.form_submit
-    const linkClick = detailFlowEventSummary.value.link_click
-    const interactionUsesForm = Boolean(formSubmit.first)
-    const interactionBase = interactionUsesForm ? formSubmit : linkClick
-
-    const pageViewCaption = detailPageview.value?.created_at_formatted || 'Não identificado'
-
-    const engagedReason = engaged.first ? formatEngagementReason(engaged.first) : ''
-    const engagedCaption = engaged.first
-        ? `${engaged.first.created_at_formatted || '-'}${engaged.count > 1 ? ` (+${engaged.count - 1})` : ''}${engagedReason ? ` • ${engagedReason}` : ''}`
-        : 'Sem engajamento detectado'
-
-    const interactionBaseCaption = interactionBase.first
-        ? `${interactionBase.first.created_at_formatted || '-'}${interactionBase.count > 1 ? ` (+${interactionBase.count - 1})` : ''}`
-        : (interactionUsesForm ? 'Sem envio de formulário' : 'Sem clique em link')
-    const interactionCaption = interactionBaseCaption
-
-    const conversionDone = Boolean(detailPageview.value?.conversion)
-    const conversionCaption = conversionDone
-        ? `${detailPageview.value?.created_at_formatted || '-'} • Convertido`
-        : 'Não convertido'
-
-    return [
-        {
-            name: 1,
-            title: 'Visita',
-            caption: pageViewCaption,
-            icon: 'visibility',
-            done: true,
-            color: 'primary',
-            tooltip: `Registro inicial da visita.\nCapturado em ${pageViewCaption}.`,
-        },
-        {
-            name: 2,
-            title: 'Engajamento',
-            caption: engagedCaption,
-            icon: 'insights',
-            done: Boolean(engaged.first),
-            color: Boolean(engaged.first) ? 'primary' : 'grey-6',
-            tooltip: Boolean(engaged.first)
-                ? buildEngagedTooltip(engaged)
-                : 'Nenhum evento de engajamento foi detectado nesta visita.',
-        },
-        {
-            name: 3,
-            title: interactionUsesForm ? 'Envio de formulário' : 'Clique em link',
-            caption: interactionCaption,
-            icon: interactionUsesForm ? 'fact_check' : 'ads_click',
-            done: Boolean(interactionBase.first),
-            color: Boolean(interactionBase.first) ? 'primary' : 'grey-6',
-            tooltip: Boolean(interactionBase.first)
-                ? buildInteractionTooltip(interactionBase, interactionUsesForm)
-                : (interactionUsesForm
-                    ? 'Nenhum envio de formulário foi detectado nesta visita.'
-                    : 'Nenhum clique em link rastreado foi detectado nesta visita.'),
-        },
-        {
-            name: 4,
-            title: 'Conversão',
-            caption: conversionCaption,
-            icon: conversionDone ? 'task_alt' : 'radio_button_unchecked',
-            done: conversionDone,
-            color: conversionDone ? 'positive' : 'grey-6',
-            tooltip: conversionDone
-                ? `Visita marcada como conversão.\nData/hora de referência: ${detailPageview.value?.created_at_formatted || '-'}.`
-                : 'Até o momento, esta visita não foi marcada como conversão.',
-        },
-    ]
-})
+const visitFlowSteps = computed(() => detailFlowStepsPayload.value)
 
 const visitFlowActiveStep = computed(() => {
     const doneSteps = visitFlowSteps.value.filter(step => step.done)
@@ -323,12 +216,6 @@ function previewValue(value) {
     return text.slice(0, PREVIEW_CHAR_LIMIT)
 }
 
-function cropText(value, limit = 50) {
-    const text = String(value || '').trim()
-    if (!text) return ''
-    return text.length > limit ? `${text.slice(0, limit)}...` : text
-}
-
 function resolveGclid() {
     const fromPageview = detailPageview.value?.gclid
     if (hasText(fromPageview)) return String(fromPageview)
@@ -383,151 +270,6 @@ function formatTrafficReason(value) {
     }
 
     return raw
-}
-
-function formatEngagementReason(event) {
-    const reason = getEventReasonKey(event)
-
-    const labels = {
-        scroll_30: 'Rolou 30% da página',
-        time_10s: 'Permaneceu 10 segundos',
-        link_click: 'Demonstrou intenção ao clicar em link',
-        form_submit: 'Demonstrou intenção ao iniciar envio de formulário',
-        interactions: 'Fez duas ou mais interações',
-        reload: 'Recarregou a página',
-        navigation_reload: 'Recarregou a página',
-    }
-
-    return labels[reason] || (reason ? `Engajamento: ${reason}` : '')
-}
-
-function resolveEventReasonLabel(type, event) {
-    if (type === 'page_engaged') {
-        return formatEngagementReason(event)
-    }
-    if (type === 'form_submit') {
-        return describeInteractionEvent(event, true)
-    }
-    if (type === 'link_click') {
-        return describeInteractionEvent(event, false)
-    }
-
-    return ''
-}
-
-function getEventReasonKey(event) {
-    const fromReason = String(event?.event_reason || '').trim().toLowerCase()
-    if (fromReason) return fromReason
-
-    const rawElementId = String(event?.element_id || '').trim().toLowerCase()
-    if (rawElementId.startsWith('engagement_reason:')) {
-        return rawElementId.slice('engagement_reason:'.length)
-    }
-    if (rawElementId === 'navigation_type:reload') {
-        return 'reload'
-    }
-
-    const rawName = String(event?.element_name || '').trim()
-    const match = /^page engaged\s*\((.+)\)$/i.exec(rawName)
-    return match?.[1] ? String(match[1]).trim().toLowerCase() : ''
-}
-
-function describeInteractionEvent(event, useFormStep) {
-    if (!event) return ''
-
-    const name = String(event?.element_name || '').trim()
-    const classes = String(event?.element_classes || '').trim()
-
-    if (useFormStep) {
-        const filled = Math.max(Number(event?.form_fields_filled || 0), 0)
-        const checked = Math.max(Number(event?.form_fields_checked || 0), 0)
-        const parts = [cropText(name || 'Formulário enviado')]
-
-        if (checked > 0) {
-            parts.push(`${filled} de ${checked} campos preenchidos`)
-        } else if (filled > 0) {
-            parts.push(`${filled} campos preenchidos`)
-        }
-
-        return parts.join(' • ')
-    }
-
-    if (name) return cropText(name)
-    if (classes) return `Clique em elemento com classe ${cropText(classes)}`
-    return 'Clique em link'
-}
-
-function resolveEventMs(event) {
-    const raw = String(event?.created_at || '').trim()
-    if (!raw) return 0
-
-    const ts = Date.parse(raw)
-    return Number.isFinite(ts) ? ts : 0
-}
-
-function pickLatestEvent(currentEvent, candidateEvent) {
-    if (!currentEvent) return candidateEvent
-    return resolveEventMs(candidateEvent) >= resolveEventMs(currentEvent) ? candidateEvent : currentEvent
-}
-
-function buildDetailedReasonLines(reasonBuckets, labelsWithoutCount = [], hiddenLabels = []) {
-    const entries = Object.entries(reasonBuckets || {})
-    if (entries.length === 0) return []
-
-    entries.sort((a, b) => resolveEventMs(b[1]?.lastEvent) - resolveEventMs(a[1]?.lastEvent))
-
-    return entries.map(([label, meta]) => {
-        if (hiddenLabels.includes(label)) {
-            return null
-        }
-
-        const count = Math.max(Number(meta?.count || 0), 1)
-        const lastAt = String(meta?.lastEvent?.created_at_formatted || '-').trim() || '-'
-
-        if (labelsWithoutCount.includes(label)) {
-            return `${label} - ${lastAt}`
-        }
-
-        return `(${count}) ${label} - ${lastAt}`
-    }).filter(Boolean)
-}
-
-function buildEngagedTooltip(engaged) {
-    const lines = buildDetailedReasonLines(engaged?.reasons, ['Rolou 30% da página'], ['Fez duas ou mais interações'])
-    if (lines.length === 0) {
-        return 'Usuário atingiu critério de engajamento nesta visita.'
-    }
-    return `Usuário atingiu critério de engajamento nesta visita.\nDetalhado:\n${lines.join('\n')}`
-}
-
-function buildInteractionTooltip(interaction, useFormStep) {
-    const base = useFormStep
-        ? 'Visitante enviou formulário na página.'
-        : 'Visitante clicou em link rastreado.'
-    const summary = describeInteractionEvent(interaction?.first, useFormStep)
-    const lines = buildDetailedReasonLines(interaction?.reasons)
-    const extra = []
-
-    if (summary) {
-        extra.push(`Resumo: ${cropText(summary)}`)
-    }
-
-    const classes = String(interaction?.first?.element_classes || '').trim()
-    if (classes) {
-        extra.push(`Classes: ${cropText(classes)}`)
-    }
-
-    if (useFormStep) {
-        const filled = Math.max(Number(interaction?.first?.form_fields_filled || 0), 0)
-        const checked = Math.max(Number(interaction?.first?.form_fields_checked || 0), 0)
-        if (checked > 0) {
-            extra.push(`Preenchimento: ${filled} de ${checked} campos`)
-        }
-    }
-
-    const allLines = [...extra, ...lines]
-    if (allLines.length === 0) return base
-    return `${base}\nDetalhado:\n${allLines.join('\n')}`
 }
 
 async function copyValue(value) {

@@ -148,13 +148,19 @@ class TrackingEventDescriptions
             return $useFormStep ? 'Sem envio de formulário' : 'Sem clique em link';
         }
 
-        $createdAt = (string) ($interaction['first']['created_at_formatted'] ?? '-');
+        $event = $interaction['first'];
+        $createdAt = (string) ($event['created_at_formatted'] ?? '-');
         $suffix = $interaction['count'] > 1 ? ' (+' . ($interaction['count'] - 1) . ')' : '';
-        $detail = self::describeInteractionEvent($interaction['first'], $useFormStep);
 
-        return $detail !== ''
-            ? "{$createdAt}{$suffix} • {$detail}"
-            : "{$createdAt}{$suffix}";
+        if (!$useFormStep) {
+            return "{$createdAt}{$suffix}";
+        }
+
+        $hasUserData = (bool) ($event['form_has_user_data'] ?? false);
+        $filled = max(0, (int) ($event['form_fields_filled'] ?? 0));
+        $status = ($hasUserData || $filled > 0) ? 'Dados informados' : 'Sem dados informados';
+
+        return "{$createdAt}{$suffix}\n• {$status}";
     }
 
     protected static function buildInteractionTooltip(array $interaction, bool $useFormStep): string
@@ -168,11 +174,6 @@ class TrackingEventDescriptions
         $base = $useFormStep
             ? 'Visitante enviou um formulário.'
             : 'Visitante clicou em um link monitorado.';
-
-        $detail = self::describeInteractionEvent($interaction['first'] ?? null, $useFormStep);
-        if ($detail !== '') {
-            $base .= "\nResumo: " . $detail;
-        }
 
         $extra = self::buildInteractionExtraLines($interaction['first'] ?? null, $useFormStep);
         $details = self::buildDetailedReasonLines($interaction['reason_details'] ?? []);
@@ -320,8 +321,8 @@ class TrackingEventDescriptions
             return '';
         }
 
-        $name = trim((string) ($event['element_name'] ?? ''));
-        $classes = trim((string) ($event['element_classes'] ?? ''));
+        $name = self::cropText(trim((string) ($event['element_name'] ?? '')));
+        $classes = self::cropText(trim((string) ($event['element_classes'] ?? '')));
 
         if ($useFormStep) {
             $filled = max(0, (int) ($event['form_fields_filled'] ?? 0));
@@ -361,7 +362,7 @@ class TrackingEventDescriptions
         }
 
         $lines = [];
-        $classes = trim((string) ($event['element_classes'] ?? ''));
+        $classes = self::cropText(trim((string) ($event['element_classes'] ?? '')));
         if ($classes !== '') {
             $lines[] = 'Classes: ' . $classes;
         }
@@ -375,5 +376,17 @@ class TrackingEventDescriptions
         }
 
         return $lines;
+    }
+
+    protected static function cropText(string $value, int $limit = 50): string
+    {
+        $text = trim($value);
+        if ($text === '') {
+            return '';
+        }
+
+        return mb_strlen($text) > $limit
+            ? mb_substr($text, 0, $limit) . '...'
+            : $text;
     }
 }

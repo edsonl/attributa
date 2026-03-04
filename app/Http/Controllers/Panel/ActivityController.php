@@ -142,10 +142,9 @@ class ActivityController extends Controller
         );
 
         $paginator->getCollection()->transform(function ($row) use ($tz, $campaignDisplayNameFormatter, $countryCodesByCampaignId) {
-            $pageviewDate = $row->occurred_at ?? $row->created_at;
-            $row->created_at_formatted = $pageviewDate
-                ? Carbon::parse($pageviewDate, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
-                : null;
+            $pageviewDateRaw = $this->resolveModelRawDateTime($row, 'occurred_at')
+                ?? $this->resolveModelRawDateTime($row, 'created_at');
+            $row->created_at_formatted = $this->formatUtcDateTimeForDisplay($pageviewDateRaw, $tz);
             $visitorId = (int) ($row->visitor_id ?? 0);
             $row->visitor_code = $visitorId > 0
                 ? app(HashidService::class)->encode($visitorId)
@@ -319,10 +318,10 @@ class ActivityController extends Controller
         ]);
 
         $tz = 'America/Sao_Paulo';
-        $pageviewOccurredAt = $pageview->occurred_at ?? $pageview->created_at;
-        $pageview->created_at_formatted = optional($pageviewOccurredAt)
-            ? Carbon::parse($pageviewOccurredAt, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
-            : null;
+        $pageviewOccurredAtRaw = $this->resolveModelRawDateTime($pageview, 'occurred_at')
+            ?? $this->resolveModelRawDateTime($pageview, 'created_at');
+        $pageviewOccurredAt = $pageviewOccurredAtRaw ?? $pageview->occurred_at ?? $pageview->created_at;
+        $pageview->created_at_formatted = $this->formatUtcDateTimeForDisplay($pageviewOccurredAtRaw, $tz);
 
         $urlData = $this->extractUrlData($pageview->url);
 
@@ -370,7 +369,9 @@ class ActivityController extends Controller
 
         $events = $pageview->events
             ->map(function ($event) use ($tz) {
-                $eventOccurredAt = $event->event_at ?? $event->created_at;
+                $eventOccurredAtRaw = $this->resolveModelRawDateTime($event, 'event_at')
+                    ?? $this->resolveModelRawDateTime($event, 'created_at');
+                $eventOccurredAt = $eventOccurredAtRaw ?? $event->event_at ?? $event->created_at;
                 return [
                     'id' => $event->id,
                     'event_type' => $event->event_type,
@@ -383,9 +384,7 @@ class ActivityController extends Controller
                     'form_fields_filled' => $event->form_fields_filled,
                     'form_has_user_data' => $event->form_has_user_data,
                     'created_at' => $eventOccurredAt,
-                    'created_at_formatted' => optional($eventOccurredAt)
-                        ? Carbon::parse($eventOccurredAt, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
-                        : null,
+                    'created_at_formatted' => $this->formatUtcDateTimeForDisplay($eventOccurredAtRaw, $tz),
                 ];
             })
             ->values();
@@ -406,13 +405,15 @@ class ActivityController extends Controller
                     'hits' => (int) $visitorRow->hits,
                     'status' => (int) $visitorRow->hits > 1 ? 'recorrente' : 'novo',
                     'first_seen_at' => $visitorRow->first_seen_at,
-                    'first_seen_at_formatted' => optional($visitorRow->first_seen_at)
-                        ? Carbon::parse($visitorRow->first_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
-                        : null,
+                    'first_seen_at_formatted' => $this->formatUtcDateTimeForDisplay(
+                        $this->resolveModelRawDateTime($visitorRow, 'first_seen_at'),
+                        $tz
+                    ),
                     'last_seen_at' => $visitorRow->last_seen_at,
-                    'last_seen_at_formatted' => optional($visitorRow->last_seen_at)
-                        ? Carbon::parse($visitorRow->last_seen_at, 'UTC')->setTimezone($tz)->format('d/m/Y, H:i:s')
-                        : null,
+                    'last_seen_at_formatted' => $this->formatUtcDateTimeForDisplay(
+                        $this->resolveModelRawDateTime($visitorRow, 'last_seen_at'),
+                        $tz
+                    ),
                 ];
             }
         }
@@ -440,6 +441,32 @@ class ActivityController extends Controller
             'flow_steps' => $flowSteps,
             'ip_lookup_raw' => $ipLookup,
         ]);
+    }
+
+    protected function resolveModelRawDateTime(object $model, string $column): ?string
+    {
+        if (!method_exists($model, 'getRawOriginal')) {
+            $value = $model->{$column} ?? null;
+            return $value !== null ? (string) $value : null;
+        }
+
+        $raw = $model->getRawOriginal($column);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        return (string) $raw;
+    }
+
+    protected function formatUtcDateTimeForDisplay(mixed $value, string $timezone = 'America/Sao_Paulo'): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return Carbon::parse((string) $value, 'UTC')
+            ->setTimezone($timezone)
+            ->format('d/m/Y, H:i:s');
     }
 
     protected function extractUrlData(?string $url): array
