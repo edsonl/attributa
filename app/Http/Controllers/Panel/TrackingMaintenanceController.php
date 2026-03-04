@@ -527,25 +527,45 @@ class TrackingMaintenanceController extends Controller
             // Fallback abaixo para outros drivers/ambientes.
         }
 
-        $cursor = '0';
+        try {
+            $cursor = '0';
 
-        do {
-            $response = $connection->command('scan', [$cursor, ['match' => $pattern, 'count' => 200]]);
-            if (!is_array($response) || count($response) < 2) {
-                break;
-            }
+            do {
+                $response = $connection->command('scan', [$cursor, ['match' => $pattern, 'count' => 200]]);
+                if (!is_array($response) || count($response) < 2) {
+                    break;
+                }
 
-            $cursor = (string) ($response[0] ?? '0');
-            $batch = $response[1] ?? [];
+                $cursor = (string) ($response[0] ?? '0');
+                $batch = $response[1] ?? [];
 
-            if (is_array($batch)) {
-                foreach ($batch as $key) {
-                    if (is_string($key) && $key !== '') {
-                        $keys[] = $key;
+                if (is_array($batch)) {
+                    foreach ($batch as $key) {
+                        if (is_string($key) && $key !== '') {
+                            $keys[] = $key;
+                        }
                     }
                 }
+            } while ($cursor !== '0');
+        } catch (\Throwable) {
+            // Se SCAN não se comportar bem no driver/ambiente, cai para KEYS.
+        }
+
+        if ($keys === []) {
+            try {
+                $fallbackKeys = $connection->keys($pattern);
+
+                if (is_array($fallbackKeys)) {
+                    foreach ($fallbackKeys as $key) {
+                        if (is_string($key) && $key !== '') {
+                            $keys[] = $key;
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+                return [];
             }
-        } while ($cursor !== '0');
+        }
 
         return array_values(array_unique($keys));
     }
