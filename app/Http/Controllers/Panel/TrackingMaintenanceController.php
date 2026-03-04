@@ -498,76 +498,113 @@ class TrackingMaintenanceController extends Controller
     {
         $keys = [];
         $connection = $this->trackingRedis();
+        $patterns = $this->redisScanPatterns($pattern);
 
-        try {
-            $client = method_exists($connection, 'client') ? $connection->client() : null;
+        foreach ($patterns as $scanPattern) {
+            try {
+                $client = method_exists($connection, 'client') ? $connection->client() : null;
 
-            if (is_object($client) && method_exists($client, 'scan')) {
-                $cursor = null;
+                if (is_object($client) && method_exists($client, 'scan')) {
+                    $cursor = null;
 
-                do {
-                    $batch = $client->scan($cursor, $pattern, 200);
+                    do {
+                        $batch = $client->scan($cursor, $scanPattern, 200);
 
-                    if ($batch === false) {
-                        continue;
-                    }
+                        if ($batch === false) {
+                            continue;
+                        }
 
-                    if (is_array($batch)) {
-                        foreach ($batch as $key) {
-                            if (is_string($key) && $key !== '') {
-                                $keys[] = $key;
+                        if (is_array($batch)) {
+                            foreach ($batch as $key) {
+                                if (is_string($key) && $key !== '') {
+                                    $keys[] = $this->normalizeRedisKey($key);
+                                }
                             }
                         }
-                    }
-                } while ($cursor !== 0);
-
-                return array_values(array_unique($keys));
+                    } while ($cursor !== 0);
+                }
+            } catch (\Throwable) {
+                // Tenta os demais padrões e fallbacks abaixo.
             }
-        } catch (\Throwable) {
-            // Fallback abaixo para outros drivers/ambientes.
-        }
-
-        try {
-            $cursor = '0';
-
-            do {
-                $response = $connection->command('scan', [$cursor, ['match' => $pattern, 'count' => 200]]);
-                if (!is_array($response) || count($response) < 2) {
-                    break;
-                }
-
-                $cursor = (string) ($response[0] ?? '0');
-                $batch = $response[1] ?? [];
-
-                if (is_array($batch)) {
-                    foreach ($batch as $key) {
-                        if (is_string($key) && $key !== '') {
-                            $keys[] = $key;
-                        }
-                    }
-                }
-            } while ($cursor !== '0');
-        } catch (\Throwable) {
-            // Se SCAN não se comportar bem no driver/ambiente, cai para KEYS.
         }
 
         if ($keys === []) {
-            try {
-                $fallbackKeys = $connection->keys($pattern);
+            foreach ($patterns as $scanPattern) {
+                try {
+                    $cursor = '0';
 
-                if (is_array($fallbackKeys)) {
-                    foreach ($fallbackKeys as $key) {
-                        if (is_string($key) && $key !== '') {
-                            $keys[] = $key;
+                    do {
+                        $response = $connection->command('scan', [$cursor, ['match' => $scanPattern, 'count' => 200]]);
+                        if (!is_array($response) || count($response) < 2) {
+                            break;
+                        }
+
+                        $cursor = (string) ($response[0] ?? '0');
+                        $batch = $response[1] ?? [];
+
+                        if (is_array($batch)) {
+                            foreach ($batch as $key) {
+                                if (is_string($key) && $key !== '') {
+                                    $keys[] = $this->normalizeRedisKey($key);
+                                }
+                            }
+                        }
+                    } while ($cursor !== '0');
+                } catch (\Throwable) {
+                    // Se SCAN não se comportar bem no driver/ambiente, cai para KEYS.
+                }
+            }
+        }
+
+        if ($keys === []) {
+            foreach ($patterns as $scanPattern) {
+                try {
+                    $fallbackKeys = $connection->keys($scanPattern);
+
+                    if (is_array($fallbackKeys)) {
+                        foreach ($fallbackKeys as $key) {
+                            if (is_string($key) && $key !== '') {
+                                $keys[] = $this->normalizeRedisKey($key);
+                            }
                         }
                     }
+                } catch (\Throwable) {
+                    // ignora e tenta o próximo padrão
                 }
-            } catch (\Throwable) {
-                return [];
             }
         }
 
         return array_values(array_unique($keys));
+    }
+
+    protected function redisScanPatterns(string $pattern): array
+    {
+        $patterns = [$pattern];
+        $globalPrefix = $this->redisGlobalPrefix();
+
+        if ($globalPrefix !== '' && !str_starts_with($pattern, $globalPrefix)) {
+            $patterns[] = $globalPrefix . $pattern;
+        }
+
+        return array_values(array_unique($patterns));
+    }
+
+    protected function redisGlobalPrefix(): string
+    {
+        $prefix = (string) config('database.redis.options.prefix', '');
+
+        return trim($prefix);
+    }
+
+    protected function normalizeRedisKey(string $key): string
+    {
+        $globalPrefix = $this->redisGlobalPrefix();
+
+        if ($globalPrefix !== '' && str_starts_with($key, $globalPrefix)) {
+            return substr($key, strlen($globalPrefix));
+        }
+
+        return $key;
     }
 
     protected function deleteKeys(array $keys): int
