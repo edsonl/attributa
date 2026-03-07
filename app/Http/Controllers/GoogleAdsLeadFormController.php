@@ -366,6 +366,18 @@ class GoogleAdsLeadFormController extends Controller
             'sub5' => null,
         ];
 
+        $startedAt = microtime(true);
+        $this->logOutgoingDispatch('outgoing_request', $campaign, $pageview, [
+            'platform_slug' => $slug,
+            'request_url' => $postUrl,
+            'request_method' => 'POST',
+            'request_headers' => [
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $this->maskSecret($apiKey),
+            ],
+            'request_body' => $body,
+        ]);
+
         try {
             $response = Http::timeout(15)
                 ->acceptJson()
@@ -375,18 +387,29 @@ class GoogleAdsLeadFormController extends Controller
                 ])
                 ->post($postUrl, $body);
 
-            $this->logOutgoingDispatch('completed', $campaign, $pageview, [
+            $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $status = $response->status();
+            $success = $status >= 200 && $status < 300;
+
+            $this->logOutgoingDispatch('outgoing_response', $campaign, $pageview, [
                 'platform_slug' => $slug,
                 'request_url' => $postUrl,
-                'request_body' => $body,
-                'response_status' => $response->status(),
+                'success' => $success,
+                'elapsed_ms' => $elapsedMs,
+                'response_status' => $status,
+                'response_headers' => $response->headers(),
                 'response_body' => $response->body(),
             ]);
         } catch (\Throwable $e) {
-            $this->logOutgoingDispatch('failed', $campaign, $pageview, [
+            $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+            $this->logOutgoingDispatch('outgoing_response', $campaign, $pageview, [
                 'platform_slug' => $slug,
                 'request_url' => $postUrl,
-                'request_body' => $body,
+                'success' => false,
+                'elapsed_ms' => $elapsedMs,
+                'response_status' => null,
+                'response_headers' => null,
+                'response_body' => null,
                 'error' => $e->getMessage(),
             ]);
         }
