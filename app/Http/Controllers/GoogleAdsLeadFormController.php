@@ -95,16 +95,20 @@ class GoogleAdsLeadFormController extends Controller
         }
 
         if ($this->isTestWebhook($payload)) {
+            $pageview = $this->storeAsPageview($request, $campaign, $payload);
+
             $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
                 'stage' => 'accepted_test',
                 'campaign_id' => (int) $campaign->id,
                 'user_id' => (int) $campaign->user_id,
+                'pageview_id' => (int) $pageview->id,
             ]);
 
             return response()->json([
                 'ok' => true,
                 'message' => 'Teste do webhook recebido com sucesso.',
                 'is_test' => true,
+                'pageview_id' => (int) $pageview->id,
             ], 200);
         }
 
