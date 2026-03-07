@@ -135,6 +135,8 @@ class AffiliatePlatformController extends Controller
             'lead_param_mapping' => $leadMapping,
             'lead_status_mapping' => $leadStatusMapping,
             'postback_additional_params' => $additionalParams,
+            'postback_url' => $affiliatePlatform->postback_url,
+            'api_post_key' => $affiliatePlatform->api_post_key,
             'mapping_preview' => empty($pairs) ? '-' : implode(', ', $pairs),
             'callback_url' => $callbackUrl,
             'created_at' => optional($affiliatePlatform->created_at)?->toIso8601String(),

@@ -32,6 +32,13 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    googleAdsLeadForm: {
+        type: Object,
+        default: () => ({
+            webhook_url: null,
+            key: null,
+        }),
+    },
 })
 </script>
 <template>
@@ -63,6 +70,7 @@ const props = defineProps({
                     :conversion-goals="conversionGoals"
                     :campaign-statuses="campaignStatuses"
                     :defaults="defaults"
+                    :google-ads-lead-form="googleAdsLeadForm"
                 />
             </q-card-section>
         </q-card>

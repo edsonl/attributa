@@ -46,6 +46,19 @@ class StoreCampaignRequest extends FormRequest
                 },
             ],
 
+            'stream_code' => [
+                Rule::requiredIf(fn () => $this->boolean('form_lead_active')),
+                'nullable',
+                'string',
+                'max:30',
+                'regex:/^\S+$/',
+            ],
+
+            'form_lead_active' => [
+                'required',
+                'boolean',
+            ],
+
             'conversion_goal_id' => [
                 'nullable',
                 'integer',
@@ -106,6 +119,10 @@ class StoreCampaignRequest extends FormRequest
             'name.max' => 'O nome da campanha não pode ter mais de 74 caracteres.',
             'product_url.required' => 'A URL do produto é obrigatória.',
             'product_url.max' => 'A URL do produto não pode ter mais de 255 caracteres.',
+            'stream_code.max' => 'O código stream não pode ter mais de 30 caracteres.',
+            'stream_code.regex' => 'O código stream não pode conter espaços.',
+            'stream_code.required' => 'O código stream é obrigatório quando o formulário de lead estiver ativo.',
+            'form_lead_active.boolean' => 'A opção de formulário de lead é inválida.',
 
             'conversion_goal_id.exists' => 'A meta de conversão selecionada é inválida.',
 
@@ -138,6 +155,19 @@ class StoreCampaignRequest extends FormRequest
         if ($this->has('product_url')) {
             $this->merge([
                 'product_url' => trim((string) $this->input('product_url')),
+            ]);
+        }
+
+        if ($this->has('stream_code')) {
+            $streamCode = trim((string) $this->input('stream_code'));
+            $this->merge([
+                'stream_code' => $streamCode === '' ? null : $streamCode,
+            ]);
+        }
+
+        if ($this->has('form_lead_active')) {
+            $this->merge([
+                'form_lead_active' => filter_var($this->input('form_lead_active'), FILTER_VALIDATE_BOOLEAN),
             ]);
         }
     }

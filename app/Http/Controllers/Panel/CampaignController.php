@@ -16,6 +16,7 @@ use App\Models\Pageview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -141,6 +142,10 @@ class CampaignController extends Controller
                     'active' => (bool) $goal->active,
                 ]),
             'defaults' => $this->campaignDefaults(),
+            'googleAdsLeadForm' => [
+                'webhook_url' => null,
+                'key' => null,
+            ],
         ]);
     }
 
@@ -151,6 +156,7 @@ class CampaignController extends Controller
     {
         $data = $request->validated();
         $googleAdsChannelId = $this->requireGoogleAdsChannelId();
+        $formLeadActive = (bool) ($data['form_lead_active'] ?? false);
 
         $campaign = Campaign::create([
             'user_id'    => auth()->id(),
@@ -162,10 +168,19 @@ class CampaignController extends Controller
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
+            'stream_code' => $data['stream_code'] ?? null,
+            'form_lead_active' => $formLeadActive,
+            'google_ads_form_key' => $formLeadActive ? $this->generateGoogleAdsFormKey() : null,
         ]);
 
         if (!empty($data['countries'])) {
             $campaign->countries()->sync($data['countries']);
+        }
+
+        if ($formLeadActive) {
+            return redirect()
+                ->route('panel.campaigns.edit', $campaign)
+                ->with('success', 'Campanha criada com sucesso. Copie a URL e a chave da integração.');
         }
 
         return redirect()
@@ -193,6 +208,7 @@ class CampaignController extends Controller
             'affiliate_platforms' => $this->affiliatePlatformOptions(),
             'campaignStatuses' => $this->campaignStatusOptions(),
             'defaults' => $this->campaignDefaults(),
+            'googleAdsLeadForm' => $this->googleAdsLeadFormData($campaign),
             'conversionGoals' => ConversionGoal::query()
                 ->where('user_id', (int) auth()->id())
                 ->where(function ($query) use ($campaign) {
@@ -222,6 +238,12 @@ class CampaignController extends Controller
     {
         $data = $request->validated();
         $googleAdsChannelId = $this->requireGoogleAdsChannelId();
+        $formLeadActive = (bool) ($data['form_lead_active'] ?? false);
+        $googleAdsFormKey = $campaign->google_ads_form_key;
+
+        if ($formLeadActive && empty($googleAdsFormKey)) {
+            $googleAdsFormKey = $this->generateGoogleAdsFormKey();
+        }
 
         $campaign->update([
             'name'       => $data['name'],
@@ -232,6 +254,9 @@ class CampaignController extends Controller
             'affiliate_platform_id' => $data['affiliate_platform_id'],
             'google_ads_account_id' => $data['google_ads_account_id'],
             'commission_value' => $data['commission_value'] ?? null,
+            'stream_code' => $data['stream_code'] ?? null,
+            'form_lead_active' => $formLeadActive,
+            'google_ads_form_key' => $googleAdsFormKey,
         ]);
 
         $campaign->countries()->sync($data['countries'] ?? []);
@@ -240,6 +265,67 @@ class CampaignController extends Controller
         return redirect()
             ->route('panel.campaigns.index')
             ->with('success', 'Campanha atualizada com sucesso.');
+    }
+
+    public function regenerateGoogleAdsFormKey(Campaign $campaign)
+    {
+        if (!(bool) $campaign->form_lead_active) {
+            return response()->json([
+                'message' => 'Ative o formulário de lead para gerar a chave.',
+            ], 422);
+        }
+
+        $newKey = $this->generateGoogleAdsFormKey();
+        $campaign->update([
+            'google_ads_form_key' => $newKey,
+        ]);
+
+        return response()->json([
+            'message' => 'Chave de integração atualizada com sucesso.',
+            'google_ads_form_key' => $newKey,
+            'webhook_url' => $this->buildGoogleAdsFormWebhookUrl($campaign),
+        ]);
+    }
+
+    public function updateGoogleAdsLeadFormState(Request $request, Campaign $campaign)
+    {
+        $data = $request->validate([
+            'active' => ['required', 'boolean'],
+            'stream_code' => ['nullable', 'string', 'max:30', 'regex:/^\S+$/'],
+        ], [
+            'stream_code.max' => 'O código stream não pode ter mais de 30 caracteres.',
+            'stream_code.regex' => 'O código stream não pode conter espaços.',
+        ]);
+
+        $active = (bool) $data['active'];
+        $streamCode = array_key_exists('stream_code', $data)
+            ? trim((string) $data['stream_code'])
+            : (string) ($campaign->stream_code ?? '');
+
+        $streamCode = $streamCode === '' ? null : $streamCode;
+
+        if ($active && !$streamCode) {
+            return response()->json([
+                'message' => 'Informe o código stream para ativar o formulário de lead.',
+            ], 422);
+        }
+
+        $campaign->stream_code = $streamCode;
+        $campaign->form_lead_active = $active;
+        $campaign->google_ads_form_key = $active
+            ? ($campaign->google_ads_form_key ?: $this->generateGoogleAdsFormKey())
+            : $campaign->google_ads_form_key;
+        $campaign->save();
+
+        return response()->json([
+            'message' => $active
+                ? 'Formulário de lead ativado com sucesso.'
+                : 'Formulário de lead desativado com sucesso.',
+            'form_lead_active' => (bool) $campaign->form_lead_active,
+            'stream_code' => $campaign->stream_code,
+            'google_ads_form_key' => $campaign->google_ads_form_key,
+            'webhook_url' => $this->buildGoogleAdsFormWebhookUrl($campaign),
+        ]);
     }
 
     /**
@@ -400,7 +486,34 @@ class CampaignController extends Controller
             'channel_id' => $googleAdsChannelId,
             'affiliate_platform_id' => $lastCampaign?->affiliate_platform_id,
             'campaign_status_id' => $defaultStatusId,
+            'form_lead_active' => false,
         ];
+    }
+
+    protected function generateGoogleAdsFormKey(): string
+    {
+        return Str::random(32);
+    }
+
+    protected function googleAdsLeadFormData(Campaign $campaign): array
+    {
+        if ((bool) $campaign->form_lead_active && empty($campaign->google_ads_form_key)) {
+            $campaign->google_ads_form_key = $this->generateGoogleAdsFormKey();
+            $campaign->saveQuietly();
+        }
+
+        return [
+            'webhook_url' => $this->buildGoogleAdsFormWebhookUrl($campaign),
+            'key' => $campaign->google_ads_form_key,
+        ];
+    }
+
+    protected function buildGoogleAdsFormWebhookUrl(Campaign $campaign): string
+    {
+        return route('google-ads.form.handle', [
+            'userHash' => app(\App\Services\HashidService::class)->encode((int) $campaign->user_id),
+            'campaignHash' => $campaign->hashid,
+        ]);
     }
 
     protected function googleAdsChannelId(): ?int

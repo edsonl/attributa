@@ -133,6 +133,12 @@ return [
             'level' => 'debug',
         ],
 
+        'google_ads_lead_form' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/google-ads-lead-form.log'),
+            'level' => 'debug',
+        ],
+
         'affiliate_platform_callback' => [
             'driver' => 'single',
             'path' => storage_path('logs/affiliate-platform-callback.log'),

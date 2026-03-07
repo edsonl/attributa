@@ -37,10 +37,23 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    googleAdsLeadForm: {
+        type: Object,
+        default: () => ({
+            webhook_url: null,
+            key: null,
+        }),
+    },
 })
 
 const isEdit = computed(() => !!props.campaign)
 const CAMPAIGN_NAME_MAX_LENGTH = 74
+const STREAM_CODE_MAX_LENGTH = 30
+const googleAdsFormKey = ref(props.googleAdsLeadForm?.key ?? '')
+const regeneratingGoogleAdsFormKey = ref(false)
+const syncingGoogleAdsLeadFormState = ref(false)
+
+const googleAdsLeadFormWebhookUrl = computed(() => props.googleAdsLeadForm?.webhook_url ?? '')
 
 /**
  * ===== FORM =====
@@ -108,6 +121,8 @@ function toStringOrNull(value) {
 const form = useForm({
     name: props.campaign?.name ?? '',
     product_url: props.campaign?.product_url ?? '',
+    stream_code: props.campaign?.stream_code ?? '',
+    form_lead_active: props.campaign?.form_lead_active ?? props.defaults?.form_lead_active ?? false,
     campaign_status_id: toStringOrNull(props.campaign?.campaign_status_id ?? props.defaults?.campaign_status_id ?? null),
     conversion_goal_id: toStringOrNull(props.campaign?.conversion_goal_id),
     channel_id: toStringOrNull(props.defaults?.channel_id ?? props.campaign?.channel_id ?? null),
@@ -135,6 +150,59 @@ watch(campaignStatusOptions, (options) => {
 watch(googleAdsAccountOptions, (options) => {
     form.google_ads_account_id = normalizeSelectValue(form.google_ads_account_id, options)
 }, { immediate: true })
+
+watch(() => form.form_lead_active, async (enabled, previousEnabled) => {
+    if (previousEnabled === undefined || syncingGoogleAdsLeadFormState.value) {
+        return
+    }
+
+    if (isEdit.value && props.campaign) {
+        syncingGoogleAdsLeadFormState.value = true
+        const campaignRouteKey = props.campaign.hashid ?? props.campaign.id
+
+        try {
+            const response = await axios.patch(
+                route('panel.campaigns.google-ads-lead-form.state', campaignRouteKey),
+                {
+                    active: enabled,
+                    stream_code: form.stream_code,
+                },
+            )
+
+            form.form_lead_active = Boolean(response.data?.form_lead_active)
+            form.stream_code = response.data?.stream_code ?? form.stream_code
+            googleAdsFormKey.value = String(response.data?.google_ads_form_key ?? '').trim()
+        } catch (error) {
+            form.form_lead_active = previousEnabled
+            const message = error?.response?.data?.message || 'Não foi possível atualizar o formulário de lead'
+            Notify.create({
+                type: 'negative',
+                message,
+                timeout: 3500,
+                position: 'top-right',
+            })
+            syncingGoogleAdsLeadFormState.value = false
+            return
+        }
+
+        syncingGoogleAdsLeadFormState.value = false
+    }
+
+    const wasEnabled = Boolean(previousEnabled)
+    const isEnabled = Boolean(enabled)
+    const hasStreamCode = String(form.stream_code ?? '').trim() !== ''
+
+    if (!isEnabled || wasEnabled || hasStreamCode) {
+        return
+    }
+
+    Notify.create({
+        type: 'warning',
+        message: 'O formulário de lead só funciona com o stream code da campanha informado.',
+        timeout: 3500,
+        position: 'top-right',
+    })
+})
 
 const countryError = computed(() => {
     if (form.errors.countries) return form.errors.countries
@@ -319,6 +387,72 @@ function copyTrackingScript() {
         })
     }
 }
+
+async function copyText(text, label) {
+    const value = String(text ?? '').trim()
+    if (!value) return
+
+    try {
+        if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(value)
+        } else {
+            const textarea = document.createElement('textarea')
+            textarea.value = value
+            textarea.setAttribute('readonly', '')
+            textarea.style.position = 'absolute'
+            textarea.style.left = '-9999px'
+            document.body.appendChild(textarea)
+            textarea.select()
+            document.execCommand('copy')
+            document.body.removeChild(textarea)
+        }
+
+        Notify.create({
+            type: 'positive',
+            message: `${label} copiada`,
+            timeout: 2000,
+            position: 'top-right',
+        })
+    } catch {
+        Notify.create({
+            type: 'negative',
+            message: `Não foi possível copiar ${label.toLowerCase()}`,
+            timeout: 3000,
+            position: 'top-right',
+        })
+    }
+}
+
+async function regenerateGoogleAdsFormKey() {
+    const campaignRouteKey = props.campaign?.hashid ?? props.campaign?.id
+    if (!campaignRouteKey || regeneratingGoogleAdsFormKey.value) return
+
+    regeneratingGoogleAdsFormKey.value = true
+
+    try {
+        const response = await axios.patch(
+            route('panel.campaigns.google-ads-lead-form.regenerate-key', campaignRouteKey),
+        )
+
+        googleAdsFormKey.value = String(response.data?.google_ads_form_key ?? '').trim()
+        Notify.create({
+            type: 'positive',
+            message: 'Chave regenerada com sucesso',
+            timeout: 2000,
+            position: 'top-right',
+        })
+    } catch (error) {
+        const message = error?.response?.data?.message || 'Não foi possível regenerar a chave'
+        Notify.create({
+            type: 'negative',
+            message,
+            timeout: 3000,
+            position: 'top-right',
+        })
+    } finally {
+        regeneratingGoogleAdsFormKey.value = false
+    }
+}
 </script>
 
 <template>
@@ -359,6 +493,17 @@ function copyTrackingScript() {
                 dense
                 :error="Boolean(form.errors.affiliate_platform_id)"
                 :error-message="form.errors.affiliate_platform_id"
+            />
+
+            <q-input
+                v-model="form.stream_code"
+                label="Código stream"
+                :maxlength="STREAM_CODE_MAX_LENGTH"
+                hint="Opcional. Sem espaços. Exemplo: OFERTA123"
+                outlined
+                dense
+                :error="Boolean(form.errors.stream_code)"
+                :error-message="form.errors.stream_code"
             />
 
             <div class="campaign-status-block">
@@ -433,6 +578,7 @@ function copyTrackingScript() {
                     </div>
                 </template>
             </q-field>
+
         </div>
 
         <!-- Botão -->
@@ -444,6 +590,94 @@ function copyTrackingScript() {
             label="Ver código de acompanhamento"
             @click="openTrackingDialog"
         />
+
+        <q-card flat bordered>
+            <q-card-section class="tw-space-y-3">
+                <div class="tw-flex tw-items-center">
+                    <q-toggle
+                        v-model="form.form_lead_active"
+                        label="Ativar formulário de lead (Google Ads)"
+                        :true-value="true"
+                        :false-value="false"
+                    />
+                    <span v-if="form.errors.form_lead_active" class="campaign-status-error">
+                        {{ form.errors.form_lead_active }}
+                    </span>
+                </div>
+
+                <q-card
+                    v-if="form.form_lead_active"
+                    flat
+                    bordered
+                >
+                    <q-card-section class="tw-space-y-3">
+                        <div class="tw-text-sm tw-font-medium">
+                            Integração com webhook do formulário de lead (Google Ads)
+                        </div>
+
+                        <q-banner
+                            v-if="!isEdit"
+                            dense
+                            class="tw-bg-amber-50 tw-text-amber-900 tw-rounded-md"
+                        >
+                            Salve a campanha para visualizar URL e chave da integração.
+                        </q-banner>
+
+                        <template v-else>
+                            <q-input
+                                :model-value="googleAdsLeadFormWebhookUrl"
+                                label="URL do webhook"
+                                outlined
+                                dense
+                                readonly
+                            >
+                                <template #append>
+                                    <q-btn
+                                        flat
+                                        dense
+                                        icon="content_copy"
+                                        @click="copyText(googleAdsLeadFormWebhookUrl, 'URL do webhook')"
+                                    />
+                                </template>
+                            </q-input>
+
+                            <q-input
+                                :model-value="googleAdsFormKey"
+                                label="Senha"
+                                outlined
+                                dense
+                                readonly
+                            >
+                                <template #append>
+                                    <q-btn
+                                        flat
+                                        dense
+                                        icon="key"
+                                        :loading="regeneratingGoogleAdsFormKey"
+                                        @click="regenerateGoogleAdsFormKey"
+                                    />
+                                    <q-btn
+                                        flat
+                                        dense
+                                        icon="content_copy"
+                                        @click="copyText(googleAdsFormKey, 'Senha')"
+                                    />
+                                </template>
+                            </q-input>
+
+                            <div class="tw-rounded-md tw-border tw-border-amber-200 tw-bg-amber-50 tw-p-3 tw-text-xs tw-text-amber-900 tw-space-y-1">
+                                <div>
+                                    Se você gerar nova senha, atualize a credencial no Google Ads imediatamente. Enquanto a senha antiga estiver configurada lá, o Google não conseguirá autenticar e o recebimento falhará.
+                                </div>
+                                <div>
+                                    O formulário de lead só funciona com o código stream desta campanha informado.
+                                </div>
+                            </div>
+                        </template>
+                    </q-card-section>
+                </q-card>
+            </q-card-section>
+        </q-card>
 
         <!-- Ações -->
         <div class="tw-flex tw-justify-end tw-gap-2">

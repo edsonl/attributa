@@ -18,6 +18,8 @@ class AffiliatePlatform extends Model
         'lead_param_mapping',
         'lead_status_mapping',
         'postback_additional_params',
+        'postback_url',
+        'api_post_key',
     ];
 
     protected $casts = [

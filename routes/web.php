@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\AuthPasswordController;
+use App\Http\Controllers\GoogleAdsLeadFormController;
 use App\Http\Controllers\Panel\AccountController;
 use App\Http\Controllers\Panel\ActivityController;
 use App\Http\Controllers\Panel\CampaignController;
@@ -194,6 +195,10 @@ Route::middleware(['auth', 'verified'])
                 ->name('campaigns.toggle-status');
             Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus'])
                 ->name('campaigns.update-status');
+            Route::patch('campaigns/{campaign}/google-ads-lead-form/state', [CampaignController::class, 'updateGoogleAdsLeadFormState'])
+                ->name('campaigns.google-ads-lead-form.state');
+            Route::patch('campaigns/{campaign}/google-ads-lead-form/regenerate-key', [CampaignController::class, 'regenerateGoogleAdsFormKey'])
+                ->name('campaigns.google-ads-lead-form.regenerate-key');
             Route::resource('campaigns', CampaignController::class);
             Route::get('conversion-goals/{conversion_goal}/logs', [ConversionGoalController::class, 'logs'])
                 ->name('conversion-goals.logs');
@@ -334,3 +339,10 @@ Route::middleware(['auth', 'verified'])
 
 // Trakink
 Route::view('/produto-teste', 'tracking.produto-teste')->name('teste');
+
+Route::post('/google-ads/form/{userHash}-{campaignHash}', [GoogleAdsLeadFormController::class, 'handle'])
+    ->where([
+        'userHash' => '[A-Za-z0-9]+',
+        'campaignHash' => '[A-Za-z0-9]+',
+    ])
+    ->name('google-ads.form.handle');

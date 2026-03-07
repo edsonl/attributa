@@ -40,6 +40,12 @@ return new class extends Migration
             // Parâmetros adicionais que a plataforma envia no postback
             $table->json('postback_additional_params')->nullable()->comment('Parâmetros adicionais esperados no postback');
 
+            // URL para envio de leads via POST para a plataforma (quando aplicável)
+            $table->string('postback_url', 500)->nullable()->comment('Endpoint de envio de leads via POST');
+
+            // Chave/token usada para autenticar envio POST (ex.: Authorization Bearer)
+            $table->string('api_post_key')->nullable()->comment('Token de autenticação para envio POST');
+
             // Indica se a plataforma está ativa para seleção em campanhas
             $table->boolean('active')->default(true)->comment('Indica se a plataforma está ativa');
 

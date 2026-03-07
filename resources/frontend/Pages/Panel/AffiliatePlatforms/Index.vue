@@ -52,6 +52,8 @@ const defaultForm = () => ({
     slug: '',
     active: true,
     integration_type: 'postback_get',
+    postback_url: '',
+    api_post_key: '',
     lead_param_mapping: {
         payout_amount: '',
         currency_code: '',
@@ -179,6 +181,8 @@ function openEdit(row) {
         slug: row.slug,
         active: row.active,
         integration_type: row.integration_type || 'postback_get',
+        postback_url: String(row.postback_url || ''),
+        api_post_key: String(row.api_post_key || ''),
         lead_param_mapping: {
             payout_amount: String(row.lead_param_mapping?.payout_amount || ''),
             currency_code: String(row.lead_param_mapping?.currency_code || ''),
@@ -716,6 +720,28 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
+
+                <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-3">
+                    <q-input
+                        v-model="form.postback_url"
+                        label="URL de envio POST (lead)"
+                        dense
+                        outlined
+                        placeholder="https://order.drcash.sh/v1/order"
+                        :error="Boolean(errors.postback_url)"
+                        :error-message="errors.postback_url?.[0]"
+                    />
+                    <q-input
+                        v-model="form.api_post_key"
+                        type="password"
+                        label="API Key envio POST"
+                        dense
+                        outlined
+                        placeholder="Bearer token da plataforma"
+                        :error="Boolean(errors.api_post_key)"
+                        :error-message="errors.api_post_key?.[0]"
+                    />
+                </div>
             </q-card-section>
             <q-card-actions align="right" class="tw-gap-2 tw-p-4">
                 <q-btn flat label="Cancelar" @click="closeDialog" />
@@ -755,6 +781,18 @@ onMounted(() => {
                     outlined
                     dense
                 />
+
+                <q-input
+                    :model-value="integrationPayload?.postback_url ?? ''"
+                    label="URL de envio POST (lead)"
+                    readonly
+                    outlined
+                    dense
+                >
+                    <template #append>
+                        <q-btn flat dense icon="content_copy" @click.stop.prevent="copyValue(integrationPayload?.postback_url, 'URL de envio POST')" />
+                    </template>
+                </q-input>
 
                 <q-input
                     :model-value="integrationPayload?.mapping_preview ?? '-'"

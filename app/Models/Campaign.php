@@ -25,7 +25,10 @@ class Campaign extends Model
         'channel_id',
         'affiliate_platform_id',
         'external_campaign_id',
-        'google_ads_account_id'
+        'google_ads_account_id',
+        'stream_code',
+        'form_lead_active',
+        'google_ads_form_key',
     ];
 
     protected $appends = [
@@ -34,6 +37,7 @@ class Campaign extends Model
 
     protected $casts = [
         'commission_value' => 'decimal:2',
+        'form_lead_active' => 'boolean',
     ];
 
     /**
@@ -134,6 +138,12 @@ class Campaign extends Model
     {
         $raw = trim((string) $value);
         $this->attributes['product_url'] = $raw === '' ? null : $raw;
+    }
+
+    public function setStreamCodeAttribute($value): void
+    {
+        $raw = trim((string) $value);
+        $this->attributes['stream_code'] = $raw === '' ? null : $raw;
     }
 
     protected function resolveHashidRouteBindingQuery(Builder $query, int $id): Builder

@@ -50,6 +50,13 @@ return new class extends Migration {
             // ID da campanha na plataforma externa (Google Ads, Meta, etc.)
             $table->string('external_campaign_id')->nullable();
 
+            // Código de stream da oferta na plataforma externa (sem espaços)
+            $table->string('stream_code', 30)->nullable();
+
+            // Integração de formulário de lead do Google Ads
+            $table->boolean('form_lead_active')->default(false);
+            $table->string('google_ads_form_key', 50)->nullable();
+
             // Data e hora de início da campanha (timezone-aware)
             $table->dateTime('starts_at')->nullable();
 

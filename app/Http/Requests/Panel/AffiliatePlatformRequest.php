@@ -82,11 +82,21 @@ class AffiliatePlatformRequest extends FormRequest
             'slug' => strtolower(trim((string) $this->input('slug'))),
             'active' => filter_var($this->input('active', true), FILTER_VALIDATE_BOOLEAN),
             'integration_type' => strtolower(trim((string) $this->input('integration_type', 'postback_get'))),
+            'postback_url' => trim((string) $this->input('postback_url', '')),
+            'api_post_key' => trim((string) $this->input('api_post_key', '')),
             'tracking_param_mapping' => $mapping,
             'lead_param_mapping' => $leadMapping,
             'lead_status_mapping' => $leadStatusMapping,
             'postback_additional_params' => $additionalParams,
         ]);
+
+        if ((string) $this->input('postback_url', '') === '') {
+            $this->merge(['postback_url' => null]);
+        }
+
+        if ((string) $this->input('api_post_key', '') === '') {
+            $this->merge(['api_post_key' => null]);
+        }
     }
 
     public function rules(): array
@@ -104,6 +114,8 @@ class AffiliatePlatformRequest extends FormRequest
             ],
             'active' => ['boolean'],
             'integration_type' => ['required', 'string', Rule::in(['postback_get'])],
+            'postback_url' => ['nullable', 'string', 'max:500', 'url:http,https'],
+            'api_post_key' => ['nullable', 'string', 'max:191'],
             'tracking_param_mapping' => ['nullable', 'array'],
             'lead_param_mapping' => ['nullable', 'array'],
             'lead_param_mapping.payout_amount' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_.-]+$/'],
