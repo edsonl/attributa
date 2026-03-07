@@ -300,7 +300,8 @@ class GoogleAdsLeadFormController extends Controller
         Pageview $pageview,
         array $payload
     ): void {
-        $platform = $campaign->affiliatePlatform()->first();
+        $campaign->loadMissing('affiliatePlatform');
+        $platform = $campaign->affiliatePlatform;
         if (!$platform) {
             $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
                 'reason' => 'affiliate_platform_not_found',
@@ -308,36 +309,10 @@ class GoogleAdsLeadFormController extends Controller
             return;
         }
 
-        // Handler temporário específico por plataforma (extensível para strategy/provider no futuro).
-        $slug = trim((string) $platform->slug);
-        if ($slug !== 'dr_cash') {
-            $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
-                'reason' => 'platform_handler_not_implemented',
-                'platform_slug' => $slug,
-            ]);
-            return;
-        }
-
-        $postUrl = trim((string) ($platform->postback_url ?? ''));
-        $apiKey = trim((string) ($platform->api_post_key ?? ''));
-        $streamCode = trim((string) ($campaign->stream_code ?? ''));
-
-        if ($postUrl === '' || $apiKey === '' || $streamCode === '') {
-            $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
-                'reason' => 'missing_post_dispatch_config',
-                'platform_slug' => $slug,
-                'has_postback_url' => $postUrl !== '',
-                'has_api_post_key' => $apiKey !== '',
-                'has_stream_code' => $streamCode !== '',
-            ]);
-            return;
-        }
-
         $columns = $this->extractUserColumnData($payload);
         $client = is_array($payload['client'] ?? null) ? $payload['client'] : [];
         $composedSub1 = $this->buildComposedSub1($campaign, $pageview);
-
-        // Formato de payload acordado para Dr.Cash (POST JSON + Bearer token).
+        $streamCode = trim((string) ($campaign->stream_code ?? ''));
         $body = [
             'stream_code' => $streamCode,
             'client' => [
@@ -359,12 +334,39 @@ class GoogleAdsLeadFormController extends Controller
                 'postcode' => $this->firstNonEmpty([$columns['postal_code'] ?? null, $client['postcode'] ?? null]),
             ],
             'sub1' => $composedSub1,
-            // Reservados para enriquecimento futuro.
             'sub2' => null,
             'sub3' => null,
             'sub4' => null,
             'sub5' => null,
         ];
+
+        // Handler temporário específico por plataforma (extensível para strategy/provider no futuro).
+        $slug = trim((string) $platform->slug);
+        if ($slug !== 'dr_cash') {
+            $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
+                'reason' => 'platform_handler_not_implemented',
+                'platform_slug' => $slug,
+                'payload_preview' => $body,
+            ]);
+            return;
+        }
+
+        $postUrl = trim((string) ($platform->postback_url ?? ''));
+        $apiKey = trim((string) ($platform->api_post_key ?? ''));
+
+        if ($postUrl === '' || $apiKey === '' || $streamCode === '') {
+            $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
+                'reason' => 'missing_post_dispatch_config',
+                'platform_slug' => $slug,
+                'has_postback_url' => $postUrl !== '',
+                'has_api_post_key' => $apiKey !== '',
+                'has_stream_code' => $streamCode !== '',
+                'configured_postback_url' => $postUrl !== '' ? $postUrl : null,
+                'configured_api_post_key_masked' => $apiKey !== '' ? $this->maskSecret($apiKey) : null,
+                'payload_preview' => $body,
+            ]);
+            return;
+        }
 
         $startedAt = microtime(true);
         $this->logOutgoingDispatch('outgoing_request', $campaign, $pageview, [
