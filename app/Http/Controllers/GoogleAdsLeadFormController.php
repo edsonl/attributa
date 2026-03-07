@@ -94,6 +94,20 @@ class GoogleAdsLeadFormController extends Controller
             ], 401);
         }
 
+        if ($this->isTestWebhook($payload)) {
+            $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
+                'stage' => 'accepted_test',
+                'campaign_id' => (int) $campaign->id,
+                'user_id' => (int) $campaign->user_id,
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Teste do webhook recebido com sucesso.',
+                'is_test' => true,
+            ], 200);
+        }
+
         $pageview = $this->storeAsPageview($request, $campaign, $payload);
         $this->dispatchLeadToAffiliatePlatform($request, $campaign, $pageview, $payload);
 
@@ -109,6 +123,20 @@ class GoogleAdsLeadFormController extends Controller
             'message' => 'Webhook autenticado e salvo em pageviews.',
             'pageview_id' => (int) $pageview->id,
         ], 202);
+    }
+
+    protected function isTestWebhook(array $payload): bool
+    {
+        if (filter_var($payload['is_test'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return true;
+        }
+
+        $leadId = trim((string) ($payload['lead_id'] ?? ''));
+        if ($leadId === '') {
+            return false;
+        }
+
+        return str_starts_with(strtolower($leadId), 'tester');
     }
 
     protected function resolvePayload(Request $request): array
