@@ -38,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tracking/collect/*',
             'tracking/event',
             'tracking/event/*',
+            'google-ads/form/*',
             'api/tracking/collect',
             'api/tracking/collect/*',
             'api/tracking/event',
