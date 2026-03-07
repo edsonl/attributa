@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Campaign;
 use App\Models\Pageview;
 use App\Services\HashidService;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ class GoogleAdsLeadFormController extends Controller
      *
      * O processamento de payload será implementado na próxima etapa.
      */
-    public function handle(Request $request, string $userHash, string $campaignHash): JsonResponse
+    public function handle(Request $request, string $userHash, string $campaignHash): Response
     {
         $payload = $this->resolvePayload($request);
 
@@ -35,10 +35,7 @@ class GoogleAdsLeadFormController extends Controller
                 'reason' => 'invalid_identifiers',
             ]);
 
-            return response()->json([
-                'ok' => false,
-                'message' => 'Identificadores inválidos.',
-            ], 422);
+            return $this->textResponse('invalid_identifiers', 422);
         }
 
         $campaign = Campaign::query()
@@ -54,10 +51,7 @@ class GoogleAdsLeadFormController extends Controller
                 'resolved_campaign_id' => (int) $campaignId,
             ]);
 
-            return response()->json([
-                'ok' => false,
-                'message' => 'Campanha não encontrada para os identificadores informados.',
-            ], 404);
+            return $this->textResponse('campaign_not_found', 404);
         }
 
         if (!(bool) $campaign->form_lead_active) {
@@ -68,10 +62,7 @@ class GoogleAdsLeadFormController extends Controller
                 'user_id' => (int) $campaign->user_id,
             ]);
 
-            return response()->json([
-                'ok' => false,
-                'message' => 'Integração de formulário de lead desativada para esta campanha.',
-            ], 422);
+            return $this->textResponse('lead_form_disabled', 422);
         }
 
         $incomingKey = $this->extractGoogleKey($payload);
@@ -88,10 +79,7 @@ class GoogleAdsLeadFormController extends Controller
                 'expected_google_key_masked' => $this->maskSecret($expectedKey),
             ]);
 
-            return response()->json([
-                'ok' => false,
-                'message' => 'Autenticação inválida (google_key).',
-            ], 401);
+            return $this->textResponse('invalid_google_key', 401);
         }
 
         if ($this->isTestWebhook($payload)) {
@@ -101,11 +89,7 @@ class GoogleAdsLeadFormController extends Controller
                 'user_id' => (int) $campaign->user_id,
             ]);
 
-            return response()->json([
-                'ok' => true,
-                'message' => 'Teste do webhook recebido com sucesso.',
-                'is_test' => true,
-            ], 200);
+            return $this->textResponse('ok', 200);
         }
 
         $pageview = $this->storeAsPageview($request, $campaign, $payload);
@@ -118,11 +102,12 @@ class GoogleAdsLeadFormController extends Controller
             'pageview_id' => (int) $pageview->id,
         ]);
 
-        return response()->json([
-            'ok' => true,
-            'message' => 'Webhook autenticado e salvo em pageviews.',
-            'pageview_id' => (int) $pageview->id,
-        ], 202);
+        return $this->textResponse('ok', 202);
+    }
+
+    protected function textResponse(string $text, int $status): Response
+    {
+        return response($text, $status)->header('Content-Type', 'text/plain; charset=UTF-8');
     }
 
     protected function isTestWebhook(array $payload): bool
