@@ -13,22 +13,51 @@ use Illuminate\Support\Facades\Log;
 class GoogleAdsLeadFormController extends Controller
 {
     /**
-     * Endpoint público para webhooks de formulário de lead do Google Ads.
+     * Endpoint público de webhook para Google Ads Lead Form.
      *
-     * O processamento de payload será implementado na próxima etapa.
+     * Resumo detalhado do fluxo:
+     * 1) Normaliza o payload (JSON body e fallback de parsing) para um array consistente.
+     * 2) Resolve os hashids da rota (`{userHash}-{campaignHash}`) em IDs internos.
+     * 3) Registra log bruto de entrada (headers, body, query, payload e metadados da rota).
+     * 4) Valida contexto:
+     *    - identificadores válidos;
+     *    - campanha existente para o usuário;
+     *    - integração de formulário ativa na campanha.
+     * 5) Autentica via chave compartilhada (`google_key`) comparando com
+     *    `campaign.google_ads_form_key` usando `hash_equals`.
+     * 6) Detecta requisições de teste (Google test webhook) por:
+     *    - `is_test = true`; ou
+     *    - `lead_id` iniciando com `TeSter` (fallback observado em payloads de teste).
+     * 7) Persistência:
+     *    - teste: salva pageview temporária e retorna 200;
+     *    - produção: salva pageview e retorna 202.
+     * 8) Pós-persistência: tenta enviar o lead para a plataforma afiliada da campanha
+     *    (atualmente com handler específico para slug `dr_cash`).
+     * 9) Loga resultado de aceite/rejeição e o resultado do dispatch de saída.
+     *
+     * Observações de operação:
+     * - Este endpoint NÃO usa autenticação de sessão (webhook externo).
+     * - Os códigos HTTP seguem semântica de integração:
+     *   * 200: teste aceito;
+     *   * 202: payload aceito para processamento assíncrono/integração;
+     *   * 4xx: rejeição de validação/autenticação.
      */
     public function handle(Request $request, string $userHash, string $campaignHash): JsonResponse
     {
+        // 1) Normalização de payload para suportar JSON puro e variações de envio.
         $payload = $this->resolvePayload($request);
 
+        // 2) Resolução de contexto via hashids da URL.
         $hashidService = app(HashidService::class);
         $userId = $hashidService->decode($userHash);
         $campaignId = $hashidService->decode($campaignHash);
 
+        // 3) Auditoria de entrada antes de qualquer validação/rejeição.
         $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
             'stage' => 'received',
         ]);
 
+        // 4.a) Rejeita cedo quando hashids não são válidos.
         if (!$userId || !$campaignId) {
             $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
                 'stage' => 'rejected',
@@ -41,6 +70,7 @@ class GoogleAdsLeadFormController extends Controller
             ], 422);
         }
 
+        // 4.b) Rejeita se campanha não for encontrada no escopo do usuário resolvido.
         $campaign = Campaign::query()
             ->where('id', (int) $campaignId)
             ->where('user_id', (int) $userId)
@@ -60,6 +90,7 @@ class GoogleAdsLeadFormController extends Controller
             ], 404);
         }
 
+        // 4.c) Rejeita se integração estiver desativada para a campanha.
         if (!(bool) $campaign->form_lead_active) {
             $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
                 'stage' => 'rejected',
@@ -74,6 +105,7 @@ class GoogleAdsLeadFormController extends Controller
             ], 422);
         }
 
+        // 5) Autenticação por chave compartilhada enviada pelo Google no payload.
         $incomingKey = $this->extractGoogleKey($payload);
         $expectedKey = (string) ($campaign->google_ads_form_key ?? '');
         $validKey = $incomingKey !== '' && $expectedKey !== '' && hash_equals($expectedKey, $incomingKey);
@@ -94,8 +126,12 @@ class GoogleAdsLeadFormController extends Controller
             ], 401);
         }
 
+        // 6 + 7.a) Fluxo de teste: persiste pageview para auditoria e retorna 200.
         if ($this->isTestWebhook($payload)) {
             $pageview = $this->storeAsPageview($request, $campaign, $payload);
+
+            // 8) Mesmo em teste, envia para afiliado temporariamente para validação ponta a ponta.
+            $this->dispatchLeadToAffiliatePlatform($request, $campaign, $pageview, $payload);
 
             $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
                 'stage' => 'accepted_test',
@@ -112,9 +148,13 @@ class GoogleAdsLeadFormController extends Controller
             ], 200);
         }
 
+        // 7.b) Fluxo de produção: persiste pageview e segue com dispatch.
         $pageview = $this->storeAsPageview($request, $campaign, $payload);
+
+        // 8) Dispatch para afiliado (handler por slug).
         $this->dispatchLeadToAffiliatePlatform($request, $campaign, $pageview, $payload);
 
+        // 9) Registro final de aceite para observabilidade operacional.
         $this->logIncomingRequest($request, $payload, $userHash, $campaignHash, [
             'stage' => 'accepted',
             'campaign_id' => (int) $campaign->id,
@@ -129,6 +169,13 @@ class GoogleAdsLeadFormController extends Controller
         ], 202);
     }
 
+    /**
+     * Detecta requisição de teste do Google Ads.
+     *
+     * Critérios:
+     * - campo explícito `is_test=true`; ou
+     * - `lead_id` com prefixo "tester" (fallback defensivo).
+     */
     protected function isTestWebhook(array $payload): bool
     {
         if (filter_var($payload['is_test'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -143,6 +190,11 @@ class GoogleAdsLeadFormController extends Controller
         return str_starts_with(strtolower($leadId), 'tester');
     }
 
+    /**
+     * Resolve payload para array.
+     *
+     * Prioriza `$request->all()` e, quando necessário, faz parse do corpo bruto JSON.
+     */
     protected function resolvePayload(Request $request): array
     {
         $payload = $request->all();
@@ -159,6 +211,9 @@ class GoogleAdsLeadFormController extends Controller
         return is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * Extrai chave de autenticação do payload suportando variações de naming.
+     */
     protected function extractGoogleKey(array $payload): string
     {
 
@@ -176,6 +231,13 @@ class GoogleAdsLeadFormController extends Controller
         return '';
     }
 
+    /**
+     * Persiste uma representação de lead webhook na tabela de pageviews.
+     *
+     * Objetivo principal:
+     * - rastreabilidade da entrada;
+     * - reaproveitar infraestrutura de análise já existente baseada em pageview.
+     */
     protected function storeAsPageview(Request $request, Campaign $campaign, array $payload): Pageview
     {
         $columns = $this->extractUserColumnData($payload);
@@ -224,6 +286,14 @@ class GoogleAdsLeadFormController extends Controller
         ]);
     }
 
+    /**
+     * Envia lead para a plataforma afiliada (dispatch de saída).
+     *
+     * Estratégia atual:
+     * - branch por slug da plataforma;
+     * - implementado: `dr_cash`;
+     * - demais slugs: log de skip controlado.
+     */
     protected function dispatchLeadToAffiliatePlatform(
         Request $request,
         Campaign $campaign,
@@ -238,6 +308,7 @@ class GoogleAdsLeadFormController extends Controller
             return;
         }
 
+        // Handler temporário específico por plataforma (extensível para strategy/provider no futuro).
         $slug = trim((string) $platform->slug);
         if ($slug !== 'dr_cash') {
             $this->logOutgoingDispatch('skipped', $campaign, $pageview, [
@@ -266,6 +337,7 @@ class GoogleAdsLeadFormController extends Controller
         $client = is_array($payload['client'] ?? null) ? $payload['client'] : [];
         $composedSub1 = $this->buildComposedSub1($campaign, $pageview);
 
+        // Formato de payload acordado para Dr.Cash (POST JSON + Bearer token).
         $body = [
             'stream_code' => $streamCode,
             'client' => [
@@ -287,6 +359,7 @@ class GoogleAdsLeadFormController extends Controller
                 'postcode' => $this->firstNonEmpty([$columns['postal_code'] ?? null, $client['postcode'] ?? null]),
             ],
             'sub1' => $composedSub1,
+            // Reservados para enriquecimento futuro.
             'sub2' => null,
             'sub3' => null,
             'sub4' => null,
@@ -319,6 +392,10 @@ class GoogleAdsLeadFormController extends Controller
         }
     }
 
+    /**
+     * Monta sub1 composto no padrão:
+     * {userHash}-{campaignHash}-{pageviewHash}
+     */
     protected function buildComposedSub1(Campaign $campaign, Pageview $pageview): string
     {
         $hashidService = app(HashidService::class);
@@ -329,6 +406,9 @@ class GoogleAdsLeadFormController extends Controller
         return $userHash . '-' . $campaignHash . '-' . $pageviewHash;
     }
 
+    /**
+     * Retorna o primeiro valor não vazio da lista (após trim).
+     */
     protected function firstNonEmpty(array $values): ?string
     {
         foreach ($values as $value) {
@@ -341,6 +421,11 @@ class GoogleAdsLeadFormController extends Controller
         return null;
     }
 
+    /**
+     * Extrai colunas do array `user_column_data` enviado pelo Google.
+     *
+     * Mantém apenas campos relevantes para mapeamentos atuais.
+     */
     protected function extractUserColumnData(array $payload): array
     {
         $result = [];
@@ -395,6 +480,9 @@ class GoogleAdsLeadFormController extends Controller
         return $result;
     }
 
+    /**
+     * Normaliza string opcional com trim e limite de tamanho.
+     */
     protected function nullableTrim(?string $value, int $maxLength): ?string
     {
         $text = trim((string) $value);
@@ -405,6 +493,9 @@ class GoogleAdsLeadFormController extends Controller
         return mb_substr($text, 0, $maxLength);
     }
 
+    /**
+     * Mascara segredo para logging seguro.
+     */
     protected function maskSecret(string $secret): string
     {
         $length = strlen($secret);
@@ -415,6 +506,9 @@ class GoogleAdsLeadFormController extends Controller
         return substr($secret, 0, 3) . str_repeat('*', max($length - 6, 0)) . substr($secret, -3);
     }
 
+    /**
+     * Log estruturado da entrada do webhook.
+     */
     protected function logIncomingRequest(Request $request, array $payload, string $userHash, string $campaignHash, array $context = []): void
     {
         Log::channel('google_ads_lead_form')->info('Google Ads lead form webhook inbound', array_merge([
@@ -435,6 +529,9 @@ class GoogleAdsLeadFormController extends Controller
         ], $context));
     }
 
+    /**
+     * Log estruturado do dispatch de saída para plataforma afiliada.
+     */
     protected function logOutgoingDispatch(string $stage, Campaign $campaign, Pageview $pageview, array $context = []): void
     {
         Log::channel('google_ads_lead_form')->info('Google Ads lead form outbound dispatch', array_merge([
